@@ -63,7 +63,11 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "reac
 import { createMarkdownStyles } from "@/styles/markdown-styles";
 import { Fonts } from "@/constants/theme";
 import * as Clipboard from "expo-clipboard";
-import type { TodoEntry, UserMessageImageAttachment } from "@/types/stream";
+import type {
+  TodoEntry,
+  UserMessageDeliveryHint,
+  UserMessageImageAttachment,
+} from "@/types/stream";
 import type { AgentAttachment } from "@server/shared/messages";
 import type { ToolCallDetail } from "@server/server/agent/agent-sdk-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
@@ -108,6 +112,7 @@ interface UserMessageProps {
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
   disableOuterSpacing?: boolean;
+  deliveryHint?: UserMessageDeliveryHint;
 }
 
 const MessageOuterSpacingContext = createContext(false);
@@ -415,6 +420,12 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
   },
+  deliveryHintLabel: {
+    alignSelf: "flex-end",
+    marginTop: theme.spacing[1],
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
 }));
 
 function UserMessageAttachmentThumbnail({ image }: { image: UserMessageImageAttachment }) {
@@ -451,6 +462,7 @@ export const UserMessage = memo(function UserMessage({
   isFirstInGroup = true,
   isLastInGroup = true,
   disableOuterSpacing,
+  deliveryHint,
 }: UserMessageProps) {
   const isCompact = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);
@@ -549,6 +561,14 @@ export const UserMessage = memo(function UserMessage({
               accessibilityLabel="Copy message"
             />
           </View>
+        ) : null}
+        {deliveryHint === "steering" ? (
+          <Text
+            accessibilityLabel="Steering conversation"
+            style={userMessageStylesheet.deliveryHintLabel}
+          >
+            Steering conversation
+          </Text>
         ) : null}
       </View>
     </View>

@@ -462,6 +462,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             timestamp={item.timestamp.getTime()}
             isFirstInGroup={isFirstInGroup}
             isLastInGroup={isLastInGroup}
+            deliveryHint={item.deliveryHint}
           />
         );
       },
