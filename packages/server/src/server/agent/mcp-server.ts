@@ -25,9 +25,7 @@ import { selectItemsByProjectedLimit } from "./timeline-projection.js";
 import type { AgentStorage } from "./agent-storage.js";
 import { ensureAgentLoaded } from "./agent-loading.js";
 import { isStoredAgentProviderAvailable } from "../persistence-hooks.js";
-import { getPaseoWorktreesRoot } from "../../utils/worktree.js";
 import {
-  archivePaseoWorktree,
   killTerminalsUnderPath,
   type ArchivePaseoWorktreeDependencies,
 } from "../paseo-worktree-archive-service.js";
@@ -75,7 +73,10 @@ import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { CreatePaseoWorktreeInput } from "../paseo-worktree-service.js";
 import { toWorktreeRequestError } from "../worktree-errors.js";
-import { join } from "node:path";
+import {
+  archivePaseoWorktreeCommand,
+  type ArchivePaseoWorktreeCommandDependencies,
+} from "../worktree/commands.js";
 
 export interface AgentMcpServerOptions {
   agentManager: AgentManager;
@@ -1996,64 +1997,28 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       if (!worktreePath && !worktreeSlug) {
         throw new Error("worktreePath or worktreeSlug is required");
       }
-      if (!options.github) {
-        throw new Error("GitHub service is required to archive worktrees");
-      }
       if (!options.workspaceGitService) {
         throw new Error("WorkspaceGitService is required to archive worktrees");
       }
-      if (!options.archiveWorkspaceRecord) {
-        throw new Error("Workspace registry archiver is required to archive worktrees");
-      }
-      if (!options.emitWorkspaceUpdatesForWorkspaceIds) {
-        throw new Error("Workspace update emitter is required to archive worktrees");
-      }
-      if (!options.markWorkspaceArchiving) {
-        throw new Error("Workspace archiving marker is required to archive worktrees");
-      }
-      if (!options.clearWorkspaceArchiving) {
-        throw new Error("Workspace archiving clearer is required to archive worktrees");
-      }
-      if (!options.emitSessionMessage) {
-        throw new Error("Session message emitter is required to archive worktrees");
-      }
       const repoRoot = await options.workspaceGitService.resolveRepoRoot(resolvedCwd);
 
-      const targetPath =
-        worktreePath ??
-        join(await getPaseoWorktreesRoot(repoRoot, options.paseoHome), worktreeSlug!);
-
-      await archivePaseoWorktree(
-        {
-          paseoHome: options.paseoHome,
-          github: options.github,
-          workspaceGitService: options.workspaceGitService,
+      const result = await archivePaseoWorktreeCommand(
+        archiveWorktreeDependencies(options, {
           agentManager,
           agentStorage,
-          archiveWorkspaceRecord: options.archiveWorkspaceRecord,
-          emit: options.emitSessionMessage,
-          emitWorkspaceUpdatesForWorkspaceIds: options.emitWorkspaceUpdatesForWorkspaceIds,
-          markWorkspaceArchiving: options.markWorkspaceArchiving,
-          clearWorkspaceArchiving: options.clearWorkspaceArchiving,
-          isPathWithinRoot: isSameOrDescendantPath,
-          killTerminalsUnderPath: (rootPath) =>
-            killTerminalsUnderPath(
-              {
-                terminalManager: terminalManager ?? null,
-                isPathWithinRoot: isSameOrDescendantPath,
-                killTrackedTerminal: () => {},
-                sessionLogger: childLogger,
-              },
-              rootPath,
-            ),
-          sessionLogger: childLogger,
-        },
+          terminalManager: terminalManager ?? null,
+          logger: childLogger,
+        }),
         {
-          targetPath,
-          repoRoot,
           requestId: "mcp:archive_worktree",
+          repoRoot,
+          worktreePath,
+          worktreeSlug,
         },
       );
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
       await options.workspaceGitService.listWorktrees(repoRoot, {
         force: true,
         reason: "mcp:archive-worktree",
@@ -2217,6 +2182,65 @@ type McpCreateWorktreeTarget =
   | { mode: "branch-off"; newBranch: string; base?: string }
   | { mode: "checkout-branch"; branch: string }
   | { mode: "checkout-pr"; prNumber: number };
+
+interface ArchiveWorktreeCommandContext {
+  agentManager: AgentManager;
+  agentStorage: AgentStorage;
+  terminalManager: TerminalManager | null;
+  logger: Logger;
+}
+
+function archiveWorktreeDependencies(
+  options: AgentMcpServerOptions,
+  context: ArchiveWorktreeCommandContext,
+): ArchivePaseoWorktreeCommandDependencies {
+  if (!options.github) {
+    throw new Error("GitHub service is required to archive worktrees");
+  }
+  if (!options.workspaceGitService) {
+    throw new Error("WorkspaceGitService is required to archive worktrees");
+  }
+  if (!options.archiveWorkspaceRecord) {
+    throw new Error("Workspace registry archiver is required to archive worktrees");
+  }
+  if (!options.emitWorkspaceUpdatesForWorkspaceIds) {
+    throw new Error("Workspace update emitter is required to archive worktrees");
+  }
+  if (!options.markWorkspaceArchiving) {
+    throw new Error("Workspace archiving marker is required to archive worktrees");
+  }
+  if (!options.clearWorkspaceArchiving) {
+    throw new Error("Workspace archiving clearer is required to archive worktrees");
+  }
+  if (!options.emitSessionMessage) {
+    throw new Error("Session message emitter is required to archive worktrees");
+  }
+
+  return {
+    paseoHome: options.paseoHome,
+    github: options.github,
+    workspaceGitService: options.workspaceGitService,
+    agentManager: context.agentManager,
+    agentStorage: context.agentStorage,
+    archiveWorkspaceRecord: options.archiveWorkspaceRecord,
+    emit: options.emitSessionMessage,
+    emitWorkspaceUpdatesForWorkspaceIds: options.emitWorkspaceUpdatesForWorkspaceIds,
+    markWorkspaceArchiving: options.markWorkspaceArchiving,
+    clearWorkspaceArchiving: options.clearWorkspaceArchiving,
+    isPathWithinRoot: isSameOrDescendantPath,
+    killTerminalsUnderPath: (rootPath: string) =>
+      killTerminalsUnderPath(
+        {
+          terminalManager: context.terminalManager,
+          isPathWithinRoot: isSameOrDescendantPath,
+          killTrackedTerminal: () => {},
+          sessionLogger: context.logger,
+        },
+        rootPath,
+      ),
+    sessionLogger: context.logger,
+  };
+}
 
 function mcpCreateWorktreeInput(
   repoRoot: string,
