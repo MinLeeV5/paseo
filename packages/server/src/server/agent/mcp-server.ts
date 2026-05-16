@@ -796,6 +796,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
           initialPrompt: parsedArgs.initialPrompt,
           cwd: parsedArgs.cwd,
           thinking: parsedArgs.thinking,
+          features: parsedArgs.features,
           labels: parsedArgs.labels,
           mode: parsedArgs.mode,
           background: parsedArgs.background ?? false,

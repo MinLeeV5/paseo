@@ -85,6 +85,7 @@ export interface CreateAgentFromMcpInput {
   initialPrompt: string;
   cwd?: string;
   thinking?: string;
+  features?: Record<string, unknown>;
   labels?: Record<string, string>;
   mode?: string;
   background: boolean;
@@ -278,6 +279,7 @@ async function resolveMcpCreateAgent(
       title: input.title.trim(),
       model: resolvedProviderModel.model,
       thinkingOptionId: input.thinking,
+      featureValues: input.features,
     },
     createOptions: labels ? { labels } : undefined,
     metadataInitialPrompt: input.initialPrompt.trim(),
