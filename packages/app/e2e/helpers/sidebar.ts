@@ -24,9 +24,8 @@ export async function openMobileAgentSidebar(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Open menu" }).click();
 }
 
-// force=true: the overlay covers the button when the mobile sidebar is open.
 export async function closeMobileAgentSidebar(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Close menu" }).click({ force: true });
+  await page.getByTestId("sidebar-close").click({ force: true });
 }
 
 // The mobile sidebar panel animates via translateX; toBeInViewport reflects the rendered position.
