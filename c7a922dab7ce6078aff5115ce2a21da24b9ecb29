@@ -1,0 +1,29 @@
+packages/server/src/utils/paseo-config-schema.ts
+  b3b4c2eee803a582 30,62,65
+packages/server/src/server/worktree-session.ts
+  b3b4c2eee803a582 30,570-573,577,613
+packages/server/src/utils/worktree.ts
+  b3b4c2eee803a582 240-243
+public-docs/worktrees.md
+  b3b4c2eee803a582 62-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.16",
+  "base_commit_sha": "c7a922dab7ce6078aff5115ce2a21da24b9ecb29",
+  "prompts": {
+    "b3b4c2eee803a582": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7fe00ccf-aa32-40b0-85ab-3f4d49fe80b8",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 29,
+      "total_deletions": 4,
+      "accepted_lines": 29,
+      "overriden_lines": 0
+    }
+  }
+}
