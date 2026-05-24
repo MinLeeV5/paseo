@@ -59,6 +59,21 @@ Both fields accept a multiline shell script or an array of commands; commands ru
 
 Commands run with the worktree as `cwd`. Use `$PASEO_SOURCE_CHECKOUT_PATH` to reach files in the original checkout (untracked config, local caches, etc).
 
+### Waiting for setup
+
+By default, setup runs in the background while the agent session starts immediately. For projects where the agent depends on setup completing first (e.g. heavy dependency installs), set `waitForSetup` to block the agent session until setup finishes:
+
+```json
+{
+  "worktree": {
+    "setup": "pnpm install",
+    "waitForSetup": true
+  }
+}
+```
+
+When `waitForSetup` is `true`, the agent session will not start until all setup commands have exited successfully. When `false` (the default), setup runs concurrently with the agent.
+
 ## Scripts and services
 
 `scripts` are named commands you can run inside a worktree on demand. Mark one as a _service_ and Paseo supervises it as a long-running process, assigns it a port, and routes HTTP traffic to it through the daemon's reverse proxy.
