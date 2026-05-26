@@ -1237,10 +1237,11 @@ export class Session {
         const visibleEntries = entries.filter((entry) =>
           this.isProviderVisibleToClient(entry.provider),
         );
+        const snapshotCwd = cwd === resolveSnapshotCwd() ? undefined : cwd;
         this.emit({
           type: "providers_snapshot_update",
           payload: {
-            cwd,
+            ...(snapshotCwd ? { cwd: snapshotCwd } : {}),
             entries: visibleEntries,
             generatedAt: new Date().toISOString(),
           },
@@ -1416,7 +1417,7 @@ export class Session {
 
   private async buildAgentPayload(agent: ManagedAgent): Promise<AgentSnapshotPayload> {
     const storedRecord = await this.agentStorage.get(agent.id);
-    const title = storedRecord?.title ?? storedRecord?.config?.title ?? null;
+    const title = storedRecord?.title ?? null;
     const payload = toAgentPayload(agent, { title });
     const storedUpdatedAt = storedRecord ? resolveStoredAgentPayloadUpdatedAt(storedRecord) : null;
     if (storedUpdatedAt) {
@@ -1775,6 +1776,7 @@ export class Session {
   private async dispatchInboundMessage(msg: SessionInboundMessage): Promise<void> {
     const promise =
       this.dispatchVoiceAndControlMessage(msg) ??
+      this.dispatchAgentRewindMessage(msg) ??
       this.dispatchAgentLifecycleMessage(msg) ??
       this.dispatchAgentConfigMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
@@ -1831,6 +1833,15 @@ export class Session {
         });
         return undefined;
       }
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchAgentRewindMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "agent.rewind.request":
+        return this.handleAgentRewindRequest(msg);
       default:
         return undefined;
     }
@@ -3082,7 +3093,6 @@ export class Session {
         agentManager: this.agentManager,
         agentStorage: this.agentStorage,
         agentId,
-        userMessageText: text,
         prompt,
         messageId,
         runOptions,
@@ -3134,10 +3144,7 @@ export class Session {
         configTitle: config.title,
         initialPrompt: trimmedPrompt,
       });
-      const resolvedConfig: AgentSessionConfig = {
-        ...config,
-        ...(provisionalTitle ? { title: provisionalTitle } : {}),
-      };
+      const resolvedConfig: AgentSessionConfig = config;
 
       const firstAgentContext: FirstAgentContext = {
         ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
@@ -3171,6 +3178,7 @@ export class Session {
         workspaceId: resolvedWorkspace.workspaceId,
         initialPrompt: trimmedPrompt,
         env,
+        initialTitle: provisionalTitle,
       });
       createdAgentId = snapshot.id;
       await this.forwardAgentUpdate(snapshot);
@@ -3519,6 +3527,33 @@ export class Session {
       }
     } catch (error) {
       this.handleAgentRunError(agentId, error, "Failed to cancel running agent on request");
+    }
+  }
+
+  private async handleAgentRewindRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.rewind.request" }>,
+  ): Promise<void> {
+    try {
+      await this.agentManager.rewind(msg.agentId, msg.messageId, msg.mode);
+      this.emit({
+        type: "agent.rewind.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          ok: true,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.rewind.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          ok: false,
+          error: error instanceof Error ? error.message : "Failed to rewind agent",
+        },
+      });
     }
   }
 
@@ -7747,7 +7782,6 @@ export class Session {
           agentManager: this.agentManager,
           agentStorage: this.agentStorage,
           agentId,
-          userMessageText: msg.text,
           prompt,
           messageId: msg.messageId,
           logger: this.sessionLogger,
@@ -8794,7 +8828,6 @@ export class Session {
             agentId,
             prompt: formatSystemNotificationPrompt(text),
             unarchive: false,
-            recordUserMessage: false,
             logger: this.sessionLogger,
           });
         },

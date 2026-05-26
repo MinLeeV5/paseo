@@ -112,14 +112,18 @@ export function formatSystemNotificationPrompt(reason: string): string {
   return `<paseo-system>\n${reason}\n</paseo-system>`;
 }
 
+const SYSTEM_ENVELOPE_PATTERN = /^<paseo-system>\n[\s\S]*\n<\/paseo-system>$/;
+
+export function isSystemInjectedEnvelope(text: string): boolean {
+  return SYSTEM_ENVELOPE_PATTERN.test(text);
+}
+
 export interface SendPromptToAgentParams {
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   agentId: string;
   /** Prompt to dispatch to the provider (may include image blocks or wrapped text). */
   prompt: AgentPromptInput;
-  /** Raw user text to record in the timeline. Required when recordUserMessage is true. */
-  userMessageText?: string;
   messageId?: string;
   runOptions?: AgentRunOptions;
   /** Optional mode to set on the agent before the run starts. */
@@ -130,18 +134,12 @@ export interface SendPromptToAgentParams {
    * schedule fires, notify-on-finish).
    */
   unarchive?: boolean;
-  /**
-   * Default true. When false, the prompt is dispatched to the provider but
-   * no user-message turn is added to the timeline — the app shows nothing.
-   * Use false for system-injected prompts.
-   */
-  recordUserMessage?: boolean;
   logger: Logger;
 }
 
 /**
  * Full send-prompt orchestration: (optional unarchive) → load → (optional
- * mode change) → (optional record user message) → start run.
+ * mode change) → start run.
  *
  * Every surface that sends a prompt to an agent (Session/WS, MCP, CLI-through-MCP,
  * chat mentions, notify-on-finish) MUST go through this so behavior can never
@@ -154,11 +152,6 @@ export async function sendPromptToAgent(
   params: SendPromptToAgentParams,
 ): Promise<{ outOfBand: boolean }> {
   const unarchive = params.unarchive ?? true;
-  const recordUserMessage = params.recordUserMessage ?? true;
-
-  if (recordUserMessage && params.userMessageText === undefined) {
-    throw new Error("userMessageText is required when recordUserMessage is true");
-  }
 
   const record = await params.agentStorage.get(params.agentId);
   if (record?.archivedAt) {
@@ -176,17 +169,6 @@ export async function sendPromptToAgent(
 
   if (params.sessionMode) {
     await params.agentManager.setAgentMode(params.agentId, params.sessionMode);
-  }
-
-  if (recordUserMessage && params.userMessageText !== undefined) {
-    try {
-      params.agentManager.recordUserMessage(params.agentId, params.userMessageText, {
-        messageId: params.messageId,
-        emitState: false,
-      });
-    } catch (error) {
-      params.logger.error({ err: error, agentId: params.agentId }, "Failed to record user message");
-    }
   }
 
   return startAgentRun(params.agentManager, params.agentId, params.prompt, params.logger, {
@@ -216,7 +198,8 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
     fired = true;
     unsubscribe?.();
 
-    const title = agentManager.getAgent(childAgentId)?.config?.title ?? childAgentId;
+    const record = await agentStorage.get(childAgentId);
+    const title = record?.title ?? childAgentId;
     const body = `Agent ${childAgentId} (${title}) ${reason}.`;
 
     await sendPromptToAgent({
@@ -225,7 +208,6 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
       agentId: callerAgentId,
       prompt: formatSystemNotificationPrompt(body),
       unarchive: false,
-      recordUserMessage: false,
       logger,
     });
   }

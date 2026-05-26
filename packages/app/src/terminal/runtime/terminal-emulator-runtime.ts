@@ -23,6 +23,11 @@ import {
   shouldInterceptDomTerminalKey,
 } from "@/utils/terminal-keys";
 import { renderTerminalSnapshotToAnsi } from "./terminal-snapshot";
+import {
+  createTerminalLocalFileLinkProvider,
+  type TerminalLocalFileLinkSource,
+  type TerminalLocalFileLinkTarget,
+} from "../local-links/terminal-local-link-provider";
 
 export type TerminalOutputData = Uint8Array;
 
@@ -46,6 +51,13 @@ export interface TerminalEmulatorRuntimeCallbacks {
   }) => Promise<void> | void;
   onPendingModifiersConsumed?: () => Promise<void> | void;
   onOpenExternalUrl?: (url: string) => Promise<void> | void;
+  onResolveLocalFileLink?: (
+    source: TerminalLocalFileLinkSource,
+  ) => Promise<TerminalLocalFileLinkTarget | null> | TerminalLocalFileLinkTarget | null;
+  onOpenLocalFileLink?: (
+    target: TerminalLocalFileLinkTarget,
+    disposition: "main" | "side",
+  ) => Promise<void> | void;
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
 }
 
@@ -162,6 +174,7 @@ export class TerminalEmulatorRuntime {
   private suppressInput = false;
   private readonly inputModeTracker = new TerminalInputModeTracker();
   private lastInputModeState: TerminalInputModeState = this.inputModeTracker.getState();
+  private themeBackgroundElements: HTMLElement[] = [];
 
   private handleVisibilityRestore = (): void => {
     if (typeof document !== "undefined" && document.visibilityState !== "visible") {
@@ -221,6 +234,17 @@ export class TerminalEmulatorRuntime {
         void this.callbacks.onOpenExternalUrl?.(uri);
       }),
     );
+    const localFileLinkProvider = terminal.registerLinkProvider(
+      createTerminalLocalFileLinkProvider(terminal, {
+        resolveLink: async (source) => {
+          const target = await this.callbacks.onResolveLocalFileLink?.(source);
+          return target ?? null;
+        },
+        openLink: (target, disposition) => {
+          void this.callbacks.onOpenLocalFileLink?.(target, disposition);
+        },
+      }),
+    );
     terminal.loadAddon(new SearchAddon({ highlightLimit: 20_000 }));
     terminal.loadAddon(new ClipboardAddon());
     try {
@@ -229,6 +253,8 @@ export class TerminalEmulatorRuntime {
       // Ligatures require Font Access API or compatible environment
     }
     terminal.open(input.host);
+    this.themeBackgroundElements = this.collectThemeBackgroundElements(input);
+    this.applyThemeBackground(input.theme);
     try {
       terminal.unicode.activeVersion = "11";
     } catch {
@@ -275,6 +301,9 @@ export class TerminalEmulatorRuntime {
         { prefix: "?", intermediates: "$", final: "p" },
         () => true,
       );
+      for (const code of [10, 11, 12]) {
+        terminal.parser.registerOscHandler(code, (data) => data.trim() === "?");
+      }
     };
     registerProtocolQuerySuppression();
 
@@ -524,6 +553,7 @@ export class TerminalEmulatorRuntime {
         disposeImageAddon();
       },
       disposeTerminal: () => {
+        localFileLinkProvider.dispose();
         terminal.dispose();
       },
     };
@@ -622,6 +652,7 @@ export class TerminalEmulatorRuntime {
       return;
     }
 
+    this.applyThemeBackground(input.theme);
     this.refreshVisibleRows();
   }
 
@@ -641,8 +672,19 @@ export class TerminalEmulatorRuntime {
     this.refreshVisibleRows();
   }
 
-  focus(): void {
-    this.terminal?.focus();
+  focus(input?: { forceRefocus?: boolean }): void {
+    const terminal = this.terminal;
+    if (!terminal) {
+      return;
+    }
+    if (input?.forceRefocus) {
+      terminal.blur();
+    }
+    terminal.focus();
+  }
+
+  blur(): void {
+    this.terminal?.blur();
   }
 
   private refreshVisibleRows(): void {
@@ -655,6 +697,26 @@ export class TerminalEmulatorRuntime {
       terminal.refresh(0, terminal.rows - 1);
     } catch {
       // ignore
+    }
+  }
+
+  private collectThemeBackgroundElements(input: {
+    root: HTMLDivElement;
+    host: HTMLDivElement;
+  }): HTMLElement[] {
+    return [
+      input.root,
+      input.host,
+      ...Array.from(
+        input.host.querySelectorAll<HTMLElement>(".xterm, .xterm-screen, .xterm-viewport"),
+      ),
+    ];
+  }
+
+  private applyThemeBackground(theme: ITheme): void {
+    const background = theme.background ?? "#0b0b0b";
+    for (const element of this.themeBackgroundElements) {
+      element.style.backgroundColor = background;
     }
   }
 
@@ -679,6 +741,7 @@ export class TerminalEmulatorRuntime {
     this.fitAddon = null;
     this.fitAndEmitResize = null;
     this.lastSize = null;
+    this.themeBackgroundElements = [];
     this.suppressInput = false;
     this.inputModeDecoder.decode();
     this.inputModeTracker.reset();
