@@ -412,6 +412,50 @@ describe("checkout git utilities", () => {
     expect(diff.diff).toContain("+two");
   });
 
+  it("includes modified files inside submodules ignored by the parent repository", async () => {
+    const submoduleSource = join(tempDir, "submodule-source");
+    mkdirSync(submoduleSource, { recursive: true });
+    execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: submoduleSource });
+    writeFileSync(join(submoduleSource, ".npmrc"), "registry=https://registry.example.test\n");
+    execFileSync("git", ["add", ".npmrc"], { cwd: submoduleSource });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "submodule initial"], {
+      cwd: submoduleSource,
+    });
+
+    execFileSync(
+      "git",
+      ["-c", "protocol.file.allow=always", "submodule", "add", submoduleSource, "modules/sub"],
+      { cwd: repoDir },
+    );
+    execFileSync(
+      "git",
+      ["config", "--file", ".gitmodules", "submodule.modules/sub.ignore", "all"],
+      {
+        cwd: repoDir,
+      },
+    );
+    execFileSync("git", ["add", ".gitmodules", "modules/sub"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add submodule"], {
+      cwd: repoDir,
+    });
+
+    writeFileSync(
+      join(repoDir, "modules/sub/.npmrc"),
+      "registry=https://registry.example.test\nstrict-peer-dependencies=false\n",
+    );
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(diff.structured?.map((file) => file.path)).toEqual(["modules/sub/.npmrc"]);
+    expect(diff.diff).toContain("diff --git a/modules/sub/.npmrc b/modules/sub/.npmrc");
+    expect(diff.diff).toContain("+strict-peer-dependencies=false");
+  });
+
   it("includes untracked files inside submodules in an uncommitted diff", async () => {
     const submoduleSource = join(tempDir, "submodule-source");
     mkdirSync(submoduleSource, { recursive: true });

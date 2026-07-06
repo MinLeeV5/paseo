@@ -184,6 +184,17 @@ interface CheckoutDiffRefs {
   includeUntracked: boolean;
 }
 
+interface SubmoduleTrackedFileChange {
+  cwd: string;
+  displayPrefix: string;
+  change: CheckoutFileChange;
+}
+
+interface SubmoduleFileChanges {
+  tracked: SubmoduleTrackedFileChange[];
+  untracked: CheckoutFileChange[];
+}
+
 function getCheckoutDiffRefArgs(refs: CheckoutDiffRefs): string[] {
   return [refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
 }
@@ -734,64 +745,188 @@ async function listInitializedSubmodulePaths(cwd: string): Promise<string[]> {
   return Array.from(new Set(paths)).sort();
 }
 
-// Parent `git diff` does not enumerate submodule-only untracked files, even
-// though `git status` marks the submodule dirty. Scan initialized submodules so
+// Parent `git diff` may not enumerate submodule worktree changes, especially
+// when `.gitmodules` configures `ignore = all`. Scan initialized submodules so
 // the checkout diff pane can show those files with parent-repo-relative paths.
-async function listSubmoduleUntrackedFileChanges(input: {
+async function listSubmoduleFileChanges(input: {
   cwd: string;
   displayPrefix?: string;
+  ignoreWhitespace: boolean;
+  skipTrackedSubmodulePaths?: ReadonlySet<string>;
   visited?: Set<string>;
-}): Promise<CheckoutFileChange[]> {
-  const { cwd, displayPrefix = "", visited = new Set<string>() } = input;
+}): Promise<SubmoduleFileChanges> {
+  const {
+    cwd,
+    displayPrefix = "",
+    ignoreWhitespace,
+    skipTrackedSubmodulePaths = new Set<string>(),
+    visited = new Set<string>(),
+  } = input;
   let canonicalCwd: string;
   try {
     canonicalCwd = realpathSync.native(cwd);
   } catch {
-    return [];
+    return { tracked: [], untracked: [] };
   }
   if (visited.has(canonicalCwd)) {
-    return [];
+    return { tracked: [], untracked: [] };
   }
   visited.add(canonicalCwd);
 
-  const changes: CheckoutFileChange[] = [];
+  const tracked: SubmoduleTrackedFileChange[] = [];
+  const untracked: CheckoutFileChange[] = [];
   const submodulePaths = await listInitializedSubmodulePaths(cwd);
   for (const submodulePath of submodulePaths) {
     const submoduleCwd = resolve(cwd, submodulePath);
     const displaySubmodulePath = joinGitPath(displayPrefix, submodulePath);
 
     try {
-      const { stdout } = await runGitCommand(["ls-files", "--others", "--exclude-standard"], {
-        cwd: submoduleCwd,
-        envOverlay: READ_ONLY_GIT_ENV,
-      });
-      for (const filePath of stdout
-        .split("\n")
-        .map((candidate) => candidate.trim())
-        .filter(Boolean)) {
-        changes.push({
-          path: joinGitPath(displaySubmodulePath, filePath),
-          status: "U",
-          isNew: true,
-          isDeleted: false,
-          isUntracked: true,
-        });
+      const submoduleChanges = await listCheckoutFileChanges(
+        submoduleCwd,
+        {
+          baseRef: "HEAD",
+          includeUntracked: true,
+        },
+        ignoreWhitespace,
+      );
+      for (const change of submoduleChanges) {
+        if (change.isUntracked) {
+          untracked.push({
+            path: joinGitPath(displaySubmodulePath, change.path),
+            status: "U",
+            isNew: true,
+            isDeleted: false,
+            isUntracked: true,
+          });
+          continue;
+        }
+
+        if (!skipTrackedSubmodulePaths.has(displaySubmodulePath)) {
+          tracked.push({
+            cwd: submoduleCwd,
+            displayPrefix: displaySubmodulePath,
+            change,
+          });
+        }
       }
     } catch {
       // Ignore uninitialized or temporarily unavailable submodules; the parent
       // repository diff should remain usable even if a nested checkout is broken.
     }
 
-    changes.push(
-      ...(await listSubmoduleUntrackedFileChanges({
-        cwd: submoduleCwd,
-        displayPrefix: displaySubmodulePath,
-        visited,
-      })),
-    );
+    const nestedChanges = await listSubmoduleFileChanges({
+      cwd: submoduleCwd,
+      displayPrefix: displaySubmodulePath,
+      ignoreWhitespace,
+      skipTrackedSubmodulePaths,
+      visited,
+    });
+    tracked.push(...nestedChanges.tracked);
+    untracked.push(...nestedChanges.untracked);
   }
 
-  return changes;
+  return { tracked, untracked };
+}
+
+async function getSubmoduleTrackedDiffTextForPath(input: {
+  trackedChange: SubmoduleTrackedFileChange;
+  ignoreWhitespace: boolean;
+}): Promise<{ path: string; text: string; truncated: boolean; change: CheckoutFileChange }> {
+  const { trackedChange } = input;
+  const path = joinGitPath(trackedChange.displayPrefix, trackedChange.change.path);
+  const result = await runGitCommand(
+    buildGitDiffArgs({
+      ignoreWhitespace: input.ignoreWhitespace,
+      extra: [
+        "--submodule=diff",
+        `--src-prefix=a/${trackedChange.displayPrefix}/`,
+        `--dst-prefix=b/${trackedChange.displayPrefix}/`,
+        "HEAD",
+        "--",
+        trackedChange.change.path,
+      ],
+    }),
+    {
+      cwd: trackedChange.cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+      maxOutputBytes: PER_FILE_DIFF_MAX_BYTES,
+    },
+  );
+
+  return {
+    path,
+    text: result.stdout,
+    truncated: result.truncated,
+    change: trackedChange.change,
+  };
+}
+
+async function processSubmoduleTrackedChanges(input: {
+  cwd: string;
+  trackedChanges: SubmoduleTrackedFileChange[];
+  ignoreWhitespace: boolean;
+  includeStructured: boolean;
+  structured: ParsedDiffFile[];
+  appendDiff: (text: string) => void;
+}): Promise<void> {
+  const { cwd, trackedChanges, ignoreWhitespace, includeStructured, structured, appendDiff } =
+    input;
+  if (trackedChanges.length === 0) {
+    return;
+  }
+
+  const trackedDiffs = await Promise.all(
+    trackedChanges.map((trackedChange) =>
+      getSubmoduleTrackedDiffTextForPath({
+        trackedChange,
+        ignoreWhitespace,
+      }),
+    ),
+  );
+
+  for (const fileDiff of trackedDiffs) {
+    if (fileDiff.truncated) {
+      if (includeStructured) {
+        structured.push(
+          buildPlaceholderParsedDiffFile(
+            {
+              path: fileDiff.path,
+              status: fileDiff.change.status,
+              isNew: fileDiff.change.isNew,
+              isDeleted: fileDiff.change.isDeleted,
+            },
+            { status: "too_large", stat: null },
+          ),
+        );
+      }
+      appendDiff(`# ${fileDiff.path}: diff too large omitted\n`);
+      continue;
+    }
+
+    appendDiff(fileDiff.text);
+    if (!includeStructured) {
+      continue;
+    }
+
+    const parsed = await parseAndHighlightDiff(fileDiff.text, cwd);
+    const parsedFile =
+      parsed[0] ??
+      ({
+        path: fileDiff.path,
+        isNew: fileDiff.change.isNew,
+        isDeleted: fileDiff.change.isDeleted,
+        additions: 0,
+        deletions: 0,
+        hunks: [],
+      } satisfies ParsedDiffFile);
+    structured.push({
+      ...parsedFile,
+      path: fileDiff.path,
+      isNew: fileDiff.change.isNew,
+      isDeleted: fileDiff.change.isDeleted,
+      status: "ok",
+    });
+  }
 }
 
 export class NotGitRepoError extends Error {
@@ -2590,8 +2725,16 @@ export async function getCheckoutDiff(
 
   const trackedChanges = changes.filter((change) => !change.isUntracked);
   const untrackedChanges = changes.filter((change) => change.isUntracked === true);
+  const parentTrackedChangePaths = new Set(trackedChanges.map((change) => change.path));
+  const submoduleFileChanges = effectiveRefsForDiff.includeUntracked
+    ? await listSubmoduleFileChanges({
+        cwd,
+        ignoreWhitespace,
+        skipTrackedSubmodulePaths: parentTrackedChangePaths,
+      })
+    : { tracked: [], untracked: [] };
   if (effectiveRefsForDiff.includeUntracked) {
-    untrackedChanges.push(...(await listSubmoduleUntrackedFileChanges({ cwd })));
+    untrackedChanges.push(...submoduleFileChanges.untracked);
     untrackedChanges.sort((a, b) => {
       if (a.path === b.path) return 0;
       return a.path < b.path ? -1 : 1;
@@ -2638,6 +2781,15 @@ export async function getCheckoutDiff(
       }
     }
   }
+
+  await processSubmoduleTrackedChanges({
+    cwd,
+    trackedChanges: submoduleFileChanges.tracked,
+    ignoreWhitespace,
+    includeStructured: compare.includeStructured === true,
+    structured,
+    appendDiff,
+  });
 
   for (const change of untrackedChanges) {
     if (diffBytes >= TOTAL_DIFF_MAX_BYTES) {
