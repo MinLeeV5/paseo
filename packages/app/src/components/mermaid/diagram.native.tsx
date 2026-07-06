@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  Text,
+  View,
+  type PressableStateCallbackType,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { Maximize2, X } from "lucide-react-native";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { mermaidWebViewHtml } from "@/components/mermaid/webview/mermaid-webview-html";
-import { useMermaidThemePayload } from "./theme";
+import { type MermaidThemePayload, useMermaidThemePayload } from "./theme";
 
 export interface MermaidDiagramProps {
   diagram: string;
@@ -90,13 +99,28 @@ function clampWebViewHeight(height: number): number {
   return Math.min(MAX_WEBVIEW_HEIGHT, Math.max(MIN_WEBVIEW_HEIGHT, Math.ceil(height)));
 }
 
-export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
-  const { theme } = useUnistyles();
-  const themePayload = useMermaidThemePayload(theme);
+function previewButtonStyle({ hovered, pressed }: PressableStateCallbackType) {
+  return [styles.previewButton, (hovered || pressed) && styles.previewButtonActive];
+}
+
+interface MermaidWebViewSurfaceProps {
+  diagram: string;
+  themePayload: MermaidThemePayload;
+  style: StyleProp<ViewStyle>;
+  scrollEnabled: boolean;
+  onHeightChange?: (height: number) => void;
+}
+
+function MermaidWebViewSurface({
+  diagram,
+  themePayload,
+  style,
+  scrollEnabled,
+  onHeightChange,
+}: MermaidWebViewSurfaceProps) {
   const webViewRef = useRef<WebView>(null);
   const requestIdRef = useRef(0);
   const [bridgeReady, setBridgeReady] = useState(false);
-  const [height, setHeight] = useState(MIN_WEBVIEW_HEIGHT);
   const [error, setError] = useState<string | null>(null);
 
   const postRenderRequest = useCallback(() => {
@@ -119,25 +143,28 @@ export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
     }
   }, [bridgeReady, postRenderRequest]);
 
-  const handleMessage = useCallback((event: WebViewMessageEvent) => {
-    const message = parseMermaidWebViewMessage(event.nativeEvent.data);
-    if (!message) {
-      return;
-    }
-    if (message.type === "bridgeReady") {
-      setBridgeReady(true);
-      return;
-    }
-    if (message.requestId !== requestIdRef.current) {
-      return;
-    }
-    if (message.type === "rendered") {
-      setHeight(clampWebViewHeight(message.height));
-      setError(null);
-      return;
-    }
-    setError(message.message);
-  }, []);
+  const handleMessage = useCallback(
+    (event: WebViewMessageEvent) => {
+      const message = parseMermaidWebViewMessage(event.nativeEvent.data);
+      if (!message) {
+        return;
+      }
+      if (message.type === "bridgeReady") {
+        setBridgeReady(true);
+        return;
+      }
+      if (message.requestId !== requestIdRef.current) {
+        return;
+      }
+      if (message.type === "rendered") {
+        onHeightChange?.(clampWebViewHeight(message.height));
+        setError(null);
+        return;
+      }
+      setError(message.message);
+    },
+    [onHeightChange],
+  );
 
   const handleLoadStart = useCallback(() => {
     setBridgeReady(false);
@@ -147,27 +174,21 @@ export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
     setBridgeReady(true);
   }, []);
 
-  const containerStyle = useMemo(
-    () => [styles.container, inlineUnistylesStyle({ backgroundColor: themePayload.background })],
-    [themePayload.background],
-  );
-  const webViewStyle = useMemo(() => [styles.webView, inlineUnistylesStyle({ height })], [height]);
-
   return (
-    <View style={containerStyle}>
+    <>
       <WebView
         ref={webViewRef}
         source={WEBVIEW_SOURCE}
         originWhitelist={WEBVIEW_ORIGIN_WHITELIST}
         javaScriptEnabled
         domStorageEnabled={false}
-        scrollEnabled={false}
+        scrollEnabled={scrollEnabled}
         bounces={false}
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
         setSupportMultipleWindows={false}
         automaticallyAdjustContentInsets={false}
-        style={webViewStyle}
+        style={style}
         onMessage={handleMessage}
         onLoadStart={handleLoadStart}
         onLoadEnd={handleLoadEnd}
@@ -176,6 +197,80 @@ export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
         <Text selectable style={styles.errorText}>
           {error}
         </Text>
+      ) : null}
+    </>
+  );
+}
+
+export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
+  const { theme } = useUnistyles();
+  const themePayload = useMermaidThemePayload(theme);
+  const [height, setHeight] = useState(MIN_WEBVIEW_HEIGHT);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  const handleOpenPreview = useCallback(() => setIsPreviewOpen(true), []);
+  const handleClosePreview = useCallback(() => setIsPreviewOpen(false), []);
+
+  const containerStyle = useMemo(
+    () => [styles.container, inlineUnistylesStyle({ backgroundColor: themePayload.background })],
+    [themePayload.background],
+  );
+  const webViewStyle = useMemo(() => [styles.webView, inlineUnistylesStyle({ height })], [height]);
+
+  return (
+    <View style={containerStyle}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Open Mermaid diagram fullscreen"
+        hitSlop={8}
+        onPress={handleOpenPreview}
+        style={previewButtonStyle}
+      >
+        <Maximize2 size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      </Pressable>
+      <MermaidWebViewSurface
+        diagram={diagram}
+        themePayload={themePayload}
+        style={webViewStyle}
+        scrollEnabled={false}
+        onHeightChange={setHeight}
+      />
+      {isPreviewOpen ? (
+        <Modal
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          visible
+          onRequestClose={handleClosePreview}
+        >
+          <View style={styles.previewRoot}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss Mermaid diagram fullscreen"
+              onPress={handleClosePreview}
+              style={styles.previewBackdrop}
+            />
+            <View style={styles.previewContentLayer}>
+              <View style={styles.previewDiagramArea}>
+                <MermaidWebViewSurface
+                  diagram={diagram}
+                  themePayload={themePayload}
+                  style={styles.previewWebView}
+                  scrollEnabled
+                />
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close Mermaid diagram fullscreen"
+                hitSlop={8}
+                onPress={handleClosePreview}
+                style={styles.previewCloseButton}
+              >
+                <X size={16} color={theme.colors.foregroundMuted} />
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       ) : null}
     </View>
   );
@@ -191,10 +286,71 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[3],
     marginVertical: theme.spacing[3],
     overflow: "hidden",
+    position: "relative",
+  },
+  previewButton: {
+    position: "absolute",
+    top: theme.spacing[2],
+    right: theme.spacing[2],
+    width: 28,
+    height: 28,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface2,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  previewButtonActive: {
+    backgroundColor: theme.colors.surface3,
   },
   webView: {
     width: "100%",
     backgroundColor: "transparent",
+  },
+  previewRoot: {
+    flex: 1,
+  },
+  previewBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.9)",
+  },
+  previewContentLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: "box-none",
+  },
+  previewDiagramArea: {
+    flex: 1,
+    padding: theme.spacing[4],
+    pointerEvents: "box-none",
+  },
+  previewWebView: {
+    flex: 1,
+    width: "100%",
+    backgroundColor: "transparent",
+  },
+  previewCloseButton: {
+    position: "absolute",
+    top: theme.spacing[3],
+    right: theme.spacing[3],
+    width: 32,
+    height: 32,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface2,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
   },
   errorText: {
     color: theme.colors.destructive,
