@@ -371,7 +371,13 @@ describe("resolveGitCreateBaseBranch", () => {
 
 describe("create-agent worktree setup boundary", () => {
   test("agent setup continuation starts setup for the created agent timeline", async () => {
-    const { tempDir, repoDir } = createGitRepo();
+    const { tempDir, repoDir } = createGitRepo({
+      paseoConfig: {
+        worktree: {
+          waitForSetup: false,
+        },
+      },
+    });
     const paseoHome = path.join(tempDir, ".paseo");
     const appendedItems: Array<{ name: string; status: string }> = [];
     const liveItems: Array<{ name: string; status: string }> = [];
@@ -439,6 +445,61 @@ describe("create-agent worktree setup boundary", () => {
         });
       });
       expect(liveItems).toEqual([]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("agent worktree waits for setup by default before returning", async () => {
+    const { tempDir, repoDir } = createGitRepo({
+      paseoConfig: {
+        worktree: {
+          setup: "node -e \"require('node:fs').writeFileSync('setup-ran.txt','yes')\"",
+        },
+      },
+    });
+    const paseoHome = path.join(tempDir, ".paseo");
+    const workspaceSetupEvents: SessionOutboundMessage[] = [];
+
+    try {
+      const result = await createPaseoWorktreeWorkflow(
+        {
+          paseoHome,
+          createPaseoWorktree: createPaseoWorktreeForTest({ paseoHome }),
+          warmWorkspaceGitData: async () => {},
+          autoNameWorkspaceBranchForFirstAgent: () => {},
+          emitWorkspaceUpdateForWorkspaceId: async () => {},
+          cacheWorkspaceSetupSnapshot: () => {},
+          emit: (message) => workspaceSetupEvents.push(message),
+          sessionLogger: createLogger(),
+          terminalManager: null,
+          archiveWorkspaceRecord: async () => {},
+          serviceProxy: null,
+          scriptRuntimeStore: null,
+          getDaemonTcpPort: null,
+          getDaemonTcpHost: null,
+          onScriptsChanged: null,
+        },
+        {
+          cwd: repoDir,
+          worktreeSlug: "agent-setup-default-wait",
+          runSetup: false,
+          paseoHome,
+        },
+        {
+          setupContinuation: {
+            kind: "agent",
+            terminalManager: createTerminalManagerStub().manager,
+            appendTimelineItem: async () => true,
+            emitLiveTimelineItem: async () => true,
+            logger: createLogger(),
+          },
+        },
+      );
+
+      expect(result.setupContinuation).toBeUndefined();
+      expect(existsSync(path.join(result.worktree.worktreePath, "setup-ran.txt"))).toBe(true);
+      expect(workspaceSetupEvents).toEqual([]);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

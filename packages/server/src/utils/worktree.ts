@@ -260,7 +260,7 @@ export function getWorktreeTeardownCommands(repoRoot: string): string[] {
 }
 
 export function getWorktreeWaitForSetup(repoRoot: string): boolean {
-  return readPaseoConfigOrThrow(repoRoot)?.worktree?.waitForSetup ?? false;
+  return readPaseoConfigOrThrow(repoRoot)?.worktree?.waitForSetup ?? true;
 }
 
 export function getWorktreeTerminalSpecs(repoRoot: string): WorktreeTerminalConfig[] {

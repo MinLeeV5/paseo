@@ -76,18 +76,18 @@ Commands run with the worktree as `cwd`. Use `$PASEO_SOURCE_CHECKOUT_PATH` to re
 
 ### Waiting for setup
 
-By default, setup runs in the background while the agent session starts immediately. For projects where the agent depends on setup completing first (e.g. heavy dependency installs), set `waitForSetup` to block the agent session until setup finishes:
+By default, setup blocks the agent session until it finishes, which keeps fresh worktrees ready before the agent starts. To let setup run in the background while the agent starts immediately, set `waitForSetup` to `false`:
 
 ```json
 {
   "worktree": {
     "setup": "pnpm install",
-    "waitForSetup": true
+    "waitForSetup": false
   }
 }
 ```
 
-When `waitForSetup` is `true`, the agent session will not start until all setup commands have exited successfully. When `false` (the default), setup runs concurrently with the agent.
+When `waitForSetup` is `true` (the default), the agent session will not start until all setup commands have exited successfully. When `false`, setup runs concurrently with the agent.
 
 ## Scripts and services
 
