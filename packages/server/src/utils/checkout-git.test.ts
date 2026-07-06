@@ -378,6 +378,74 @@ describe("checkout git utilities", () => {
     expect(message).toBe("update file");
   });
 
+  it("includes modified files inside submodules in an uncommitted diff", async () => {
+    const submoduleSource = join(tempDir, "submodule-source");
+    mkdirSync(submoduleSource, { recursive: true });
+    execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: submoduleSource });
+    writeFileSync(join(submoduleSource, "inner.txt"), "one\n");
+    execFileSync("git", ["add", "inner.txt"], { cwd: submoduleSource });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "submodule initial"], {
+      cwd: submoduleSource,
+    });
+
+    execFileSync(
+      "git",
+      ["-c", "protocol.file.allow=always", "submodule", "add", submoduleSource, "modules/sub"],
+      { cwd: repoDir },
+    );
+    execFileSync("git", ["add", ".gitmodules", "modules/sub"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add submodule"], {
+      cwd: repoDir,
+    });
+
+    writeFileSync(join(repoDir, "modules/sub/inner.txt"), "one\ntwo\n");
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(diff.structured?.map((file) => file.path)).toEqual(["modules/sub/inner.txt"]);
+    expect(diff.diff).toContain("diff --git a/modules/sub/inner.txt b/modules/sub/inner.txt");
+    expect(diff.diff).toContain("+two");
+  });
+
+  it("includes untracked files inside submodules in an uncommitted diff", async () => {
+    const submoduleSource = join(tempDir, "submodule-source");
+    mkdirSync(submoduleSource, { recursive: true });
+    execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: submoduleSource });
+    writeFileSync(join(submoduleSource, "inner.txt"), "one\n");
+    execFileSync("git", ["add", "inner.txt"], { cwd: submoduleSource });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "submodule initial"], {
+      cwd: submoduleSource,
+    });
+
+    execFileSync(
+      "git",
+      ["-c", "protocol.file.allow=always", "submodule", "add", submoduleSource, "modules/sub"],
+      { cwd: repoDir },
+    );
+    execFileSync("git", ["add", ".gitmodules", "modules/sub"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add submodule"], {
+      cwd: repoDir,
+    });
+
+    writeFileSync(join(repoDir, "modules/sub/new.txt"), "new\n");
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(diff.structured?.map((file) => file.path)).toEqual(["modules/sub/new.txt"]);
+    expect(diff.diff).toContain("diff --git a/modules/sub/new.txt b/modules/sub/new.txt");
+    expect(diff.diff).toContain("+new");
+  });
+
   it("reuses checkout snapshot facts across status, shortstat, and PR status reads", async () => {
     setupRemoteTrackingMain(repoDir, tempDir);
     execFileSync("git", ["checkout", "-b", "feature/facts"], { cwd: repoDir });
@@ -1197,8 +1265,8 @@ const x = 1;
     expect(diff.diff).toContain(`-export const value = "old";`);
     expect(diff.diff).toContain(`+export const value = "new";`);
     expect(commands).toContain("diff --numstat HEAD");
-    expect(commands).toContain("diff HEAD -- generated.js");
-    expect(commands).toContain("diff HEAD -- small.ts");
+    expect(commands).toContain("diff --submodule=diff HEAD -- generated.js");
+    expect(commands).toContain("diff --submodule=diff HEAD -- small.ts");
     expect(metrics.maxConcurrent).toBeLessThanOrEqual(8);
   });
 

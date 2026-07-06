@@ -203,6 +203,42 @@ describe("CheckoutDiffManager", () => {
     });
   });
 
+  test("refreshes parent repo diff subscriptions for submodule descendant cwd changes", async () => {
+    const getCheckoutDiff = vi
+      .fn()
+      .mockResolvedValueOnce({
+        diff: "",
+        structured: [{ path: "modules/sub", additions: 0, deletions: 0, status: "ok" }],
+      })
+      .mockResolvedValueOnce({
+        diff: "",
+        structured: [{ path: "modules/sub/inner.txt", additions: 1, deletions: 0, status: "ok" }],
+      });
+
+    const { manager } = createManager({
+      repoRoot: "/tmp/repo",
+      getCheckoutDiffImplementation: getCheckoutDiff,
+    });
+    const listener = vi.fn();
+
+    await manager.subscribe(
+      {
+        cwd: "/tmp/repo",
+        compare: { mode: "uncommitted" },
+      },
+      listener,
+    );
+
+    manager.scheduleRefreshForCwd("/tmp/repo/modules/sub");
+    await vi.advanceTimersByTimeAsync(150);
+
+    expect(listener).toHaveBeenCalledWith({
+      cwd: "/tmp/repo",
+      files: [{ path: "modules/sub/inner.txt", additions: 1, deletions: 0, status: "ok" }],
+      error: null,
+    });
+  });
+
   test("falls back to cwd when the working tree watch returns no repo root", async () => {
     const { manager, workspaceGitService } = createManager({ repoRoot: null });
 

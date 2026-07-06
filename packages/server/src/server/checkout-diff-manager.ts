@@ -1,3 +1,4 @@
+import { isAbsolute, relative } from "node:path";
 import type pino from "pino";
 import type { SubscribeCheckoutDiffRequest, SessionOutboundMessage } from "./messages.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
@@ -18,6 +19,11 @@ export interface CheckoutDiffMetrics {
   checkoutDiffSubscriptionCount: number;
   checkoutDiffWatcherCount: number;
   checkoutDiffFallbackRefreshTargetCount: number;
+}
+
+function isSameOrDescendantPath(basePath: string, candidatePath: string): boolean {
+  const relativePath = relative(basePath, candidatePath);
+  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
 interface CheckoutDiffWatchTarget {
@@ -76,7 +82,10 @@ export class CheckoutDiffManager {
   scheduleRefreshForCwd(cwd: string): void {
     const resolvedCwd = expandTilde(cwd);
     for (const target of this.targets.values()) {
-      if (target.cwd !== resolvedCwd && target.diffCwd !== resolvedCwd) {
+      if (
+        !isSameOrDescendantPath(target.cwd, resolvedCwd) &&
+        !isSameOrDescendantPath(target.diffCwd, resolvedCwd)
+      ) {
         continue;
       }
       this.scheduleTargetRefresh(target);

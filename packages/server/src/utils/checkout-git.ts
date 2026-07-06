@@ -577,6 +577,21 @@ function buildGitDiffArgs(args: { ignoreWhitespace?: boolean; extra: string[] })
   return ["diff", ...(args.ignoreWhitespace ? ["-w"] : []), ...args.extra];
 }
 
+function getNestedParsedFilesForChange(
+  parsedTrackedFiles: ParsedDiffFile[],
+  change: CheckoutFileChange,
+): ParsedDiffFile[] {
+  const nestedPathPrefix = `${change.path}/`;
+  return parsedTrackedFiles.filter((file) => file.path.startsWith(nestedPathPrefix));
+}
+
+function joinGitPath(...parts: string[]): string {
+  return parts
+    .map((part) => part.replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean)
+    .join("/");
+}
+
 const TRACKED_DIFF_NUMSTAT_MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
@@ -654,7 +669,7 @@ async function getTrackedDiffTextForPath(input: {
   const result = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace: input.ignoreWhitespace,
-      extra: [...getCheckoutDiffRefArgs(input.refsForDiff), "--", input.path],
+      extra: ["--submodule=diff", ...getCheckoutDiffRefArgs(input.refsForDiff), "--", input.path],
     }),
     {
       cwd: input.cwd,
@@ -668,6 +683,115 @@ async function getTrackedDiffTextForPath(input: {
     text: result.stdout,
     truncated: result.truncated,
   };
+}
+
+async function listInitializedSubmodulePaths(cwd: string): Promise<string[]> {
+  let result;
+  try {
+    result = await runGitCommand(
+      ["config", "--file", ".gitmodules", "--get-regexp", "^submodule\\..*\\.path$"],
+      {
+        cwd,
+        envOverlay: READ_ONLY_GIT_ENV,
+        acceptExitCodes: [0, 1],
+      },
+    );
+  } catch {
+    return [];
+  }
+
+  if (result.exitCode !== 0) {
+    return [];
+  }
+
+  const paths: string[] = [];
+  for (const line of result.stdout
+    .split("\n")
+    .map((candidate) => candidate.trim())
+    .filter(Boolean)) {
+    const separatorIndex = line.indexOf(" ");
+    if (separatorIndex < 0) {
+      continue;
+    }
+
+    const submodulePath = line.slice(separatorIndex + 1).trim();
+    if (!submodulePath || submodulePath.startsWith("/")) {
+      continue;
+    }
+
+    try {
+      await runGitCommand(["rev-parse", "--is-inside-work-tree"], {
+        cwd: resolve(cwd, submodulePath),
+        envOverlay: READ_ONLY_GIT_ENV,
+      });
+    } catch {
+      continue;
+    }
+
+    paths.push(submodulePath);
+  }
+
+  return Array.from(new Set(paths)).sort();
+}
+
+// Parent `git diff` does not enumerate submodule-only untracked files, even
+// though `git status` marks the submodule dirty. Scan initialized submodules so
+// the checkout diff pane can show those files with parent-repo-relative paths.
+async function listSubmoduleUntrackedFileChanges(input: {
+  cwd: string;
+  displayPrefix?: string;
+  visited?: Set<string>;
+}): Promise<CheckoutFileChange[]> {
+  const { cwd, displayPrefix = "", visited = new Set<string>() } = input;
+  let canonicalCwd: string;
+  try {
+    canonicalCwd = realpathSync.native(cwd);
+  } catch {
+    return [];
+  }
+  if (visited.has(canonicalCwd)) {
+    return [];
+  }
+  visited.add(canonicalCwd);
+
+  const changes: CheckoutFileChange[] = [];
+  const submodulePaths = await listInitializedSubmodulePaths(cwd);
+  for (const submodulePath of submodulePaths) {
+    const submoduleCwd = resolve(cwd, submodulePath);
+    const displaySubmodulePath = joinGitPath(displayPrefix, submodulePath);
+
+    try {
+      const { stdout } = await runGitCommand(["ls-files", "--others", "--exclude-standard"], {
+        cwd: submoduleCwd,
+        envOverlay: READ_ONLY_GIT_ENV,
+      });
+      for (const filePath of stdout
+        .split("\n")
+        .map((candidate) => candidate.trim())
+        .filter(Boolean)) {
+        changes.push({
+          path: joinGitPath(displaySubmodulePath, filePath),
+          status: "U",
+          isNew: true,
+          isDeleted: false,
+          isUntracked: true,
+        });
+      }
+    } catch {
+      // Ignore uninitialized or temporarily unavailable submodules; the parent
+      // repository diff should remain usable even if a nested checkout is broken.
+    }
+
+    changes.push(
+      ...(await listSubmoduleUntrackedFileChanges({
+        cwd: submoduleCwd,
+        displayPrefix: displaySubmodulePath,
+        visited,
+      })),
+    );
+  }
+
+  return changes;
 }
 
 export class NotGitRepoError extends Error {
@@ -2217,6 +2341,14 @@ async function appendStructuredTrackedDiffs(
       continue;
     }
 
+    const nestedParsedFiles = getNestedParsedFilesForChange(parsedTrackedFiles, change);
+    if (nestedParsedFiles.length > 0) {
+      for (const nestedFile of nestedParsedFiles) {
+        structured.push({ ...nestedFile, status: "ok" });
+      }
+      continue;
+    }
+
     // `git diff -w --name-status` can still report a modified path even when the
     // whitespace-filtered patch and numstat are both empty. Skip emitting a
     // structured placeholder in that case so whitespace-only edits truly disappear.
@@ -2458,6 +2590,13 @@ export async function getCheckoutDiff(
 
   const trackedChanges = changes.filter((change) => !change.isUntracked);
   const untrackedChanges = changes.filter((change) => change.isUntracked === true);
+  if (effectiveRefsForDiff.includeUntracked) {
+    untrackedChanges.push(...(await listSubmoduleUntrackedFileChanges({ cwd })));
+    untrackedChanges.sort((a, b) => {
+      if (a.path === b.path) return 0;
+      return a.path < b.path ? -1 : 1;
+    });
+  }
   const trackedDiff = await processTrackedChanges({
     cwd,
     refsForDiff: effectiveRefsForDiff,
