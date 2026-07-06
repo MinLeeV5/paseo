@@ -1,7 +1,6 @@
 import mermaid from "mermaid";
-import { useEffect, useId, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import { SvgXml } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { createMermaidThemePayload } from "./theme";
@@ -23,6 +22,18 @@ function normalizeMermaidRenderId(id: string): string {
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unable to render Mermaid diagram";
 }
+
+const svgHostStyle: CSSProperties = {
+  width: "100%",
+  overflowX: "auto",
+};
+
+const svgRootStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "center",
+  width: "100%",
+};
 
 export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
   const { theme } = useUnistyles();
@@ -68,6 +79,7 @@ export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
     () => [styles.container, inlineUnistylesStyle({ backgroundColor: themePayload.background })],
     [themePayload.background],
   );
+  const svgMarkup = useMemo(() => ({ __html: state.svg ?? "" }), [state.svg]);
 
   if (state.kind === "failed") {
     return (
@@ -89,7 +101,14 @@ export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
 
   return (
     <View style={containerStyle}>
-      <SvgXml xml={state.svg} width="100%" />
+      <div style={svgHostStyle}>
+        {/* Mermaid sanitizes this SVG under securityLevel: "strict"; the browser keeps SVG semantics intact here. */}
+        <div
+          data-testid="mermaid-diagram-svg"
+          style={svgRootStyle}
+          dangerouslySetInnerHTML={svgMarkup}
+        />
+      </div>
     </View>
   );
 }
