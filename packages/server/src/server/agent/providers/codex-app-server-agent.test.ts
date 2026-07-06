@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -870,6 +870,34 @@ describe("Codex app-server provider", () => {
     }
   });
 
+  test("lists repo .agents skills when app-server skills are unavailable", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "codex-agents-skills-"));
+    const repoRoot = path.join(tempDir, "repo");
+    const cwd = path.join(repoRoot, "packages", "app");
+    const repoSkillDir = path.join(repoRoot, ".agents", "skills", "release-beta");
+    mkdirSync(cwd, { recursive: true });
+    mkdirSync(repoSkillDir, { recursive: true });
+    writeFileSync(
+      path.join(repoSkillDir, "SKILL.md"),
+      "---\nname: release-beta\ndescription: Cut a beta release.\n---\n",
+    );
+    const workspaceGitService = {
+      resolveRepoRoot: vi.fn().mockResolvedValue(repoRoot),
+    };
+
+    try {
+      await expect(listCodexSkills(cwd, workspaceGitService)).resolves.toContainEqual({
+        name: "release-beta",
+        description: "Cut a beta release.",
+        argumentHint: "",
+        kind: "skill",
+      });
+      expect(workspaceGitService.resolveRepoRoot).toHaveBeenCalledWith(cwd);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   const logger = createTestLogger();
 
   test("extracts context window usage from snake_case token payloads", () => {
@@ -1100,6 +1128,212 @@ describe("Codex app-server provider", () => {
         ],
       }),
     );
+  });
+
+  test("resolves fallback project skills into Codex skill input", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "codex-fallback-skill-"));
+    const skillDir = path.join(tempDir, ".agents", "skills", "release-beta");
+    const skillPath = path.join(skillDir, "SKILL.md");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      skillPath,
+      [
+        "---",
+        "name: release-beta",
+        "description: Cut a beta release.",
+        "---",
+        "",
+        "Cut a beta release carefully.",
+        "",
+      ].join("\n"),
+    );
+
+    const session = createSession({ cwd: tempDir });
+    const request = vi.fn(async (method: string) => {
+      if (method === "skills/list") {
+        return { data: [] };
+      }
+      if (method === "thread/loaded/list") {
+        return { data: ["test-thread"] };
+      }
+      if (method === "turn/start") {
+        return {};
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+
+    session.activeForegroundTurnId = null;
+    session.client = createStub<CodexClientLike>({ request });
+
+    try {
+      await session.startTurn("/release-beta beta.5");
+
+      const turnStartCall = request.mock.calls.find(([method]) => method === "turn/start");
+      expect(turnStartCall?.[1]).toEqual(
+        expect.objectContaining({
+          input: [
+            {
+              type: "skill",
+              name: "release-beta",
+              path: skillPath,
+            },
+            {
+              type: "text",
+              text: "$release-beta beta.5",
+              text_elements: [],
+            },
+          ],
+        }),
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves symlinked project skills when app-server returns other skills", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "codex-symlink-skill-"));
+    const linkedSkillsDir = path.join(tempDir, "linked-skills");
+    const agentsDir = path.join(tempDir, ".agents");
+    const skillDir = path.join(linkedSkillsDir, "release-beta");
+    const skillPath = path.join(tempDir, ".agents", "skills", "release-beta", "SKILL.md");
+    mkdirSync(skillDir, { recursive: true });
+    mkdirSync(agentsDir, { recursive: true });
+    symlinkSync(linkedSkillsDir, path.join(agentsDir, "skills"), "dir");
+    writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      [
+        "---",
+        "name: release-beta",
+        "description: Cut a symlinked beta release.",
+        "---",
+        "",
+        "Cut a beta release carefully.",
+        "",
+      ].join("\n"),
+    );
+
+    const session = createSession({ cwd: tempDir });
+    const request = vi.fn(async (method: string) => {
+      if (method === "skills/list") {
+        return {
+          data: [
+            {
+              cwd: tempDir,
+              skills: [
+                {
+                  name: "global-skill",
+                  description: "Global skill from app-server.",
+                  path: "/tmp/global-skill/SKILL.md",
+                },
+              ],
+              errors: [],
+            },
+          ],
+        };
+      }
+      if (method === "thread/loaded/list") {
+        return { data: ["test-thread"] };
+      }
+      if (method === "turn/start") {
+        return {};
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+
+    session.activeForegroundTurnId = null;
+    session.client = createStub<CodexClientLike>({ request });
+
+    try {
+      await expect(session.listCommands()).resolves.toContainEqual({
+        name: "release-beta",
+        description: "Cut a symlinked beta release.",
+        argumentHint: "",
+        kind: "skill",
+      });
+
+      await session.startTurn("/release-beta beta.5");
+
+      const turnStartCall = request.mock.calls.find(([method]) => method === "turn/start");
+      expect(turnStartCall?.[1]).toEqual(
+        expect.objectContaining({
+          input: [
+            {
+              type: "skill",
+              name: "release-beta",
+              path: skillPath,
+            },
+            {
+              type: "text",
+              text: "$release-beta beta.5",
+              text_elements: [],
+            },
+          ],
+        }),
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves project command markdown into Codex prompt input", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "codex-project-command-"));
+    const commandDir = path.join(tempDir, ".agents", "commands");
+    mkdirSync(commandDir, { recursive: true });
+    writeFileSync(
+      path.join(commandDir, "release-note.md"),
+      [
+        "---",
+        "description: Draft a release note",
+        "argument-hint: NAME=<name>",
+        "---",
+        "",
+        "Draft a release note for $NAME.",
+        "",
+      ].join("\n"),
+    );
+
+    const session = createSession({ cwd: tempDir });
+    const request = vi.fn(async (method: string) => {
+      if (method === "skills/list") {
+        return { data: [] };
+      }
+      if (method === "thread/loaded/list") {
+        return { data: ["test-thread"] };
+      }
+      if (method === "turn/start") {
+        return {};
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+
+    session.activeForegroundTurnId = null;
+    session.client = createStub<CodexClientLike>({ request });
+
+    try {
+      await expect(session.listCommands()).resolves.toContainEqual({
+        name: "release-note",
+        description: "Draft a release note",
+        argumentHint: "NAME=<name>",
+        kind: "command",
+      });
+
+      await session.startTurn("/release-note NAME=Paseo");
+
+      const turnStartCall = request.mock.calls.find(([method]) => method === "turn/start");
+      expect(turnStartCall?.[1]).toEqual(
+        expect.objectContaining({
+          input: [
+            {
+              type: "text",
+              text: expect.stringContaining("Draft a release note for Paseo."),
+              text_elements: [],
+            },
+          ],
+        }),
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   test("deduplicates Codex skill slash commands returned from multiple skill roots", async () => {

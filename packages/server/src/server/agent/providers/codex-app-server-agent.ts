@@ -613,63 +613,227 @@ function parseFrontMatter(markdown: string): {
   return { frontMatter, body };
 }
 
-async function listCodexCustomPrompts(): Promise<AgentSlashCommand[]> {
-  const codexHome = resolveCodexHomeDir();
-  const promptsDir = path.join(codexHome, "prompts");
-  let entries: Dirent[];
-  try {
-    entries = await fs.readdir(promptsDir, { withFileTypes: true });
-  } catch {
-    return [];
+function pushUniquePath(paths: string[], nextPath: string): void {
+  if (!paths.includes(nextPath)) {
+    paths.push(nextPath);
   }
-
-  const mdEntries = entries.filter(
-    (entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name.slice(0, -".md".length),
-  );
-  const parsedCommands = await Promise.all(
-    mdEntries.map(async (entry): Promise<AgentSlashCommand | null> => {
-      const name = entry.name.slice(0, -".md".length);
-      const fullPath = path.join(promptsDir, entry.name);
-      let content: string;
-      try {
-        content = await fs.readFile(fullPath, "utf8");
-      } catch {
-        return null;
-      }
-      const parsed = parseFrontMatter(content);
-      const description = parsed.frontMatter["description"] ?? "Custom prompt";
-      const argumentHint =
-        parsed.frontMatter["argument-hint"] ?? parsed.frontMatter["argument_hint"] ?? "";
-      return {
-        name: `prompts:${name}`,
-        description,
-        argumentHint,
-        kind: "command",
-      };
-    }),
-  );
-  const commands: AgentSlashCommand[] = parsedCommands.filter(
-    (cmd): cmd is AgentSlashCommand => cmd !== null,
-  );
-  return commands.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function listCodexSkills(
+async function codexWorkspaceSearchBases(
   cwd: string,
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<AgentSlashCommand[]> {
-  const candidates: string[] = [];
-  candidates.push(path.join(cwd, ".codex", "skills"));
+): Promise<string[]> {
+  const bases: string[] = [];
+  pushUniquePath(bases, cwd);
 
   const repoRoot = workspaceGitService
     ? await workspaceGitService.resolveRepoRoot(cwd).catch(() => null)
     : null;
   if (repoRoot) {
-    candidates.push(path.join(path.dirname(cwd), ".codex", "skills"));
-    candidates.push(path.join(repoRoot, ".codex", "skills"));
+    pushUniquePath(bases, path.dirname(cwd));
+    pushUniquePath(bases, repoRoot);
   }
 
-  candidates.push(path.join(resolveCodexHomeDir(), "skills"));
+  return bases;
+}
+
+async function collectMarkdownFiles(dir: string): Promise<string[]> {
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const files = await Promise.all(
+    entries.map(async (entry): Promise<string[]> => {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        return collectMarkdownFiles(fullPath);
+      }
+      if (entry.isFile() && entry.name.endsWith(".md")) {
+        return [fullPath];
+      }
+      return [];
+    }),
+  );
+  return files.flat();
+}
+
+function commandNameFromMarkdownPath(root: string, fullPath: string): string | null {
+  const relative = path.relative(root, fullPath);
+  if (relative.startsWith("..") || path.isAbsolute(relative) || !relative.endsWith(".md")) {
+    return null;
+  }
+  const withoutExt = relative.slice(0, -".md".length);
+  const parts = withoutExt.split(path.sep).filter(Boolean);
+  return parts.length > 0 ? parts.join(":") : null;
+}
+
+interface CodexMarkdownCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+  body: string;
+}
+
+async function readCodexMarkdownCommand(
+  fullPath: string,
+  name: string,
+): Promise<CodexMarkdownCommand | null> {
+  let content: string;
+  try {
+    content = await fs.readFile(fullPath, "utf8");
+  } catch {
+    return null;
+  }
+  const parsed = parseFrontMatter(content);
+  const description = parsed.frontMatter["description"] ?? "Custom command";
+  const argumentHint =
+    parsed.frontMatter["argument-hint"] ?? parsed.frontMatter["argument_hint"] ?? "";
+  return {
+    name,
+    description,
+    argumentHint,
+    body: parsed.body,
+  };
+}
+
+async function listMarkdownCommandsFromRoots(
+  roots: string[],
+  options?: { namePrefix?: string },
+): Promise<CodexMarkdownCommand[]> {
+  const commandsByName = new Map<string, CodexMarkdownCommand>();
+  for (const root of roots) {
+    const files = await collectMarkdownFiles(root);
+    const parsedCommands = await Promise.all(
+      files.map(async (fullPath) => {
+        const pathName = commandNameFromMarkdownPath(root, fullPath);
+        if (!pathName) {
+          return null;
+        }
+        return readCodexMarkdownCommand(fullPath, `${options?.namePrefix ?? ""}${pathName}`);
+      }),
+    );
+    for (const command of parsedCommands) {
+      if (command && !commandsByName.has(command.name)) {
+        commandsByName.set(command.name, command);
+      }
+    }
+  }
+  return Array.from(commandsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function codexPromptRoots(
+  cwd: string,
+  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+): Promise<string[]> {
+  const roots: string[] = [];
+  for (const base of await codexWorkspaceSearchBases(cwd, workspaceGitService)) {
+    pushUniquePath(roots, path.join(base, ".agents", "prompts"));
+    pushUniquePath(roots, path.join(base, ".codex", "prompts"));
+  }
+  pushUniquePath(roots, path.join(os.homedir(), ".agents", "prompts"));
+  pushUniquePath(roots, path.join(resolveCodexHomeDir(), "prompts"));
+  return roots;
+}
+
+async function codexCommandRoots(
+  cwd: string,
+  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+): Promise<string[]> {
+  const roots: string[] = [];
+  for (const base of await codexWorkspaceSearchBases(cwd, workspaceGitService)) {
+    pushUniquePath(roots, path.join(base, ".agents", "commands"));
+    pushUniquePath(roots, path.join(base, ".codex", "commands"));
+  }
+  pushUniquePath(roots, path.join(os.homedir(), ".agents", "commands"));
+  pushUniquePath(roots, path.join(resolveCodexHomeDir(), "commands"));
+  return roots;
+}
+
+async function listCodexCustomPrompts(
+  cwd: string,
+  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+): Promise<AgentSlashCommand[]> {
+  return (
+    await listMarkdownCommandsFromRoots(await codexPromptRoots(cwd, workspaceGitService), {
+      namePrefix: "prompts:",
+    })
+  )
+    .map((command): AgentSlashCommand => {
+      return {
+        name: command.name,
+        description: command.description,
+        argumentHint: command.argumentHint,
+        kind: "command",
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function listCodexMarkdownCommands(
+  cwd: string,
+  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+): Promise<AgentSlashCommand[]> {
+  return (await listMarkdownCommandsFromRoots(await codexCommandRoots(cwd, workspaceGitService)))
+    .map((command) => ({
+      name: command.name,
+      description: command.description,
+      argumentHint: command.argumentHint,
+      kind: "command" as const,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function findCodexMarkdownCommand(
+  commandName: string,
+  cwd: string,
+  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+): Promise<CodexMarkdownCommand | null> {
+  const roots = commandName.startsWith("prompts:")
+    ? await codexPromptRoots(cwd, workspaceGitService)
+    : await codexCommandRoots(cwd, workspaceGitService);
+  const normalizedName = commandName.startsWith("prompts:")
+    ? commandName.slice("prompts:".length)
+    : commandName;
+  const pathParts = normalizedName.split(":");
+  if (pathParts.some((part) => !part || part === "." || part === ".." || /[/\\]/u.test(part))) {
+    return null;
+  }
+  for (const root of roots) {
+    const fullPath = path.join(root, ...pathParts) + ".md";
+    const command = await readCodexMarkdownCommand(fullPath, commandName);
+    if (command) {
+      return command;
+    }
+  }
+  return null;
+}
+
+interface CodexSkillEntry {
+  name: string;
+  description: string;
+  path: string;
+}
+
+async function listCodexSkillEntries(
+  cwd: string,
+  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+): Promise<CodexSkillEntry[]> {
+  const candidates: string[] = [];
+  const pushSkillRoots = (baseDir: string) => {
+    pushUniquePath(candidates, path.join(baseDir, ".agents", "skills"));
+    pushUniquePath(candidates, path.join(baseDir, ".codex", "skills"));
+    pushUniquePath(candidates, path.join(baseDir, "skills"));
+  };
+
+  for (const base of await codexWorkspaceSearchBases(cwd, workspaceGitService)) {
+    pushSkillRoots(base);
+  }
+
+  pushUniquePath(candidates, path.join(os.homedir(), ".agents", "skills"));
+  pushUniquePath(candidates, path.join(resolveCodexHomeDir(), "skills"));
 
   const candidateReads = await Promise.all(
     candidates.map(async (dir) => {
@@ -677,7 +841,7 @@ export async function listCodexSkills(
       try {
         entries = await fs.readdir(dir, { withFileTypes: true });
       } catch {
-        return [] as string[];
+        return [] as { path: string; content: string }[];
       }
       const dirEntries = entries.filter((entry) => entry.isDirectory() || entry.isSymbolicLink());
       const skillContents = await Promise.all(
@@ -685,37 +849,65 @@ export async function listCodexSkills(
           const skillDir = path.join(dir, entry.name);
           const skillPath = path.join(skillDir, "SKILL.md");
           try {
-            return await fs.readFile(skillPath, "utf8");
+            return {
+              path: skillPath,
+              content: await fs.readFile(skillPath, "utf8"),
+            };
           } catch {
             return null;
           }
         }),
       );
-      return skillContents.filter((content): content is string => content !== null);
+      return skillContents.filter(
+        (content): content is { path: string; content: string } => content !== null,
+      );
     }),
   );
 
-  const commandsByName = new Map<string, AgentSlashCommand>();
-  for (const skillContents of candidateReads) {
-    for (const content of skillContents) {
+  const skillsByName = new Map<string, CodexSkillEntry>();
+  for (const skillEntries of candidateReads) {
+    for (const { path: skillPath, content } of skillEntries) {
       const { frontMatter } = parseFrontMatter(content);
       const name = frontMatter["name"];
       const description = frontMatter["description"];
       if (!name || !description) {
         continue;
       }
-      if (!commandsByName.has(name)) {
-        commandsByName.set(name, {
+      if (!skillsByName.has(name)) {
+        skillsByName.set(name, {
           name,
           description,
-          argumentHint: "",
-          kind: "skill",
+          path: skillPath,
         });
       }
     }
   }
 
-  return Array.from(commandsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
+  return Array.from(skillsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function listCodexSkills(
+  cwd: string,
+  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+): Promise<AgentSlashCommand[]> {
+  return (await listCodexSkillEntries(cwd, workspaceGitService)).map((skill) => ({
+    name: skill.name,
+    description: skill.description,
+    argumentHint: "",
+    kind: "skill",
+  }));
+}
+
+async function findCodexSkill(
+  skillName: string,
+  cwd: string,
+  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+): Promise<CodexSkillEntry | null> {
+  return (
+    (await listCodexSkillEntries(cwd, workspaceGitService)).find(
+      (skill) => skill.name === skillName,
+    ) ?? null
+  );
 }
 
 function escapeRegExp(value: string): string {
@@ -3332,12 +3524,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     args?: string,
   ): Promise<CodexPromptInput> {
     if (commandName.startsWith("prompts:")) {
-      const promptName = commandName.slice("prompts:".length);
-      const codexHome = resolveCodexHomeDir();
-      const promptPath = path.join(codexHome, "prompts", `${promptName}.md`);
-      const raw = await fs.readFile(promptPath, "utf8");
-      const parsed = parseFrontMatter(raw);
-      return expandCodexCustomPrompt(parsed.body, args);
+      const command = await findCodexMarkdownCommand(
+        commandName,
+        this.config.cwd,
+        this.deps.workspaceGitService,
+      );
+      if (command) {
+        return expandCodexCustomPrompt(command.body, args);
+      }
     }
 
     if (!this.connected) {
@@ -3354,6 +3548,30 @@ export class CodexAppServerAgentSession implements AgentSession {
         { type: "text", text },
       ];
       return input;
+    }
+
+    const fallbackSkill = await findCodexSkill(
+      commandName,
+      this.config.cwd,
+      this.deps.workspaceGitService,
+    );
+    if (fallbackSkill) {
+      const trimmedArgs = args?.trim() ?? "";
+      const text = trimmedArgs ? `$${fallbackSkill.name} ${trimmedArgs}` : `$${fallbackSkill.name}`;
+      const input: CodexPromptContentBlock[] = [
+        { type: "skill", name: fallbackSkill.name, path: fallbackSkill.path },
+        { type: "text", text },
+      ];
+      return input;
+    }
+
+    const command = await findCodexMarkdownCommand(
+      commandName,
+      this.config.cwd,
+      this.deps.workspaceGitService,
+    );
+    if (command) {
+      return expandCodexCustomPrompt(command.body, args);
     }
 
     return args ? `$${commandName} ${args}` : `$${commandName}`;
@@ -3926,7 +4144,11 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
-    const prompts = await listCodexCustomPrompts();
+    const prompts = await listCodexCustomPrompts(this.config.cwd, this.deps.workspaceGitService);
+    const markdownCommands = await listCodexMarkdownCommands(
+      this.config.cwd,
+      this.deps.workspaceGitService,
+    );
     if (!this.connected) {
       await this.connect();
     } else {
@@ -3938,10 +4160,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       argumentHint: "",
       kind: "skill" as const,
     }));
-    const fallbackSkills =
-      appServerSkills.length === 0
-        ? await listCodexSkills(this.config.cwd, this.deps.workspaceGitService)
-        : [];
+    const fallbackSkills = await listCodexSkills(this.config.cwd, this.deps.workspaceGitService);
     const builtin: AgentSlashCommand[] = [
       {
         name: "compact",
@@ -3958,9 +4177,19 @@ export class CodexAppServerAgentSession implements AgentSession {
         kind: "command",
       });
     }
-    return [...builtin, ...appServerSkills, ...fallbackSkills, ...prompts].sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
+    const commandsByName = new Map<string, AgentSlashCommand>();
+    for (const command of [
+      ...builtin,
+      ...appServerSkills,
+      ...fallbackSkills,
+      ...prompts,
+      ...markdownCommands,
+    ]) {
+      if (!commandsByName.has(command.name)) {
+        commandsByName.set(command.name, command);
+      }
+    }
+    return Array.from(commandsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
   }
 
   tryHandleOutOfBand(
