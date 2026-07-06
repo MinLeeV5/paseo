@@ -20,7 +20,8 @@ import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { lineNumberGutterWidth } from "@/components/code-insets";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
-import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
+import { getFilePaneRenderMode } from "@/components/file-pane-render-mode";
+import { MermaidDiagram } from "@/components/mermaid/diagram";
 import { isWeb } from "@/constants/platform";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
@@ -200,8 +201,8 @@ function FilePreviewBody({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const filePath = location.path;
-  const isMarkdownFile =
-    preview?.kind === "text" && isRenderedMarkdownFile(filePath) && !location.lineStart;
+  const textRenderMode =
+    preview?.kind === "text" && !location.lineStart ? getFilePaneRenderMode(filePath) : "code";
 
   const previewScrollRef = useRef<RNScrollView>(null);
   const webScrollbarStyle = useWebScrollbarStyle();
@@ -210,12 +211,12 @@ function FilePreviewBody({
   });
 
   const highlightedLines = useMemo(() => {
-    if (!preview || preview.kind !== "text" || isMarkdownFile) {
+    if (!preview || preview.kind !== "text" || textRenderMode !== "code") {
       return null;
     }
 
     return highlightCode(preview.content ?? "", filePath);
-  }, [isMarkdownFile, preview, filePath]);
+  }, [textRenderMode, preview, filePath]);
 
   const gutterWidth = useMemo(() => {
     if (!highlightedLines) return 0;
@@ -269,7 +270,7 @@ function FilePreviewBody({
   }
 
   if (preview.kind === "text") {
-    if (isMarkdownFile) {
+    if (textRenderMode === "markdown") {
       return (
         <View style={styles.previewScrollContainer}>
           <RNScrollView
@@ -283,6 +284,26 @@ function FilePreviewBody({
             showsVerticalScrollIndicator={!showDesktopWebScrollbar}
           >
             <MarkdownRenderer text={preview.content ?? ""} />
+          </RNScrollView>
+          {scrollbar.overlay}
+        </View>
+      );
+    }
+
+    if (textRenderMode === "mermaid") {
+      return (
+        <View style={styles.previewScrollContainer}>
+          <RNScrollView
+            ref={previewScrollRef}
+            style={styles.previewContent}
+            contentContainerStyle={styles.previewMarkdownScrollContent}
+            onLayout={scrollbar.onLayout}
+            onScroll={scrollbar.onScroll}
+            onContentSizeChange={scrollbar.onContentSizeChange}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={!showDesktopWebScrollbar}
+          >
+            <MermaidDiagram diagram={preview.content ?? ""} />
           </RNScrollView>
           {scrollbar.overlay}
         </View>
