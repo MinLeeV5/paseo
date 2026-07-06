@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { Theme } from "@/styles/theme";
 
 export interface MermaidThemePayload {
@@ -43,4 +44,35 @@ export function createMermaidThemePayload(theme: Theme): MermaidThemePayload {
       fontFamily: theme.fontFamily.ui,
     },
   };
+}
+
+function createMermaidThemeSignature(theme: Theme): string {
+  return [
+    theme.colors.surface0,
+    theme.colors.surface1,
+    theme.colors.surface2,
+    theme.colors.surface3,
+    theme.colors.foreground,
+    theme.colors.foregroundMuted,
+    theme.colors.border,
+    theme.colors.destructive,
+    theme.fontFamily.ui,
+  ].join("\0");
+}
+
+export function useMermaidThemePayload(theme: Theme): MermaidThemePayload {
+  const signature = createMermaidThemeSignature(theme);
+  const payloadRef = useRef<{
+    signature: string;
+    payload: MermaidThemePayload;
+  } | null>(null);
+
+  if (payloadRef.current?.signature !== signature) {
+    payloadRef.current = {
+      signature,
+      payload: createMermaidThemePayload(theme),
+    };
+  }
+
+  return payloadRef.current.payload;
 }

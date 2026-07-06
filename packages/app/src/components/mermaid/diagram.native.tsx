@@ -4,7 +4,7 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { mermaidWebViewHtml } from "@/components/mermaid/webview/mermaid-webview-html";
-import { createMermaidThemePayload } from "./theme";
+import { useMermaidThemePayload } from "./theme";
 
 export interface MermaidDiagramProps {
   diagram: string;
@@ -92,7 +92,7 @@ function clampWebViewHeight(height: number): number {
 
 export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
   const { theme } = useUnistyles();
-  const themePayload = useMemo(() => createMermaidThemePayload(theme), [theme]);
+  const themePayload = useMermaidThemePayload(theme);
   const webViewRef = useRef<WebView>(null);
   const requestIdRef = useRef(0);
   const [bridgeReady, setBridgeReady] = useState(false);

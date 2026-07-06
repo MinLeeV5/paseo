@@ -3,7 +3,7 @@ import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
-import { createMermaidThemePayload } from "./theme";
+import { useMermaidThemePayload } from "./theme";
 
 export interface MermaidDiagramProps {
   diagram: string;
@@ -39,7 +39,7 @@ export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
   const { theme } = useUnistyles();
   const reactId = useId();
   const renderId = useMemo(() => normalizeMermaidRenderId(reactId), [reactId]);
-  const themePayload = useMemo(() => createMermaidThemePayload(theme), [theme]);
+  const themePayload = useMermaidThemePayload(theme);
   const [state, setState] = useState<MermaidRenderState>({ kind: "loading" });
 
   useEffect(() => {
