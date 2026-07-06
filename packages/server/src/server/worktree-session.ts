@@ -27,6 +27,7 @@ import type { CheckoutExistingBranchResult } from "../utils/checkout-git.js";
 import { expandTilde } from "../utils/path.js";
 import {
   getWorktreeSetupCommands,
+  getWorktreeWaitForSetup,
   resolveWorktreeRuntimeEnv,
   runWorktreeSetupCommands,
   slugify,
@@ -579,10 +580,13 @@ export async function createPaseoWorktreeWorkflow(
     setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
   },
 ): Promise<CreatePaseoWorktreeWorkflowResult> {
+  const setupContinuation = options?.setupContinuation ?? { kind: "workspace" };
+  const waitForSetup = setupContinuation.kind === "agent" && getWorktreeWaitForSetup(input.cwd);
+
   const createdWorktree = await dependencies.createPaseoWorktree(
     {
       ...input,
-      runSetup: false,
+      runSetup: waitForSetup,
       paseoHome: input.paseoHome ?? dependencies.paseoHome,
       worktreesRoot: input.worktreesRoot ?? dependencies.worktreesRoot,
     },
@@ -592,7 +596,6 @@ export async function createPaseoWorktreeWorkflow(
   );
   const slug = basename(createdWorktree.worktree.worktreePath);
   const workspace = createdWorktree.workspace;
-  const setupContinuation = options?.setupContinuation ?? { kind: "workspace" };
 
   setTimeout(() => {
     if (input.firstAgentContext) {
@@ -620,7 +623,7 @@ export async function createPaseoWorktreeWorkflow(
     }
   }, 0);
 
-  if (setupContinuation.kind === "agent") {
+  if (setupContinuation.kind === "agent" && !waitForSetup) {
     return {
       ...createdWorktree,
       setupContinuation: {
