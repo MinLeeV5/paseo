@@ -179,16 +179,14 @@ export async function createAgentCommand(
     resolved.createOptions,
   );
 
-  const setupResult = resolved.setupContinuation?.startAfterAgentCreate({
+  resolved.setupContinuation?.startAfterAgentCreate({
     agentId: snapshot.id,
   });
-  const setupSucceeded =
-    resolved.setupContinuation?.waitForSetup === true ? (await setupResult) !== false : true;
 
   let liveSnapshot = snapshot;
   let initialPromptStarted = false;
   let initialPromptError: unknown | null = null;
-  if (setupSucceeded && resolved.prompt !== undefined) {
+  if (resolved.prompt !== undefined) {
     const sendResult = await sendInitialPrompt(dependencies, resolved, snapshot);
     initialPromptStarted = sendResult.started;
     liveSnapshot = sendResult.liveSnapshot;
@@ -275,7 +273,6 @@ async function resolveMcpCreateAgent(
     cwd,
     worktree: input.worktree,
     initialPrompt: input.initialPrompt ?? "",
-    waitingAgentId: input.callerAgentId,
   });
 
   const workspaceId = await resolveMcpWorkspaceId({
@@ -515,7 +512,6 @@ async function resolveMcpCwd(params: {
   cwd: string;
   initialPrompt: string;
   worktree: CreateAgentFromMcpInput["worktree"];
-  waitingAgentId?: string;
 }): Promise<{
   resolvedCwd: string;
   setupContinuation?: AgentWorktreeSetupContinuation;
@@ -559,7 +555,6 @@ async function resolveMcpCwd(params: {
     setupContinuation: {
       kind: "agent",
       terminalManager: dependencies.terminalManager ?? null,
-      ...(params.waitingAgentId ? { waitingAgentId: params.waitingAgentId } : {}),
       appendTimelineItem: ({ agentId, item }) =>
         appendTimelineItemIfAgentKnown({
           agentManager: dependencies.agentManager,

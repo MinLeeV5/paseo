@@ -891,7 +891,7 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
   }
 });
 
-test("create_agent_request worktree waits for blocking setup before starting the prompt", async () => {
+test("create_agent_request worktree starts the prompt without waiting for setup", async () => {
   const workdir = realpathSync(mkdtempSync(path.join(tmpdir(), "paseo-create-agent-setup-")));
   const repoDir = path.join(workdir, "repo");
   const paseoHome = path.join(workdir, "paseo-home");
@@ -1038,7 +1038,7 @@ test("create_agent_request worktree waits for blocking setup before starting the
         type: "create_agent_request",
         requestId: "req-create-worktree-setup",
         config: { provider: "codex", cwd: repoDir },
-        initialPrompt: "start after setup",
+        initialPrompt: "start while setup runs",
         attachments: [],
         worktree: {
           mode: "branch-off",
@@ -1069,19 +1069,20 @@ test("create_agent_request worktree waits for blocking setup before starting the
             event.type === "timeline" &&
             event.item.type === "tool_call" &&
             event.item.name === "paseo_worktree_setup" &&
-            event.item.status === "running" &&
-            event.item.metadata?.waitForSetup === true
+            event.item.status === "running"
           );
         }),
       ).toBe(true);
     });
-    expect(startedPrompts).toEqual([]);
+    await vi.waitFor(() => {
+      expect(startedPrompts).toEqual(["start while setup runs"]);
+    });
 
     expect(actualWorktreePath).not.toBeNull();
     writeFileSync(path.join(actualWorktreePath!, "allow-setup"), "yes");
     await createPromise;
 
-    expect(startedPrompts).toEqual(["start after setup"]);
+    expect(startedPrompts).toEqual(["start while setup runs"]);
     expect(findByType(emitted, "status")?.payload).toMatchObject({
       status: "agent_created",
       agent: { cwd: actualWorktreePath },
@@ -5055,7 +5056,19 @@ function createRecreateWorktreeRepo(): { tempDir: string; repoDir: string } {
   execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "main\n");
-  execFileSync("git", ["add", "README.md"], { cwd: repoDir, stdio: "pipe" });
+  writeFileSync(
+    path.join(repoDir, "paseo.json"),
+    JSON.stringify(
+      {
+        worktree: {
+          setup: "node -e \"require('node:fs').writeFileSync('setup-ran.txt', 'yes')\"",
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  execFileSync("git", ["add", "README.md", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["commit", "-m", "initial"], { cwd: repoDir, stdio: "pipe" });
   return { tempDir, repoDir };
 }
@@ -7479,6 +7492,7 @@ test("workspace.create worktree source checks out a GitHub PR from githubPrNumbe
     await session.handleMessage({
       type: "workspace.create.request",
       requestId: "req-workspace-create-pr",
+      runSetup: true,
       source: {
         kind: "worktree",
         cwd: fixture.repoDir,
@@ -7497,6 +7511,14 @@ test("workspace.create worktree source checks out a GitHub PR from githubPrNumbe
     const workspaceDirectory = response?.payload.workspace?.workspaceDirectory as string;
     expect(readCurrentBranch(workspaceDirectory)).toBe(fixture.headRef);
     expect(existsSync(path.join(workspaceDirectory, fixture.prFileName))).toBe(true);
+    await vi.waitFor(() => {
+      expect(
+        emitted.some(
+          (message) =>
+            message.type === "workspace_setup_progress" && message.payload.status === "completed",
+        ),
+      ).toBe(true);
+    });
   } finally {
     await flushTerminalContributionWork();
     await removeTempDirForTest(fixture.tempDir);

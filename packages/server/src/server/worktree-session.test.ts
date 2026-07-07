@@ -148,6 +148,33 @@ function createWorkflowForRequestTest(options: {
   };
 }
 
+function createWorkflowDependenciesForTest(options: {
+  paseoHome: string;
+  worktreesRoot?: string;
+  emitted?: SessionOutboundMessage[];
+  createPaseoWorktree?: CreatePaseoWorktreeFn;
+}) {
+  return {
+    paseoHome: options.paseoHome,
+    ...(options.worktreesRoot ? { worktreesRoot: options.worktreesRoot } : {}),
+    createPaseoWorktree:
+      options.createPaseoWorktree ?? createPaseoWorktreeForTest({ paseoHome: options.paseoHome }),
+    warmWorkspaceGitData: async () => {},
+    autoNameWorkspaceBranchForFirstAgent: () => {},
+    emitWorkspaceUpdateForWorkspaceId: async () => {},
+    cacheWorkspaceSetupSnapshot: () => {},
+    emit: (message: SessionOutboundMessage) => options.emitted?.push(message),
+    sessionLogger: createLogger(),
+    terminalManager: null,
+    archiveWorkspaceRecord: async () => {},
+    serviceProxy: null,
+    scriptRuntimeStore: null,
+    getDaemonTcpPort: null,
+    getDaemonTcpHost: null,
+    onScriptsChanged: null,
+  };
+}
+
 function createGitHubServiceStub(): GitHubService {
   return {
     listPullRequests: async () => [],
@@ -390,15 +417,86 @@ describe("resolveGitCreateBaseBranch", () => {
   });
 });
 
-describe("create-agent worktree setup boundary", () => {
-  test("agent setup continuation starts setup for the created agent timeline", async () => {
+describe("workspace worktree setup trigger", () => {
+  test("workspace setup does not start unless runSetup is explicit", async () => {
     const { tempDir, repoDir } = createGitRepo({
       paseoConfig: {
         worktree: {
-          waitForSetup: false,
+          setup: "node -e \"require('node:fs').writeFileSync('setup.txt', 'yes')\"",
         },
       },
     });
+    const paseoHome = path.join(tempDir, ".paseo");
+    const emitted: SessionOutboundMessage[] = [];
+    let createdWorktreePath: string | null = null;
+
+    try {
+      const result = await createPaseoWorktreeWorkflow(
+        createWorkflowDependenciesForTest({ paseoHome, emitted }),
+        {
+          cwd: repoDir,
+          worktreeSlug: "no-explicit-setup",
+          runSetup: false,
+          paseoHome,
+        },
+      );
+      createdWorktreePath = result.worktree.worktreePath;
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(emitted.some((message) => message.type === "workspace_setup_progress")).toBe(false);
+      expect(existsSync(path.join(result.worktree.worktreePath, "setup.txt"))).toBe(false);
+    } finally {
+      await removeGitWorktreeForTest(repoDir, createdWorktreePath);
+      await removeTempDirForTest(tempDir);
+    }
+  });
+
+  test("workspace setup starts when runSetup is explicit", async () => {
+    const { tempDir, repoDir } = createGitRepo({
+      paseoConfig: {
+        worktree: {
+          setup: "node -e \"require('node:fs').writeFileSync('setup.txt', 'yes')\"",
+        },
+      },
+    });
+    const paseoHome = path.join(tempDir, ".paseo");
+    const emitted: SessionOutboundMessage[] = [];
+    let createdWorktreePath: string | null = null;
+
+    try {
+      const result = await createPaseoWorktreeWorkflow(
+        createWorkflowDependenciesForTest({ paseoHome, emitted }),
+        {
+          cwd: repoDir,
+          worktreeSlug: "explicit-setup",
+          runSetup: true,
+          paseoHome,
+        },
+      );
+      createdWorktreePath = result.worktree.worktreePath;
+
+      await vi.waitFor(() => {
+        expect(existsSync(path.join(result.worktree.worktreePath, "setup.txt"))).toBe(true);
+      });
+
+      expect(emitted.some((message) => message.type === "workspace_setup_progress")).toBe(true);
+      expect(
+        emitted.some(
+          (message) =>
+            message.type === "workspace_setup_progress" && message.payload.status === "completed",
+        ),
+      ).toBe(true);
+    } finally {
+      await removeGitWorktreeForTest(repoDir, createdWorktreePath);
+      await removeTempDirForTest(tempDir);
+    }
+  });
+});
+
+describe("create-agent worktree setup boundary", () => {
+  test("agent setup continuation starts setup for the created agent timeline", async () => {
+    const { tempDir, repoDir } = createGitRepo();
     const paseoHome = path.join(tempDir, ".paseo");
     const appendedItems: Array<{ name: string; status: string }> = [];
     const liveItems: Array<{ name: string; status: string }> = [];
@@ -474,7 +572,7 @@ describe("create-agent worktree setup boundary", () => {
     }
   });
 
-  test("agent worktree waitForSetup returns a blocking setup continuation before setup completes", async () => {
+  test("agent worktree setup continuation starts setup without blocking on setup completion", async () => {
     const setupCommand = [
       "node -e",
       JSON.stringify(
@@ -539,7 +637,6 @@ describe("create-agent worktree setup boundary", () => {
           setupContinuation: {
             kind: "agent",
             terminalManager: createTerminalManagerStub().manager,
-            waitingAgentId: "parent-agent",
             appendTimelineItem: async ({ agentId, item }) => {
               timelineItems.push({ agentId, item });
               return true;
@@ -556,17 +653,21 @@ describe("create-agent worktree setup boundary", () => {
       const result = await expectPromiseResolvesWithin(
         workflowPromise,
         1_000,
-        "waitForSetup workflow should return before setup completes",
+        "agent setup workflow should return before setup completes",
       );
       createdWorktreePath = result.worktree.worktreePath;
 
       expect(result.setupContinuation?.kind).toBe("agent");
-      expect(result.setupContinuation?.waitForSetup).toBe(true);
       expect(existsSync(path.join(result.worktree.worktreePath, "setup-done.txt"))).toBe(false);
 
       const setupPromise = result.setupContinuation?.startAfterAgentCreate({
         agentId: "agent-after-create",
       });
+      await expectPromiseResolvesWithin(
+        Promise.resolve(setupPromise),
+        100,
+        "agent setup continuation should not wait for setup completion",
+      );
 
       await vi.waitFor(() => {
         const runningItem = findRunningSetupTimelineEntryForAgent(
@@ -574,11 +675,6 @@ describe("create-agent worktree setup boundary", () => {
           "agent-after-create",
         );
         expect(runningItem).toBeDefined();
-        const parentRunningItem = findRunningSetupTimelineEntryForAgent(
-          timelineItems,
-          "parent-agent",
-        );
-        expect(parentRunningItem).toBeDefined();
       });
 
       const runningItem = findRunningSetupTimelineEntryForAgent(
@@ -591,32 +687,21 @@ describe("create-agent worktree setup boundary", () => {
       if (runningItem.item.detail.type !== "worktree_setup") {
         throw new Error("Expected worktree setup detail");
       }
-      expect(runningItem.item.metadata).toEqual({ waitForSetup: true });
       writeFileSync(path.join(runningItem.item.detail.worktreePath, "allow-setup"), "ok\n");
 
-      await expect(setupPromise).resolves.toBe(true);
-
-      expect(existsSync(path.join(result.worktree.worktreePath, "setup-done.txt"))).toBe(true);
-      expect(timelineItems).toContainEqual(
-        expect.objectContaining({
-          agentId: "agent-after-create",
-          item: expect.objectContaining({
-            type: "tool_call",
-            name: "paseo_worktree_setup",
-            status: "completed",
+      await vi.waitFor(() => {
+        expect(existsSync(path.join(result.worktree.worktreePath, "setup-done.txt"))).toBe(true);
+        expect(timelineItems).toContainEqual(
+          expect.objectContaining({
+            agentId: "agent-after-create",
+            item: expect.objectContaining({
+              type: "tool_call",
+              name: "paseo_worktree_setup",
+              status: "completed",
+            }),
           }),
-        }),
-      );
-      expect(timelineItems).toContainEqual(
-        expect.objectContaining({
-          agentId: "parent-agent",
-          item: expect.objectContaining({
-            type: "tool_call",
-            name: "paseo_worktree_setup",
-            status: "completed",
-          }),
-        }),
-      );
+        );
+      });
     } finally {
       if (!createdWorktreePath && existsSync(expectedWorktreePath)) {
         writeFileSync(path.join(expectedWorktreePath, "allow-setup"), "ok\n");
@@ -882,7 +967,7 @@ describe("runWorktreeSetupInBackground", () => {
     expect(emitWorkspaceUpdateForWorkspaceId).toHaveBeenCalledWith("42");
   });
 
-  test("archives the pending workspace and emits a failed snapshot when setup cannot start", async () => {
+  test("keeps the workspace and emits a failed snapshot when setup cannot start", async () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
@@ -951,7 +1036,8 @@ describe("runWorktreeSetupInBackground", () => {
       status: "failed",
       error: expect.stringMatching(/Failed to parse paseo\.json at .*paseo\.json/),
     });
-    expect(archiveWorkspaceRecord).toHaveBeenCalledWith(workspaceId);
+    expect(archiveWorkspaceRecord).not.toHaveBeenCalled();
+    expect(existsSync(worktreePath)).toBe(true);
     expect(emitWorkspaceUpdateForWorkspaceId).toHaveBeenCalledWith(workspaceId);
   });
 

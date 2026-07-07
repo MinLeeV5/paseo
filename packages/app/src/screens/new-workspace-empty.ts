@@ -13,6 +13,7 @@ export interface CreateEmptyWorkspaceInput {
     prompt: string;
     attachments: AgentAttachment[];
     withInitialAgent: boolean;
+    runSetup?: boolean;
   }) => Promise<ReturnType<typeof normalizeWorkspaceDescriptor>>;
   serverId: string;
   navigate: (serverId: string, workspaceId: string) => void;
@@ -25,6 +26,18 @@ export async function runCreateEmptyWorkspace(input: CreateEmptyWorkspaceInput):
     prompt: "",
     attachments: [],
     withInitialAgent: false,
+  });
+  navigate(serverId, ensuredWorkspace.id);
+}
+
+export async function runCreateWorkspaceWithSetup(input: CreateEmptyWorkspaceInput): Promise<void> {
+  const { payload, ensureWorkspace, serverId, navigate } = input;
+  const ensuredWorkspace = await ensureWorkspace({
+    cwd: payload.cwd,
+    prompt: "",
+    attachments: [],
+    withInitialAgent: false,
+    runSetup: true,
   });
   navigate(serverId, ensuredWorkspace.id);
 }

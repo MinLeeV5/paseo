@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PaseoConfigRawSchema, PaseoConfigSchema } from "@getpaseo/protocol/paseo-config-schema";
+import { PaseoConfigRawSchema, PaseoConfigSchema } from "./paseo-config-schema.js";
 
 describe("paseo config schema", () => {
   it("parses an empty config without metadata generation", () => {
@@ -28,7 +28,6 @@ describe("paseo config schema", () => {
       worktree: {
         setup: ["npm install"],
         teardown: ["npm run clean"],
-        waitForSetup: true,
       },
       scripts: config.scripts,
     });
@@ -45,7 +44,6 @@ describe("paseo config schema", () => {
       worktree: {
         setup: ['echo "setup ran" > setup.log'],
         teardown: [],
-        waitForSetup: true,
       },
     });
 
@@ -59,24 +57,6 @@ describe("paseo config schema", () => {
       worktree: {
         setup: [],
         teardown: ["npm run clean"],
-        waitForSetup: true,
-      },
-    });
-  });
-
-  it("preserves explicit waitForSetup false", () => {
-    expect(
-      PaseoConfigSchema.parse({
-        worktree: {
-          setup: "npm install",
-          waitForSetup: false,
-        },
-      }),
-    ).toEqual({
-      worktree: {
-        setup: ["npm install"],
-        teardown: [],
-        waitForSetup: false,
       },
     });
   });

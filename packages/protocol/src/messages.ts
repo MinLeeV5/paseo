@@ -1721,6 +1721,7 @@ export const CreatePaseoWorktreeRequestSchema = z.object({
   refName: z.string().min(1).optional(),
   action: z.enum(["branch-off", "checkout"]).optional(),
   githubPrNumber: z.number().int().positive().optional(),
+  runSetup: z.boolean().optional(),
   requestId: z.string(),
 });
 
@@ -1774,6 +1775,8 @@ export const WorkspaceCreateRequestSchema = z.object({
   title: z.string().optional(),
   // Optional prompt context for workspace-level name/branch generation.
   firstAgentContext: FirstAgentContextSchema.optional(),
+  // Optional explicit request to run setup after creating a worktree-backed workspace.
+  runSetup: z.boolean().optional(),
   source: z.discriminatedUnion("kind", [
     z.object({
       kind: z.literal("directory"),

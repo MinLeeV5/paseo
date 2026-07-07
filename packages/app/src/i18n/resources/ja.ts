@@ -873,6 +873,7 @@ export const ja: TranslationResources = {
   newWorkspace: {
     title: "新しいワークスペース",
     create: "作成",
+    createAndRunSetup: "Create and run setup",
     isolation: {
       local: "ローカル",
       worktree: "新しいワークツリー",

@@ -2199,6 +2199,66 @@ test("sends first-agent prompt context with workspace.create.request", async () 
   });
 });
 
+test("sends runSetup with workspace.create.request", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const createPromise = client.createWorkspace(
+    {
+      runSetup: true,
+      source: {
+        kind: "worktree",
+        cwd: "/tmp/project",
+        projectId: "local:/tmp/project",
+      },
+    },
+    "req-workspace-setup",
+  );
+
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "workspace.create.request",
+    requestId: "req-workspace-setup",
+    runSetup: true,
+    source: {
+      kind: "worktree",
+      cwd: "/tmp/project",
+      projectId: "local:/tmp/project",
+    },
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.create.response",
+      payload: {
+        requestId: "req-workspace-setup",
+        workspace: null,
+        error: "workspace setup sentinel",
+        setupTerminalId: null,
+      },
+    }),
+  );
+
+  await expect(createPromise).resolves.toEqual({
+    requestId: "req-workspace-setup",
+    workspace: null,
+    error: "workspace setup sentinel",
+    setupTerminalId: null,
+  });
+});
+
 test("sends project.remove.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -2298,6 +2358,60 @@ test("sends worktree base-ref fields in create_paseo_worktree_request", async ()
     requestId: request.requestId,
     workspace: null,
     error: "worktree ref fields sentinel",
+    setupTerminalId: null,
+  });
+});
+
+test("sends runSetup with create_paseo_worktree_request", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const createPromise = client.createPaseoWorktree(
+    {
+      cwd: "/tmp/project",
+      worktreeSlug: "setup-now",
+      runSetup: true,
+    },
+    "req-create-setup",
+  );
+
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "create_paseo_worktree_request",
+    cwd: "/tmp/project",
+    worktreeSlug: "setup-now",
+    runSetup: true,
+    requestId: "req-create-setup",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "create_paseo_worktree_response",
+      payload: {
+        requestId: "req-create-setup",
+        workspace: null,
+        error: "create setup sentinel",
+        setupTerminalId: null,
+      },
+    }),
+  );
+
+  await expect(createPromise).resolves.toEqual({
+    requestId: "req-create-setup",
+    workspace: null,
+    error: "create setup sentinel",
     setupTerminalId: null,
   });
 });

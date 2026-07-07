@@ -868,6 +868,7 @@ export const en = {
   newWorkspace: {
     title: "New workspace",
     create: "Create",
+    createAndRunSetup: "Create and run setup",
     isolation: {
       local: "Local",
       worktree: "New worktree",

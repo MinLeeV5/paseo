@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { describe, expect, test } from "vitest";
 import {
+  CreatePaseoWorktreeRequestSchema,
   RecentProviderSessionDescriptorPayloadSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
@@ -937,6 +938,19 @@ describe("workspace message schemas", () => {
     expect(newWorktree.type).toBe("workspace.create.request");
     expect(newWorktree.source.kind).toBe("worktree");
 
+    const runSetupWorktree = WorkspaceCreateRequestSchema.parse({
+      type: "workspace.create.request",
+      requestId: "req-setup",
+      runSetup: true,
+      source: {
+        kind: "worktree",
+        cwd: "/tmp/repo",
+        action: "checkout",
+        refName: "feat/my-feature",
+      },
+    });
+    expect(runSetupWorktree.runSetup).toBe(true);
+
     // Directory source must also be accepted.
     const newDirectory = WorkspaceCreateRequestSchema.parse({
       type: "workspace.create.request",
@@ -948,5 +962,13 @@ describe("workspace message schemas", () => {
     });
     expect(newDirectory.type).toBe("workspace.create.request");
     expect(newDirectory.source.kind).toBe("directory");
+
+    const createWorktree = CreatePaseoWorktreeRequestSchema.parse({
+      type: "create_paseo_worktree_request",
+      requestId: "req-create-setup",
+      cwd: "/tmp/repo",
+      runSetup: true,
+    });
+    expect(createWorktree.runSetup).toBe(true);
   });
 });

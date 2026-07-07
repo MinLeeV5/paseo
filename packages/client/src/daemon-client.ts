@@ -296,6 +296,7 @@ export interface CreatePaseoWorktreeInput extends Pick<
   | "refName"
   | "action"
   | "githubPrNumber"
+  | "runSetup"
 > {}
 
 type CheckoutStatusPayload = CheckoutStatusResponse["payload"];
@@ -3475,6 +3476,7 @@ export class DaemonClient {
         ...(input.refName !== undefined ? { refName: input.refName } : {}),
         ...(input.action !== undefined ? { action: input.action } : {}),
         ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
+        ...(input.runSetup !== undefined ? { runSetup: input.runSetup } : {}),
       },
       responseType: "create_paseo_worktree_response",
     });
@@ -3485,6 +3487,7 @@ export class DaemonClient {
       source: WorkspaceCreateRequest["source"];
       title?: string;
       firstAgentContext?: WorkspaceCreateRequest["firstAgentContext"];
+      runSetup?: WorkspaceCreateRequest["runSetup"];
     },
     requestId?: string,
   ): Promise<WorkspaceCreatePayload> {
@@ -3497,6 +3500,7 @@ export class DaemonClient {
         ...(input.firstAgentContext !== undefined
           ? { firstAgentContext: input.firstAgentContext }
           : {}),
+        ...(input.runSetup !== undefined ? { runSetup: input.runSetup } : {}),
       },
       responseType: "workspace.create.response",
     });

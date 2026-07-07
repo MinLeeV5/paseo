@@ -852,6 +852,7 @@ export const zhCN: TranslationResources = {
   newWorkspace: {
     title: "新建 workspace",
     create: "创建",
+    createAndRunSetup: "创建并执行 setup",
     isolation: {
       local: "本地",
       worktree: "新建 worktree",

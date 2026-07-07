@@ -4493,6 +4493,7 @@ export class Session {
         refName: source.refName,
         githubPrNumber: source.githubPrNumber,
         firstAgentContext: request.firstAgentContext,
+        runSetup: request.runSetup === true,
       },
       source.baseBranch
         ? { resolveDefaultBranch: async () => source.baseBranch as string }

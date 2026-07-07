@@ -27,7 +27,6 @@ import type { CheckoutExistingBranchResult } from "../utils/checkout-git.js";
 import { expandTilde } from "../utils/path.js";
 import {
   getWorktreeSetupCommands,
-  getWorktreeWaitForSetup,
   resolveWorktreeRuntimeEnv,
   runWorktreeSetupCommands,
   slugify,
@@ -131,7 +130,6 @@ interface AgentWorktreeSetupContinuationInput {
   terminalManager: TerminalManager | null;
   appendTimelineItem: AgentWorktreeSetupTimelineWriter;
   emitLiveTimelineItem: AgentWorktreeSetupTimelineWriter;
-  waitingAgentId?: string;
   logger: Logger;
 }
 
@@ -141,7 +139,6 @@ export type CreatePaseoWorktreeSetupContinuationInput =
 
 export interface AgentWorktreeSetupContinuation {
   kind: "agent";
-  waitForSetup?: boolean;
   startAfterAgentCreate: (input: { agentId: string }) => boolean | void | Promise<boolean | void>;
 }
 
@@ -516,6 +513,7 @@ export async function handleCreatePaseoWorktreeRequest(
         refName: request.refName,
         action: request.action,
         githubPrNumber: request.githubPrNumber,
+        runSetup: request.runSetup === true,
       },
     );
 
@@ -583,7 +581,7 @@ export async function createPaseoWorktreeWorkflow(
   },
 ): Promise<CreatePaseoWorktreeWorkflowResult> {
   const setupContinuation = options?.setupContinuation ?? { kind: "workspace" };
-  const waitForSetup = setupContinuation.kind === "agent" && getWorktreeWaitForSetup(input.cwd);
+  const shouldRunWorkspaceSetup = setupContinuation.kind === "workspace" && input.runSetup === true;
   const createdWorktree = await dependencies.createPaseoWorktree(
     {
       ...input,
@@ -611,7 +609,7 @@ export async function createPaseoWorktreeWorkflow(
         "Failed to warm workspace git data after creating worktree",
       );
     });
-    if (setupContinuation.kind === "workspace") {
+    if (shouldRunWorkspaceSetup) {
       void runWorktreeSetupInBackground(dependencies, {
         requestCwd: input.cwd,
         repoRoot: createdWorktree.repoRoot,
@@ -629,47 +627,18 @@ export async function createPaseoWorktreeWorkflow(
       ...createdWorktree,
       setupContinuation: {
         kind: "agent",
-        waitForSetup,
-        startAfterAgentCreate: async ({ agentId }) => {
-          const shouldMirrorToWaitingAgent = (item: AgentWorktreeSetupTimelineItem) =>
-            waitForSetup &&
-            setupContinuation.waitingAgentId &&
-            item.type === "tool_call" &&
-            item.name === "paseo_worktree_setup";
-          const appendSetupTimelineItem = async (item: AgentWorktreeSetupTimelineItem) => {
-            const appended = await setupContinuation.appendTimelineItem({ agentId, item });
-            if (shouldMirrorToWaitingAgent(item)) {
-              await setupContinuation.appendTimelineItem({
-                agentId: setupContinuation.waitingAgentId!,
-                item,
-              });
-            }
-            return appended;
-          };
-          const emitLiveSetupTimelineItem = async (item: AgentWorktreeSetupTimelineItem) => {
-            const emitted = await setupContinuation.emitLiveTimelineItem({ agentId, item });
-            if (shouldMirrorToWaitingAgent(item)) {
-              await setupContinuation.emitLiveTimelineItem({
-                agentId: setupContinuation.waitingAgentId!,
-                item,
-              });
-            }
-            return emitted;
-          };
+        startAfterAgentCreate: ({ agentId }) => {
           const bootstrap = runAsyncWorktreeBootstrap({
             agentId,
             workspaceId: workspace.workspaceId,
             worktree: createdWorktree.worktree,
             shouldBootstrap: createdWorktree.created,
             terminalManager: setupContinuation.terminalManager,
-            appendTimelineItem: appendSetupTimelineItem,
-            emitLiveTimelineItem: emitLiveSetupTimelineItem,
-            ...(waitForSetup ? { setupMetadata: { waitForSetup: true } } : {}),
+            appendTimelineItem: (item) => setupContinuation.appendTimelineItem({ agentId, item }),
+            emitLiveTimelineItem: (item) =>
+              setupContinuation.emitLiveTimelineItem({ agentId, item }),
             logger: setupContinuation.logger,
           });
-          if (waitForSetup) {
-            return bootstrap;
-          }
           void bootstrap;
           return true;
         },
@@ -780,10 +749,6 @@ export async function runWorktreeSetupInBackground(
       }
       const message = error instanceof Error ? error.message : String(error);
       emitSetupProgress("failed", message);
-
-      if (!setupStarted) {
-        await dependencies.archiveWorkspaceRecord(options.workspaceId);
-      }
 
       dependencies.sessionLogger.error(
         {

@@ -27,7 +27,6 @@ export const PaseoWorktreeConfigRawSchema = z
     setup: PaseoLifecycleCommandRawSchema.optional(),
     teardown: PaseoLifecycleCommandRawSchema.optional(),
     terminals: z.unknown().optional(),
-    waitForSetup: z.boolean().optional(),
   })
   .passthrough();
 
@@ -61,10 +60,9 @@ export const PaseoConfigRawSchema = z
 export const WorktreeConfigSchema = PaseoWorktreeConfigRawSchema.extend({
   setup: z.unknown().optional().transform(normalizeLifecycleCommands),
   teardown: z.unknown().optional().transform(normalizeLifecycleCommands),
-  waitForSetup: z.boolean().optional().default(true),
 })
   .passthrough()
-  .catch({ setup: [], teardown: [], waitForSetup: true });
+  .catch({ setup: [], teardown: [] });
 
 export const ScriptEntrySchema = PaseoScriptEntryRawSchema.catch({});
 

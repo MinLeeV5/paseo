@@ -880,6 +880,7 @@ export const ru: TranslationResources = {
   newWorkspace: {
     title: "Новое рабочее пространство",
     create: "Создавать",
+    createAndRunSetup: "Create and run setup",
     isolation: {
       local: "Локально",
       worktree: "Новый worktree",

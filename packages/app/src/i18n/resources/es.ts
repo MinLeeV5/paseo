@@ -888,6 +888,7 @@ export const es: TranslationResources = {
   newWorkspace: {
     title: "Nuevo espacio de trabajo",
     create: "Crear",
+    createAndRunSetup: "Create and run setup",
     isolation: {
       local: "Local",
       worktree: "Nuevo worktree",

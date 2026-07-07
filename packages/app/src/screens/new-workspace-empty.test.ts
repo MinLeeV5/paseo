@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ComposerAttachment } from "@/attachments/types";
 import type { MessagePayload } from "@/composer/types";
-import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
+import {
+  isEmptyWorkspaceSubmission,
+  runCreateEmptyWorkspace,
+  runCreateWorkspaceWithSetup,
+} from "./new-workspace-empty";
 
 function payload(
   input: { text?: string; attachments?: ComposerAttachment[] } = {},
@@ -40,6 +44,29 @@ describe("runCreateEmptyWorkspace", () => {
       withInitialAgent: false,
     });
     expect(recorded).toEqual([{ serverId: "server-abc", workspaceId: "workspace-123" }]);
+  });
+
+  it("creates a setup workspace without prompt or attachments and navigates to it", async () => {
+    const workspace = { id: "workspace-setup" };
+    const ensureWorkspace = vi.fn().mockResolvedValue(workspace);
+    const { navigate, recorded } = createRecordingNavigate();
+
+    await runCreateWorkspaceWithSetup({
+      payload: payload({ text: "keep this draft" }),
+      ensureWorkspace,
+      serverId: "server-abc",
+      navigate,
+    });
+
+    expect(ensureWorkspace).toHaveBeenCalledOnce();
+    expect(ensureWorkspace).toHaveBeenCalledWith({
+      cwd: "/sample/repo",
+      prompt: "",
+      attachments: [],
+      withInitialAgent: false,
+      runSetup: true,
+    });
+    expect(recorded).toEqual([{ serverId: "server-abc", workspaceId: "workspace-setup" }]);
   });
 });
 

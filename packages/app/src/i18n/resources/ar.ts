@@ -861,6 +861,7 @@ export const ar: TranslationResources = {
   newWorkspace: {
     title: "مساحة عمل جديدة",
     create: "يخلق",
+    createAndRunSetup: "Create and run setup",
     isolation: {
       local: "محلي",
       worktree: "شجرة عمل جديدة",

@@ -28,15 +28,6 @@ function readString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function isWaitForSetupBlocked(input: ToolCallDisplayInput): boolean {
-  return (
-    input.status === "running" &&
-    input.detail.type === "worktree_setup" &&
-    isRecord(input.metadata) &&
-    input.metadata.waitForSetup === true
-  );
-}
-
 function humanizeToolName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -114,9 +105,7 @@ function buildCanonicalDetailDisplay(input: ToolCallDisplayInput): DetailDisplay
     case "worktree_setup":
       return {
         displayName: "Worktree Setup",
-        summary: isWaitForSetupBlocked(input)
-          ? "Waiting for setup to complete before starting the agent"
-          : input.detail.branchName,
+        summary: input.detail.branchName,
       };
     case "sub_agent":
       return {

@@ -879,6 +879,7 @@ export const ptBR: TranslationResources = {
   newWorkspace: {
     title: "Novo workspace",
     create: "Criar",
+    createAndRunSetup: "Create and run setup",
     isolation: {
       local: "Local",
       worktree: "Novo worktree",

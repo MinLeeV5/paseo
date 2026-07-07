@@ -242,7 +242,7 @@ test("mcp create stamps the new worktree's workspaceId, not the parent's", async
   }
 });
 
-test("mcp create waits for blocking worktree setup before starting the initial prompt", async () => {
+test("session create starts the initial prompt without waiting for worktree setup", async () => {
   const snapshot = {
     id: "agent-wait-setup",
     provider: "codex",
@@ -272,16 +272,15 @@ test("mcp create waits for blocking worktree setup before starting the initial p
   const commandPromise = createAgentCommand(dependencies, {
     kind: "session",
     config: { provider: "codex", cwd: "/tmp/paseo-create-test/worktree" },
-    initialPrompt: "start after setup",
+    initialPrompt: "start while setup runs",
     labels: {},
     provisionalTitle: null,
     firstAgentContext: { attachments: [] },
     buildSessionConfig: async (config) => ({
       sessionConfig: config,
-      createdWorkspaceId: "ws-wait-setup",
+      createdWorkspaceId: "ws-setup",
       setupContinuation: {
         kind: "agent",
-        waitForSetup: true,
         startAfterAgentCreate: async () => {
           setupStarted();
           await setupFinished;
@@ -294,12 +293,16 @@ test("mcp create waits for blocking worktree setup before starting the initial p
   await vi.waitFor(() => {
     expect(setupStarted).toHaveBeenCalledTimes(1);
   });
-  expect(streamAgent).not.toHaveBeenCalled();
+  await vi.waitFor(() => {
+    expect(streamAgent).toHaveBeenCalledWith(
+      "agent-wait-setup",
+      "start while setup runs",
+      undefined,
+    );
+  });
 
   releaseSetup?.();
   await commandPromise;
-
-  expect(streamAgent).toHaveBeenCalledWith("agent-wait-setup", "start after setup", undefined);
 });
 
 test("session create keeps the prompt title after the initial prompt settles", async () => {

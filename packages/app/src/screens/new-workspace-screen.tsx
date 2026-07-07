@@ -9,11 +9,20 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNameId } from "mnemonic-id";
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, Folder, GitBranch, GitPullRequest, X } from "lucide-react-native";
+import {
+  Check,
+  ChevronDown,
+  Folder,
+  GitBranch,
+  GitPullRequest,
+  Play,
+  X,
+} from "lucide-react-native";
 import { Composer } from "@/composer";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
+import { Button } from "@/components/ui/button";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -70,7 +79,11 @@ import type { AgentAttachment, GitHubSearchItem } from "@getpaseo/protocol/messa
 import type { CreatePaseoWorktreeInput } from "@getpaseo/client/internal/daemon-client";
 import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
-import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
+import {
+  isEmptyWorkspaceSubmission,
+  runCreateEmptyWorkspace,
+  runCreateWorkspaceWithSetup,
+} from "./new-workspace-empty";
 import {
   getWorkspaceNamingAttachments,
   remapDraftCwdToWorkspace,
@@ -125,7 +138,7 @@ function resolveVisibleDraftContextScopeKeys(input: {
 }
 
 function isNewWorkspacePending(input: {
-  pendingAction: "chat" | "empty" | null;
+  pendingAction: "chat" | "empty" | "setup" | null;
   isDraftHandoffActive: boolean;
 }): boolean {
   return input.pendingAction !== null || input.isDraftHandoffActive;
@@ -836,6 +849,7 @@ async function createMultiplicityWorkspace(input: {
   selectedItem: PickerItem | null;
   currentBranch: string | null;
   withInitialAgent: boolean;
+  runSetup?: boolean;
   prompt: string;
   attachments: AgentAttachment[];
   mergeWorkspaces: (
@@ -868,6 +882,7 @@ async function createMultiplicityWorkspace(input: {
           projectId: input.project.projectKey,
         },
     ...(firstAgentContext ? { firstAgentContext } : {}),
+    ...(isWorktree && input.runSetup === true ? { runSetup: true } : {}),
   });
   if (payload.error || !payload.workspace) {
     throw new Error(payload.error ?? input.createFailedMessage);
@@ -889,6 +904,7 @@ interface CreateChatAgentInput {
     prompt: string;
     attachments: AgentAttachment[];
     withInitialAgent: boolean;
+    runSetup?: boolean;
   }) => Promise<ReturnType<typeof normalizeWorkspaceDescriptor>>;
   serverId: string;
   draftKey: string;
@@ -1585,7 +1601,7 @@ export function NewWorkspaceScreen({
   const [createdWorkspace, setCreatedWorkspace] = useState<ReturnType<
     typeof normalizeWorkspaceDescriptor
   > | null>(null);
-  const [pendingAction, setPendingAction] = useState<"chat" | "empty" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"chat" | "empty" | "setup" | null>(null);
   const [manualPickerSelection, setManualPickerSelection] = useState<PickerSelection | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
@@ -1903,6 +1919,7 @@ export function NewWorkspaceScreen({
       cwd: string;
       prompt: string;
       attachments: AgentAttachment[];
+      runSetup?: boolean;
     }): CreatePaseoWorktreeInput => {
       if (!selectedProject) {
         throw new Error("Choose a project");
@@ -1918,6 +1935,7 @@ export function NewWorkspaceScreen({
         projectId: selectedProject.projectKey,
         worktreeSlug: createNameId(),
         ...(firstAgentContext ? { firstAgentContext } : {}),
+        ...(input.runSetup === true ? { runSetup: true } : {}),
         ...checkoutRequest,
       };
     },
@@ -1930,6 +1948,7 @@ export function NewWorkspaceScreen({
       prompt: string;
       attachments: AgentAttachment[];
       withInitialAgent: boolean;
+      runSetup?: boolean;
     }) => {
       if (createdWorkspace) {
         return createdWorkspace;
@@ -1949,6 +1968,7 @@ export function NewWorkspaceScreen({
             selectedItem,
             currentBranch,
             withInitialAgent: input.withInitialAgent,
+            runSetup: input.runSetup,
             prompt: input.prompt,
             attachments: input.attachments,
             mergeWorkspaces,
@@ -2021,6 +2041,37 @@ export function NewWorkspaceScreen({
     },
     [composerState, draftId, draftKey, ensureWorkspace, forkDraftSetup, selectedServerId, t, toast],
   );
+
+  const handleCreateAndRunSetup = useCallback(async () => {
+    try {
+      setErrorMessage(null);
+      await composerState?.persistFormPreferences();
+      setPendingAction("setup");
+      await runCreateWorkspaceWithSetup({
+        payload: {
+          text: chatDraft.text,
+          attachments: chatDraft.attachments,
+          cwd: selectedSourceDirectory ?? "",
+        },
+        ensureWorkspace,
+        serverId: selectedServerId,
+        navigate: (targetServerId, workspaceId) => navigateToWorkspace(targetServerId, workspaceId),
+      });
+    } catch (error) {
+      const message = toErrorMessage(error);
+      setPendingAction(null);
+      setErrorMessage(message);
+      toast.error(message);
+    }
+  }, [
+    chatDraft.attachments,
+    chatDraft.text,
+    composerState,
+    ensureWorkspace,
+    selectedServerId,
+    selectedSourceDirectory,
+    toast,
+  ]);
 
   const renderPickerOption = useCallback(
     (props: {
@@ -2144,6 +2195,19 @@ export function NewWorkspaceScreen({
   const composerFooter = useMemo(
     () => (
       <>
+        {effectiveIsolation === "worktree" ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={Play}
+            onPress={handleCreateAndRunSetup}
+            disabled={isPending || !selectedSourceDirectory}
+            loading={pendingAction === "setup"}
+            testID="workspace-create-and-run-setup"
+          >
+            {t("newWorkspace.createAndRunSetup")}
+          </Button>
+        ) : null}
         {agentControlsWithDisabled ? (
           <DraftAgentModeControl placement="footer" {...agentControlsWithDisabled} />
         ) : null}
@@ -2171,6 +2235,11 @@ export function NewWorkspaceScreen({
       agentControlsWithDisabled,
       checkoutHintPrAttachment,
       dismissCheckoutHint,
+      effectiveIsolation,
+      handleCreateAndRunSetup,
+      isPending,
+      pendingAction,
+      selectedSourceDirectory,
       t,
       theme.colors.foregroundMuted,
       theme.iconSize.sm,
