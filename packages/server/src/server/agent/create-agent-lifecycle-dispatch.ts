@@ -9,10 +9,12 @@ import {
   resolveWorkspaceIdAtPath,
 } from "../workspace-archive-service.js";
 import type {
+  CreatePaseoWorktreeSetupContinuationInput,
   CreatePaseoWorktreeWorkflowFn,
   CreatePaseoWorktreeWorkflowResult,
 } from "../worktree-session.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
+import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import type {
   CreateAgentWorktreeTarget,
   FirstAgentContext,
@@ -20,6 +22,10 @@ import type {
 } from "../messages.js";
 import type { AgentManager } from "./agent-manager.js";
 import type { AgentStorage } from "./agent-storage.js";
+import {
+  appendTimelineItemIfAgentKnown,
+  emitLiveTimelineItemIfAgentKnown,
+} from "./timeline-append.js";
 
 interface CreateAgentLifecycleDispatchDependencies {
   paseoHome: string;
@@ -29,6 +35,7 @@ interface CreateAgentLifecycleDispatchDependencies {
   github: GitHubService;
   workspaceGitService: WorkspaceGitService;
   createPaseoWorktreeWorkflow: CreatePaseoWorktreeWorkflowFn;
+  terminalManager: TerminalManager | null;
   archiveAgentForClose: (agentId: string) => Promise<unknown>;
   findWorkspaceIdForCwd: (cwd: string) => Promise<string | null>;
   listActiveWorkspaces: () => Promise<ActiveWorkspaceRef[]>;
@@ -124,23 +131,55 @@ export class CreateAgentLifecycleDispatch {
             action: "branch-off",
             ...(target.base ? { refName: target.base } : {}),
           },
-          target.base ? { resolveDefaultBranch: async () => target.base! } : undefined,
+          {
+            ...(target.base ? { resolveDefaultBranch: async () => target.base! } : {}),
+            setupContinuation: this.createAgentSetupContinuation(),
+          },
         );
       case "checkout-branch":
-        return this.dependencies.createPaseoWorktreeWorkflow({
-          ...baseInput,
-          action: "checkout",
-          refName: target.branch,
-        });
+        return this.dependencies.createPaseoWorktreeWorkflow(
+          {
+            ...baseInput,
+            action: "checkout",
+            refName: target.branch,
+          },
+          { setupContinuation: this.createAgentSetupContinuation() },
+        );
       case "checkout-pr":
-        return this.dependencies.createPaseoWorktreeWorkflow({
-          ...baseInput,
-          action: "checkout",
-          githubPrNumber: target.prNumber,
-        });
+        return this.dependencies.createPaseoWorktreeWorkflow(
+          {
+            ...baseInput,
+            action: "checkout",
+            githubPrNumber: target.prNumber,
+          },
+          { setupContinuation: this.createAgentSetupContinuation() },
+        );
       default:
         throw new Error("Unsupported create_agent_request worktree target");
     }
+  }
+
+  private createAgentSetupContinuation(): Extract<
+    CreatePaseoWorktreeSetupContinuationInput,
+    { kind: "agent" }
+  > {
+    return {
+      kind: "agent" as const,
+      terminalManager: this.dependencies.terminalManager,
+      appendTimelineItem: ({ agentId, item }) =>
+        appendTimelineItemIfAgentKnown({
+          agentManager: this.dependencies.agentManager,
+          agentId,
+          item,
+        }),
+      emitLiveTimelineItem: ({ agentId, item }) =>
+        emitLiveTimelineItemIfAgentKnown({
+          agentManager: this.dependencies.agentManager,
+          agentId,
+          item,
+        }),
+      logger: this.dependencies.logger,
+    };
   }
 
   private registerAutoArchiveOnTerminalState(

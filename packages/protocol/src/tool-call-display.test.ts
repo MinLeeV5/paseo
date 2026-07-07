@@ -86,6 +86,27 @@ describe("shared tool-call display mapping", () => {
     });
   });
 
+  it("tells the user when worktree setup is blocking agent startup", () => {
+    const display = buildToolCallDisplayModel({
+      name: "paseo_worktree_setup",
+      status: "running",
+      error: null,
+      metadata: { waitForSetup: true },
+      detail: {
+        type: "worktree_setup",
+        worktreePath: "/tmp/repo/.paseo/worktrees/repo/branch",
+        branchName: "feature-branch",
+        log: "",
+        commands: [],
+      },
+    });
+
+    expect(display).toEqual({
+      displayName: "Worktree Setup",
+      summary: "Waiting for setup to complete before starting the agent",
+    });
+  });
+
   it("provides errorText for failed calls", () => {
     const display = buildToolCallDisplayModel({
       name: "shell",

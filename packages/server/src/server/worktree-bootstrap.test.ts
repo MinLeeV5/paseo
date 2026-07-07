@@ -46,6 +46,28 @@ function killTerminal(terminalManager: TerminalManager, terminal: TerminalSessio
   });
 }
 
+async function removeTempDirForTest(target: string): Promise<void> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  if (process.platform !== "win32") {
+    try {
+      execFileSync("rm", ["-rf", target], { stdio: "pipe" });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 async function createBootstrapWorktreeForTest(
   options: CreateAgentWorktreeTestOptions,
 ): Promise<CreateAgentWorktreeTestResult> {
@@ -89,7 +111,7 @@ describe("runAsyncWorktreeBootstrap", () => {
 
   afterEach(async () => {
     await Promise.all(realTerminalManagers.map(cleanupTerminalManager));
-    rmSync(tempDir, { recursive: true, force: true });
+    await removeTempDirForTest(tempDir);
   });
 
   it("does not fail setup when live timeline emission throws", async () => {
@@ -131,7 +153,7 @@ describe("runAsyncWorktreeBootstrap", () => {
           throw new Error("live emit failed");
         },
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(true);
 
     const persistedSetupItems = persisted.filter(
       (item) => item.type === "tool_call" && item.name === "paseo_worktree_setup",

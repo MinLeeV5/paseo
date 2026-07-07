@@ -242,6 +242,66 @@ test("mcp create stamps the new worktree's workspaceId, not the parent's", async
   }
 });
 
+test("mcp create waits for blocking worktree setup before starting the initial prompt", async () => {
+  const snapshot = {
+    id: "agent-wait-setup",
+    provider: "codex",
+    cwd: "/tmp/paseo-create-test/worktree",
+    runtimeInfo: null,
+  } as ManagedAgent;
+  const streamAgent = vi.fn(() => (async function* noop() {})());
+  let releaseSetup: (() => void) | null = null;
+  const setupStarted = vi.fn();
+  const setupFinished = new Promise<void>((resolve) => {
+    releaseSetup = resolve;
+  });
+  const dependencies: Parameters<typeof createAgentCommand>[0] = {
+    agentManager: {
+      createAgent: vi.fn(async () => snapshot),
+      getAgent: vi.fn(() => snapshot),
+      tryRunOutOfBand: vi.fn(() => false),
+      hasInFlightRun: vi.fn(() => false),
+      streamAgent,
+      waitForAgentRunStart: vi.fn(async () => undefined),
+    } as unknown as Parameters<typeof createAgentCommand>[0]["agentManager"],
+    agentStorage: {} as Parameters<typeof createAgentCommand>[0]["agentStorage"],
+    logger: createTestLogger(),
+    providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+  };
+
+  const commandPromise = createAgentCommand(dependencies, {
+    kind: "session",
+    config: { provider: "codex", cwd: "/tmp/paseo-create-test/worktree" },
+    initialPrompt: "start after setup",
+    labels: {},
+    provisionalTitle: null,
+    firstAgentContext: { attachments: [] },
+    buildSessionConfig: async (config) => ({
+      sessionConfig: config,
+      createdWorkspaceId: "ws-wait-setup",
+      setupContinuation: {
+        kind: "agent",
+        waitForSetup: true,
+        startAfterAgentCreate: async () => {
+          setupStarted();
+          await setupFinished;
+          return true;
+        },
+      },
+    }),
+  });
+
+  await vi.waitFor(() => {
+    expect(setupStarted).toHaveBeenCalledTimes(1);
+  });
+  expect(streamAgent).not.toHaveBeenCalled();
+
+  releaseSetup?.();
+  await commandPromise;
+
+  expect(streamAgent).toHaveBeenCalledWith("agent-wait-setup", "start after setup", undefined);
+});
+
 test("session create keeps the prompt title after the initial prompt settles", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "create-agent-title-test-"));
   const storage = new AgentStorage(join(workdir, "agents"), logger);

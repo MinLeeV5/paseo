@@ -131,6 +131,7 @@ interface AgentWorktreeSetupContinuationInput {
   terminalManager: TerminalManager | null;
   appendTimelineItem: AgentWorktreeSetupTimelineWriter;
   emitLiveTimelineItem: AgentWorktreeSetupTimelineWriter;
+  waitingAgentId?: string;
   logger: Logger;
 }
 
@@ -140,7 +141,8 @@ export type CreatePaseoWorktreeSetupContinuationInput =
 
 export interface AgentWorktreeSetupContinuation {
   kind: "agent";
-  startAfterAgentCreate: (input: { agentId: string }) => void;
+  waitForSetup?: boolean;
+  startAfterAgentCreate: (input: { agentId: string }) => boolean | void | Promise<boolean | void>;
 }
 
 export type CreatePaseoWorktreeWorkflowResult = CreatePaseoWorktreeResult & {
@@ -582,11 +584,10 @@ export async function createPaseoWorktreeWorkflow(
 ): Promise<CreatePaseoWorktreeWorkflowResult> {
   const setupContinuation = options?.setupContinuation ?? { kind: "workspace" };
   const waitForSetup = setupContinuation.kind === "agent" && getWorktreeWaitForSetup(input.cwd);
-
   const createdWorktree = await dependencies.createPaseoWorktree(
     {
       ...input,
-      runSetup: waitForSetup,
+      runSetup: false,
       paseoHome: input.paseoHome ?? dependencies.paseoHome,
       worktreesRoot: input.worktreesRoot ?? dependencies.worktreesRoot,
     },
@@ -623,23 +624,54 @@ export async function createPaseoWorktreeWorkflow(
     }
   }, 0);
 
-  if (setupContinuation.kind === "agent" && !waitForSetup) {
+  if (setupContinuation.kind === "agent") {
     return {
       ...createdWorktree,
       setupContinuation: {
         kind: "agent",
-        startAfterAgentCreate: ({ agentId }) => {
-          void runAsyncWorktreeBootstrap({
+        waitForSetup,
+        startAfterAgentCreate: async ({ agentId }) => {
+          const shouldMirrorToWaitingAgent = (item: AgentWorktreeSetupTimelineItem) =>
+            waitForSetup &&
+            setupContinuation.waitingAgentId &&
+            item.type === "tool_call" &&
+            item.name === "paseo_worktree_setup";
+          const appendSetupTimelineItem = async (item: AgentWorktreeSetupTimelineItem) => {
+            const appended = await setupContinuation.appendTimelineItem({ agentId, item });
+            if (shouldMirrorToWaitingAgent(item)) {
+              await setupContinuation.appendTimelineItem({
+                agentId: setupContinuation.waitingAgentId!,
+                item,
+              });
+            }
+            return appended;
+          };
+          const emitLiveSetupTimelineItem = async (item: AgentWorktreeSetupTimelineItem) => {
+            const emitted = await setupContinuation.emitLiveTimelineItem({ agentId, item });
+            if (shouldMirrorToWaitingAgent(item)) {
+              await setupContinuation.emitLiveTimelineItem({
+                agentId: setupContinuation.waitingAgentId!,
+                item,
+              });
+            }
+            return emitted;
+          };
+          const bootstrap = runAsyncWorktreeBootstrap({
             agentId,
             workspaceId: workspace.workspaceId,
             worktree: createdWorktree.worktree,
             shouldBootstrap: createdWorktree.created,
             terminalManager: setupContinuation.terminalManager,
-            appendTimelineItem: (item) => setupContinuation.appendTimelineItem({ agentId, item }),
-            emitLiveTimelineItem: (item) =>
-              setupContinuation.emitLiveTimelineItem({ agentId, item }),
+            appendTimelineItem: appendSetupTimelineItem,
+            emitLiveTimelineItem: emitLiveSetupTimelineItem,
+            ...(waitForSetup ? { setupMetadata: { waitForSetup: true } } : {}),
             logger: setupContinuation.logger,
           });
+          if (waitForSetup) {
+            return bootstrap;
+          }
+          void bootstrap;
+          return true;
         },
       },
     };

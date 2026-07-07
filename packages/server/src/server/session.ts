@@ -825,6 +825,7 @@ export class Session {
       workspaceGitService: this.workspaceGitService,
       createPaseoWorktreeWorkflow: (input, workflowOptions) =>
         this.createPaseoWorktreeWorkflow(input, workflowOptions),
+      terminalManager: this.terminalManager,
       archiveAgentForClose: (agentId) => this.archiveAgentForClose(agentId),
       findWorkspaceIdForCwd: (cwd) => this.findWorkspaceIdForCwd(cwd),
       listActiveWorkspaces: () => this.listActiveWorkspaceRefs(),
@@ -2446,8 +2447,22 @@ export class Session {
           env,
           provisionalTitle,
           firstAgentContext,
-          buildSessionConfig: (sessionConfig, gitOptions, legacyWorktreeName, ctx) =>
-            this.buildAgentSessionConfig(sessionConfig, gitOptions, legacyWorktreeName, ctx),
+          buildSessionConfig: async (sessionConfig, gitOptions, legacyWorktreeName, ctx) => {
+            const result = await this.buildAgentSessionConfig(
+              sessionConfig,
+              gitOptions,
+              legacyWorktreeName,
+              ctx,
+            );
+            if (!createdWorktree?.setupContinuation || result.setupContinuation) {
+              return result;
+            }
+            return {
+              ...result,
+              setupContinuation: createdWorktree.setupContinuation,
+              createdWorkspaceId: createdWorktree.workspace.workspaceId,
+            };
+          },
         },
       );
       createdAgentId = snapshot.id;

@@ -26,6 +26,7 @@ import type {
   AgentClient,
   AgentCreateSessionOptions,
   AgentLaunchContext,
+  AgentPromptInput,
   AgentPersistenceHandle,
   AgentRunResult,
   AgentSession,
@@ -85,6 +86,28 @@ afterEach(async () => {
   }
   await flushTerminalContributionWork();
 });
+
+async function removeTempDirForTest(target: string): Promise<void> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  if (process.platform !== "win32") {
+    try {
+      execFileSync("rm", ["-rf", target], { stdio: "pipe" });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
 
 interface SessionTestAccess {
   projectRegistry: {
@@ -438,13 +461,17 @@ class CreateAgentTestSession implements AgentSession {
   readonly id = "create-agent-test-session";
   readonly capabilities = CREATE_AGENT_TEST_CAPABILITIES;
 
-  constructor(private readonly config: AgentSessionConfig) {}
+  constructor(
+    private readonly config: AgentSessionConfig,
+    private readonly onStartTurn?: (prompt: AgentPromptInput) => void,
+  ) {}
 
   async run(): Promise<AgentRunResult> {
     return { sessionId: this.id, finalText: "", timeline: [] };
   }
 
-  async startTurn(): Promise<{ turnId: string }> {
+  async startTurn(prompt: AgentPromptInput): Promise<{ turnId: string }> {
+    this.onStartTurn?.(prompt);
     return { turnId: "turn-1" };
   }
 
@@ -492,22 +519,27 @@ class CreateAgentTestClient implements AgentClient {
   readonly provider = "codex";
   readonly capabilities = CREATE_AGENT_TEST_CAPABILITIES;
 
+  constructor(private readonly onStartTurn?: (prompt: AgentPromptInput) => void) {}
+
   async createSession(
     config: AgentSessionConfig,
     _launchContext?: AgentLaunchContext,
     _options?: AgentCreateSessionOptions,
   ): Promise<AgentSession> {
-    return new CreateAgentTestSession(config);
+    return new CreateAgentTestSession(config, this.onStartTurn);
   }
 
   async resumeSession(
     _handle: AgentPersistenceHandle,
     overrides?: Partial<AgentSessionConfig>,
   ): Promise<AgentSession> {
-    return new CreateAgentTestSession({
-      provider: this.provider,
-      cwd: overrides?.cwd ?? process.cwd(),
-    });
+    return new CreateAgentTestSession(
+      {
+        provider: this.provider,
+        cwd: overrides?.cwd ?? process.cwd(),
+      },
+      this.onStartTurn,
+    );
   }
 
   async fetchCatalog() {
@@ -812,6 +844,17 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
           dispose: () => {},
         }),
         workspaceGitService,
+        workspaceAutoName: new WorkspaceAutoName({
+          agentManager,
+          workspaceRegistry,
+          workspaceGitService,
+          providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+          readDaemonConfig: () => ({ metadataGeneration: { providers: [] } }),
+          gitMutation: { notifyGitMutation: async () => {} },
+          emitWorkspaceUpdateForCwd: async () => {},
+          emitWorkspaceUpdateForWorkspaceId: async () => {},
+          logger: asSessionLogger(logger),
+        }),
         daemonConfigStore: asDaemonConfigStore({
           get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
           onChange: () => () => {},
@@ -847,6 +890,215 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
     rmSync(workdir, { recursive: true, force: true });
   }
 });
+
+test("create_agent_request worktree waits for blocking setup before starting the prompt", async () => {
+  const workdir = realpathSync(mkdtempSync(path.join(tmpdir(), "paseo-create-agent-setup-")));
+  const repoDir = path.join(workdir, "repo");
+  const paseoHome = path.join(workdir, "paseo-home");
+  const worktreesRoot = path.join(workdir, "worktrees");
+  const worktreeSlug = "setup-blocking-agent";
+  const setupCommand = [
+    "node -e",
+    JSON.stringify(
+      [
+        "const fs = require('node:fs');",
+        "const path = require('node:path');",
+        "const root = process.env.PASEO_WORKTREE_PATH;",
+        "fs.writeFileSync(path.join(root, 'setup-started.txt'), 'yes');",
+        "const allow = path.join(root, 'allow-setup');",
+        "function wait() {",
+        "  if (fs.existsSync(allow)) {",
+        "    fs.writeFileSync(path.join(root, 'setup-done.txt'), 'yes');",
+        "    return;",
+        "  }",
+        "  setTimeout(wait, 25);",
+        "}",
+        "wait();",
+      ].join(" "),
+    ),
+  ].join(" ");
+
+  let createPromise: Promise<unknown> | null = null;
+  let createError: unknown;
+  let actualWorktreePath: string | null = null;
+  try {
+    mkdirSync(repoDir, { recursive: true });
+    execFileSync("git", ["init", "-b", "main"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+      cwd: repoDir,
+      stdio: "pipe",
+    });
+    execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd: repoDir, stdio: "pipe" });
+    writeFileSync(path.join(repoDir, "README.md"), "hello\n");
+    writeFileSync(
+      path.join(repoDir, "paseo.json"),
+      JSON.stringify({ worktree: { setup: setupCommand } }, null, 2),
+    );
+    execFileSync("git", ["add", "."], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "initial"], {
+      cwd: repoDir,
+      stdio: "pipe",
+    });
+
+    const emitted: SessionOutboundMessage[] = [];
+    const startedPrompts: AgentPromptInput[] = [];
+    const logger = {
+      child: () => logger,
+      trace: vi.fn(),
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const agentStorage = new AgentStorage(path.join(workdir, "agents"), asSessionLogger(logger));
+    const agentManager = new AgentManager({
+      clients: { codex: new CreateAgentTestClient((prompt) => startedPrompts.push(prompt)) },
+      registry: agentStorage,
+      logger: asSessionLogger(logger),
+      idFactory: () => "00000000-0000-4000-8000-000000000553",
+    });
+    const projectRegistry = new FileBackedProjectRegistry(
+      path.join(workdir, "projects.json"),
+      asSessionLogger(logger),
+    );
+    const workspaceRegistry = new FileBackedWorkspaceRegistry(
+      path.join(workdir, "workspaces.json"),
+      asSessionLogger(logger),
+    );
+    const workspaceGitService = createNoopWorkspaceGitService({
+      getSnapshot: async (cwd: string) =>
+        createWorkspaceRuntimeSnapshot(cwd, {
+          git: {
+            repoRoot: cwd === repoDir ? repoDir : cwd,
+            currentBranch: cwd === repoDir ? "main" : worktreeSlug,
+            remoteUrl: null,
+            isPaseoOwnedWorktree: cwd !== repoDir,
+            mainRepoRoot: cwd === repoDir ? null : repoDir,
+          },
+        }),
+    });
+    const session = asTestSession(
+      new Session({
+        clientId: "test-client",
+        appVersion: null,
+        onMessage: (message) => emitted.push(message),
+        logger: asSessionLogger(logger),
+        downloadTokenStore: asDownloadTokenStore(),
+        pushTokenStore: asPushTokenStore(),
+        paseoHome,
+        worktreesRoot,
+        agentManager,
+        agentStorage,
+        projectRegistry,
+        workspaceRegistry,
+        chatService: asChatService(),
+        scheduleService: asScheduleService(),
+        loopService: asLoopService(),
+        checkoutDiffManager: asCheckoutDiffManager({
+          subscribe: async () => ({
+            initial: { cwd: repoDir, files: [], error: null },
+            unsubscribe: () => {},
+          }),
+          scheduleRefreshForCwd: () => {},
+          onWorkspaceStateMayHaveChanged: () => {},
+          getMetrics: () => ({
+            checkoutDiffTargetCount: 0,
+            checkoutDiffSubscriptionCount: 0,
+            checkoutDiffWatcherCount: 0,
+            checkoutDiffFallbackRefreshTargetCount: 0,
+          }),
+          dispose: () => {},
+        }),
+        workspaceGitService,
+        workspaceAutoName: new WorkspaceAutoName({
+          agentManager,
+          workspaceRegistry,
+          workspaceGitService,
+          providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+          readDaemonConfig: () => ({ metadataGeneration: { providers: [] } }),
+          gitMutation: { notifyGitMutation: async () => {} },
+          emitWorkspaceUpdateForCwd: async () => {},
+          emitWorkspaceUpdateForWorkspaceId: async () => {},
+          logger: asSessionLogger(logger),
+        }),
+        daemonConfigStore: asDaemonConfigStore({
+          get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
+          onChange: () => () => {},
+        }),
+        mcpBaseUrl: null,
+        stt: null,
+        tts: null,
+        providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+        terminalManager: null,
+      }),
+    );
+
+    createPromise = session
+      .handleMessage({
+        type: "create_agent_request",
+        requestId: "req-create-worktree-setup",
+        config: { provider: "codex", cwd: repoDir },
+        initialPrompt: "start after setup",
+        attachments: [],
+        worktree: {
+          mode: "branch-off",
+          newBranch: worktreeSlug,
+          base: "main",
+        },
+      })
+      .catch((error) => {
+        createError = error;
+        throw error;
+      });
+
+    await vi.waitFor(() => {
+      if (createError) {
+        throw createError;
+      }
+      const [createdAgent] = agentManager.listAgents();
+      expect(createdAgent).toBeDefined();
+      actualWorktreePath = createdAgent!.cwd;
+      expect(existsSync(path.join(actualWorktreePath, "setup-started.txt"))).toBe(true);
+      expect(
+        emitted.some((message) => {
+          if (message.type !== "agent_stream") {
+            return false;
+          }
+          const event = message.payload.event;
+          return (
+            event.type === "timeline" &&
+            event.item.type === "tool_call" &&
+            event.item.name === "paseo_worktree_setup" &&
+            event.item.status === "running" &&
+            event.item.metadata?.waitForSetup === true
+          );
+        }),
+      ).toBe(true);
+    });
+    expect(startedPrompts).toEqual([]);
+
+    expect(actualWorktreePath).not.toBeNull();
+    writeFileSync(path.join(actualWorktreePath!, "allow-setup"), "yes");
+    await createPromise;
+
+    expect(startedPrompts).toEqual(["start after setup"]);
+    expect(findByType(emitted, "status")?.payload).toMatchObject({
+      status: "agent_created",
+      agent: { cwd: actualWorktreePath },
+    });
+  } finally {
+    if (actualWorktreePath && existsSync(actualWorktreePath)) {
+      writeFileSync(path.join(actualWorktreePath, "allow-setup"), "yes");
+    }
+    if (createPromise) {
+      await Promise.race([
+        createPromise.catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 1000)),
+      ]);
+    }
+    await removeTempDirForTest(workdir);
+  }
+}, 15_000);
 
 test("create_agent_request does not title an existing workspace from the agent prompt", async () => {
   vi.useFakeTimers();
@@ -3410,7 +3662,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
     });
   } finally {
     vi.useRealTimers();
-    rmSync(tempDir, { recursive: true, force: true });
+    await removeTempDirForTest(tempDir);
   }
 
   const response = findByType(emitted, "create_paseo_worktree_response");
@@ -4929,7 +5181,7 @@ test("refresh_agent_request recreates a real deleted worktree against a temp git
   expect(workspaces.get(workspaceId)?.cwd).toBe(worktreePath);
   expect(workspaces.get(workspaceId)?.archivedAt).toBeNull();
 
-  rmSync(tempDir, { recursive: true, force: true });
+  await removeTempDirForTest(tempDir);
 });
 
 test("recreateOwningWorktreeForRestore throws a typed WorktreeRequestError and leaves the workspace archived when the project root is missing", async () => {
@@ -4991,7 +5243,7 @@ test("recreateOwningWorktreeForRestore throws a typed WorktreeRequestError and l
   // Guard fires before createWorktree, so archivedAt is untouched.
   expect(workspaces.get(workspaceId)?.archivedAt).toBe("2026-03-10T00:00:00.000Z");
 
-  rmSync(tempDir, { recursive: true, force: true });
+  await removeTempDirForTest(tempDir);
 });
 
 test.skip("open_project_request collapses a git subdirectory onto the repo root workspace", async () => {
@@ -5212,7 +5464,7 @@ test("archive_workspace_request archives a worktree-kind workspace and removes t
       | undefined;
     expect(response?.payload.error).toBeNull();
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    await removeTempDirForTest(tempDir);
   }
 });
 
@@ -5323,7 +5575,7 @@ test.skip("opening a new worktree reconciles older local workspaces into the rem
       firstUpdate?.payload.kind === "upsert" ? firstUpdate.payload.workspace.projectId : null,
     ).toBe(remoteProjectId);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    await removeTempDirForTest(tempDir);
   }
 });
 
@@ -5419,7 +5671,7 @@ test.skip("fetch_workspaces_request reconciles remote URL changes for existing w
     expect(workspaces.get(worktreeWorkspaceId)?.projectId).toBe(newProjectId);
     expect(projects.get(oldProjectId)?.archivedAt).toBeTruthy();
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    await removeTempDirForTest(tempDir);
   }
 });
 
@@ -5515,7 +5767,7 @@ test.skip("reconcile archives stale subdirectory workspace records when collapsi
     expect(workspaces.get(repoRoot)?.archivedAt).toBeNull();
     expect(workspaces.get(subdirWorkspaceId)?.archivedAt).toBeTruthy();
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    await removeTempDirForTest(tempDir);
   }
 });
 
@@ -7247,7 +7499,7 @@ test("workspace.create worktree source checks out a GitHub PR from githubPrNumbe
     expect(existsSync(path.join(workspaceDirectory, fixture.prFileName))).toBe(true);
   } finally {
     await flushTerminalContributionWork();
-    rmSync(fixture.tempDir, { recursive: true, force: true });
+    await removeTempDirForTest(fixture.tempDir);
   }
 });
 
@@ -7477,7 +7729,7 @@ test("workspace auto-name applies title once when branch auto-name is rejected",
     expect(emittedCwds).toEqual([repoDir]);
   } finally {
     vi.useRealTimers();
-    rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await removeTempDirForTest(tempDir);
   }
 });
 

@@ -54,6 +54,28 @@ function killTerminal(terminalManager: TerminalManager, terminal: TerminalSessio
   });
 }
 
+async function removeTempDirForTest(target: string): Promise<void> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  if (process.platform !== "win32") {
+    try {
+      execFileSync("rm", ["-rf", target], { stdio: "pipe" });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 async function createBootstrapWorktreeForTest(
   options: CreateAgentWorktreeTestOptions,
 ): Promise<CreateAgentWorktreeTestResult> {
@@ -127,7 +149,7 @@ describe.skipIf(isPlatform("win32"))("worktree-bootstrap POSIX-only", () => {
 
     afterEach(async () => {
       await Promise.all(realTerminalManagers.map(cleanupTerminalManager));
-      rmSync(tempDir, { recursive: true, force: true });
+      await removeTempDirForTest(tempDir);
     });
     it("streams running setup updates live and persists only a final setup timeline row", async () => {
       writeFileSync(

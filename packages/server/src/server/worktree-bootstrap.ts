@@ -48,6 +48,7 @@ export interface RunAsyncWorktreeBootstrapOptions {
   terminalManager: TerminalManager | null;
   appendTimelineItem: (item: AgentTimelineItem) => Promise<boolean>;
   emitLiveTimelineItem?: (item: AgentTimelineItem) => Promise<boolean>;
+  setupMetadata?: Record<string, unknown>;
   logger?: Logger;
 }
 
@@ -343,6 +344,7 @@ function buildSetupTimelineItem(input: {
   worktree: WorktreeConfig;
   results: WorktreeSetupCommandResult[];
   outputAccumulatorsByIndex?: Map<number, WorktreeSetupOutputAccumulator>;
+  metadata?: Record<string, unknown>;
   errorMessage: string | null;
 }): AgentTimelineItem {
   const detail = buildWorktreeSetupDetail({
@@ -358,6 +360,7 @@ function buildSetupTimelineItem(input: {
       callId: input.callId,
       status: "running",
       detail,
+      ...(input.metadata ? { metadata: input.metadata } : {}),
       error: null,
     };
   }
@@ -369,6 +372,7 @@ function buildSetupTimelineItem(input: {
       callId: input.callId,
       status: "completed",
       detail,
+      ...(input.metadata ? { metadata: input.metadata } : {}),
       error: null,
     };
   }
@@ -379,6 +383,7 @@ function buildSetupTimelineItem(input: {
     callId: input.callId,
     status: "failed",
     detail,
+    ...(input.metadata ? { metadata: input.metadata } : {}),
     error: { message: input.errorMessage ?? "Worktree setup failed" },
   };
 }
@@ -587,9 +592,9 @@ async function runWorktreeTerminalBootstrap(
 
 export async function runAsyncWorktreeBootstrap(
   options: RunAsyncWorktreeBootstrapOptions,
-): Promise<void> {
+): Promise<boolean> {
   if (options.shouldBootstrap === false) {
-    return;
+    return true;
   }
 
   const setupCallId = uuidv4();
@@ -613,6 +618,7 @@ export async function runAsyncWorktreeBootstrap(
             worktree: options.worktree,
             results: runningResults,
             outputAccumulatorsByIndex: progressAccumulator.outputAccumulatorsByIndex,
+            metadata: options.setupMetadata,
             errorMessage: null,
           }),
         );
@@ -655,11 +661,12 @@ export async function runAsyncWorktreeBootstrap(
         worktree: options.worktree,
         results: setupResults,
         outputAccumulatorsByIndex: progressAccumulator.outputAccumulatorsByIndex,
+        metadata: options.setupMetadata,
         errorMessage: null,
       }),
     );
     if (!completed) {
-      return;
+      return true;
     }
   } catch (error) {
     if (error instanceof WorktreeSetupError) {
@@ -674,13 +681,15 @@ export async function runAsyncWorktreeBootstrap(
         worktree: options.worktree,
         results: setupResults,
         outputAccumulatorsByIndex: progressAccumulator.outputAccumulatorsByIndex,
+        metadata: options.setupMetadata,
         errorMessage: message,
       }),
     );
-    return;
+    return false;
   }
 
   await runWorktreeTerminalBootstrap(options, runtimeEnv);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
