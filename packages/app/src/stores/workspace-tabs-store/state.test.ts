@@ -322,6 +322,55 @@ describe("workspace-tabs-store reducers", () => {
     expect(reopened.state.focusedTabIdByWorkspace[WORKSPACE_KEY]).toBe(fileResult.tabId);
   });
 
+  it("opens a diff-context file tab without retargeting an existing plain file tab", () => {
+    let state = emptyState();
+    const plainFile = applyOpenOrFocusTab(state, {
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      target: { kind: "file", path: "src/app.ts" },
+      now: NOW,
+    });
+    state = plainFile.state;
+
+    const diffFile = applyOpenOrFocusTab(state, {
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      target: {
+        kind: "file",
+        path: "src/app.ts",
+        diffContext: {
+          cwd: "/repo/worktree",
+          mode: "uncommitted",
+          ignoreWhitespace: false,
+        },
+      },
+      now: NOW + 1,
+    });
+
+    expect(diffFile.tabId).not.toBe(plainFile.tabId);
+    expect(diffFile.state.focusedTabIdByWorkspace[WORKSPACE_KEY]).toBe(diffFile.tabId);
+    expect(diffFile.state.uiTabsByWorkspace[WORKSPACE_KEY]).toEqual([
+      {
+        tabId: plainFile.tabId,
+        target: { kind: "file", path: "src/app.ts" },
+        createdAt: NOW,
+      },
+      {
+        tabId: diffFile.tabId,
+        target: {
+          kind: "file",
+          path: "src/app.ts",
+          diffContext: {
+            cwd: "/repo/worktree",
+            mode: "uncommitted",
+            ignoreWhitespace: false,
+          },
+        },
+        createdAt: NOW + 1,
+      },
+    ]);
+  });
+
   it("builds a deterministic setup tab keyed by workspace id", () => {
     const result = applyOpenOrFocusTab(initialWorkspaceTabsCoreState, {
       serverId: SERVER_ID,

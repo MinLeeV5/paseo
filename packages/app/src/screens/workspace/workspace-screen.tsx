@@ -149,6 +149,7 @@ import {
 import {
   deriveWorkspacePaneState,
   resolveSideFileOpenPlacement,
+  type WorkspacePaneState,
 } from "@/screens/workspace/workspace-pane-state";
 import {
   buildWorkspacePaneContentModel,
@@ -300,6 +301,26 @@ function decodeSegment(value: string): string {
   } catch {
     return value;
   }
+}
+
+function openExplorerWorkspaceFileRequest(input: {
+  request: WorkspaceFileOpenRequest;
+  sourcePaneId?: string;
+  openMain: (location: WorkspaceFileLocation) => void;
+  openSide: (input: { location: WorkspaceFileLocation; sourcePaneId?: string }) => void;
+}) {
+  if (input.request.disposition === "side") {
+    input.openSide({
+      location: input.request.location,
+      sourcePaneId: input.sourcePaneId,
+    });
+    return;
+  }
+  input.openMain(input.request.location);
+}
+
+function getWorkspacePaneSourceId(paneState: WorkspacePaneState): string | undefined {
+  return paneState.pane?.id;
 }
 
 function useSyncWorkspaceActiveBrowser(input: {
@@ -2246,7 +2267,6 @@ function WorkspaceScreenContent({
       showMobileAgent,
     ],
   );
-
   const handleOpenFileFromChatInSidePane = useCallback(
     (input: {
       location: WorkspaceFileLocation;
@@ -2297,6 +2317,18 @@ function WorkspaceScreenContent({
       uiTabs,
       workspaceLayout,
     ],
+  );
+  const explorerSourcePaneId = getWorkspacePaneSourceId(focusedPaneTabState);
+  const handleOpenWorkspaceFileFromExplorer = useCallback(
+    (request: WorkspaceFileOpenRequest) => {
+      openExplorerWorkspaceFileRequest({
+        request,
+        sourcePaneId: explorerSourcePaneId,
+        openMain: handleOpenFileFromChat,
+        openSide: handleOpenFileFromChatInSidePane,
+      });
+    },
+    [explorerSourcePaneId, handleOpenFileFromChat, handleOpenFileFromChatInSidePane],
   );
 
   const handleOpenWorkspaceFileFromPane = useStableEvent(function handleOpenWorkspaceFileFromPane({
@@ -3640,6 +3672,7 @@ function WorkspaceScreenContent({
                   workspaceRoot={workspaceDirectory}
                   isGit={isGitCheckout}
                   onOpenFile={handleOpenFileFromExplorer}
+                  onOpenWorkspaceFile={handleOpenWorkspaceFileFromExplorer}
                 />
               ) : null}
             </View>

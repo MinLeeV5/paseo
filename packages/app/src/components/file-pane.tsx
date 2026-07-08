@@ -20,7 +20,7 @@ import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { lineNumberGutterWidth } from "@/components/code-insets";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
-import { getFilePaneRenderMode } from "@/components/file-pane-render-mode";
+import { getFilePaneContentRenderMode } from "@/components/file-pane-render-mode";
 import { MermaidDiagram } from "@/components/mermaid/diagram";
 import { isWeb } from "@/constants/platform";
 import type { AttachmentMetadata } from "@/attachments/types";
@@ -29,16 +29,29 @@ import { persistAttachmentFromBytes } from "@/attachments/service";
 import { createPreviewAttachmentId, getFileNameFromPath } from "@/attachments/utils";
 import { explorerFileFromReadResult } from "@/file-explorer/read-result";
 import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
-import type { WorkspaceFileLocation } from "@/workspace/file-open";
+import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
 import { MountedTabActiveContext } from "@/components/split-container";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
+import { useCheckoutDiffQuery, type ParsedDiffFile } from "@/git/use-diff-query";
+import {
+  buildWorkspaceFileDiffDecorations,
+  type WorkspaceFileDeletedDiffRow,
+  type WorkspaceFileDiffDecorations,
+  type WorkspaceFileDiffLineState,
+} from "@/workspace/file-diff-decorations";
 
 interface CodeLineProps {
   tokens: HighlightToken[];
   lineNumber: number;
   gutterWidth: number;
   highlighted: boolean;
+  diffState?: WorkspaceFileDiffLineState;
+}
+
+interface DeletedCodeLineProps {
+  row: WorkspaceFileDeletedDiffRow;
+  gutterWidth: number;
 }
 
 interface FilePreviewBodyProps {
@@ -48,6 +61,7 @@ interface FilePreviewBodyProps {
   isMobile: boolean;
   location: WorkspaceFileLocation;
   imagePreviewUri: string | null;
+  diffDecorations: WorkspaceFileDiffDecorations | null;
 }
 
 function trimNonEmpty(value: string | null | undefined): string | null {
@@ -120,19 +134,134 @@ function clampLineSelection(input: {
   return { lineStart, lineEnd: Math.max(lineStart, lineEnd) };
 }
 
+function normalizePreviewPath(value: string | null | undefined): string | null {
+  const path = trimNonEmpty(value);
+  return path ? path.replace(/\\/g, "/") : null;
+}
+
+function findDiffFileForLocation(input: {
+  files: ParsedDiffFile[];
+  path: string | null;
+  relativePath: string | null;
+  absolutePath: string | null;
+}): ParsedDiffFile | null {
+  const candidates = new Set<string>();
+  for (const path of [input.path, input.relativePath, input.absolutePath]) {
+    const normalized = normalizePreviewPath(path);
+    if (normalized) {
+      candidates.add(normalized);
+    }
+  }
+  return input.files.find((file) => candidates.has(normalizePreviewPath(file.path) ?? "")) ?? null;
+}
+
+function getMaxDeletedLineNumber(decorations: WorkspaceFileDiffDecorations | null): number {
+  if (!decorations) {
+    return 0;
+  }
+  let maxLineNumber = 0;
+  const inspectRows = (rows: WorkspaceFileDeletedDiffRow[]) => {
+    for (const row of rows) {
+      maxLineNumber = Math.max(maxLineNumber, row.oldLineNumber);
+    }
+  };
+  for (const rows of decorations.deletedRowsBeforeLineNumber.values()) {
+    inspectRows(rows);
+  }
+  inspectRows(decorations.deletedRowsAfterLastLine);
+  return maxLineNumber;
+}
+
+function collectDeletedRowsForFallback(
+  decorations: WorkspaceFileDiffDecorations | null,
+): WorkspaceFileDeletedDiffRow[] {
+  if (!decorations) {
+    return [];
+  }
+  const rows: WorkspaceFileDeletedDiffRow[] = [];
+  for (const beforeRows of decorations.deletedRowsBeforeLineNumber.values()) {
+    rows.push(...beforeRows);
+  }
+  rows.push(...decorations.deletedRowsAfterLastLine);
+  return rows;
+}
+
+function getDeletedRowsAfterRenderedLines(input: {
+  decorations: WorkspaceFileDiffDecorations | null;
+  lineCount: number;
+}): WorkspaceFileDeletedDiffRow[] {
+  if (!input.decorations) {
+    return [];
+  }
+  const rows: WorkspaceFileDeletedDiffRow[] = [];
+  for (const [lineNumber, beforeRows] of input.decorations.deletedRowsBeforeLineNumber) {
+    if (lineNumber < 1 || lineNumber > input.lineCount) {
+      rows.push(...beforeRows);
+    }
+  }
+  rows.push(...input.decorations.deletedRowsAfterLastLine);
+  return rows;
+}
+
+function useWorkspaceFileDiffDecorations(input: {
+  serverId: string;
+  normalizedWorkspaceRoot: string;
+  normalizedFilePath: string | null;
+  location: WorkspaceFileLocation;
+  isActive: boolean;
+  isAppVisible: boolean;
+}): WorkspaceFileDiffDecorations | null {
+  const resolvedFilePaths = useMemo(
+    () =>
+      input.normalizedFilePath
+        ? resolveWorkspaceFilePaths({
+            path: input.normalizedFilePath,
+            workspaceRoot: input.normalizedWorkspaceRoot,
+          })
+        : null,
+    [input.normalizedFilePath, input.normalizedWorkspaceRoot],
+  );
+  const diffContext = input.location.diffContext;
+  const diffQuery = useCheckoutDiffQuery({
+    serverId: input.serverId,
+    cwd: diffContext?.cwd ?? input.normalizedWorkspaceRoot,
+    mode: diffContext?.mode ?? "uncommitted",
+    baseRef: diffContext?.baseRef,
+    ignoreWhitespace: diffContext?.ignoreWhitespace,
+    enabled: Boolean(diffContext && input.isActive && input.isAppVisible),
+  });
+  const diffFile = useMemo(
+    () =>
+      findDiffFileForLocation({
+        files: diffQuery.files,
+        path: input.normalizedFilePath,
+        relativePath: resolvedFilePaths?.relativePath ?? null,
+        absolutePath: resolvedFilePaths?.absolutePath ?? null,
+      }),
+    [diffQuery.files, input.normalizedFilePath, resolvedFilePaths],
+  );
+  return useMemo(() => (diffFile ? buildWorkspaceFileDiffDecorations(diffFile) : null), [diffFile]);
+}
+
 const CodeLine = React.memo(function CodeLine({
   tokens,
   lineNumber,
   gutterWidth,
   highlighted,
+  diffState,
 }: CodeLineProps) {
   const gutterStyle = useMemo(
     () => [codeLineStyles.gutter, inlineUnistylesStyle({ width: gutterWidth })],
     [gutterWidth],
   );
   const lineStyle = useMemo(
-    () => [codeLineStyles.line, highlighted && codeLineStyles.highlightedLine],
-    [highlighted],
+    () => [
+      codeLineStyles.line,
+      diffState === "added" && codeLineStyles.addedLine,
+      diffState === "modified" && codeLineStyles.modifiedLine,
+      highlighted && codeLineStyles.highlightedLine,
+    ],
+    [diffState, highlighted],
   );
   const keyedTokens = useMemo(
     () => tokens.map((token, index) => ({ key: `${index}-${token.text}`, token })),
@@ -154,6 +283,34 @@ const CodeLine = React.memo(function CodeLine({
   );
 });
 
+function DeletedCodeLine({ row, gutterWidth }: DeletedCodeLineProps) {
+  const gutterStyle = useMemo(
+    () => [codeLineStyles.gutter, inlineUnistylesStyle({ width: gutterWidth })],
+    [gutterWidth],
+  );
+  const lineStyle = useMemo(() => [codeLineStyles.line, codeLineStyles.deletedLine], []);
+  const gutterTextStyle = useMemo(
+    () => [codeLineStyles.gutterText, codeLineStyles.deletedGutter],
+    [],
+  );
+  const lineTextStyle = useMemo(
+    () => [codeLineStyles.lineText, codeLineStyles.deletedLineText],
+    [],
+  );
+  return (
+    <View style={lineStyle}>
+      <View style={gutterStyle}>
+        <Text numberOfLines={1} style={gutterTextStyle}>
+          {String(row.oldLineNumber)}
+        </Text>
+      </View>
+      <Text selectable style={lineTextStyle}>
+        {row.content || " "}
+      </Text>
+    </View>
+  );
+}
+
 interface CodeLineTokenProps {
   token: HighlightToken;
 }
@@ -168,6 +325,15 @@ const codeLineStyles = StyleSheet.create((theme) => ({
   },
   highlightedLine: {
     backgroundColor: theme.colors.accentBorder,
+  },
+  addedLine: {
+    backgroundColor: "rgba(46, 160, 67, 0.15)",
+  },
+  modifiedLine: {
+    backgroundColor: "rgba(249, 115, 22, 0.16)",
+  },
+  deletedLine: {
+    backgroundColor: "rgba(248, 81, 73, 0.1)",
   },
   gutter: {
     alignItems: "flex-end",
@@ -188,6 +354,12 @@ const codeLineStyles = StyleSheet.create((theme) => ({
     lineHeight: theme.fontSize.code * 1.45,
     flex: 1,
   },
+  deletedGutter: {
+    color: theme.colors.diffDeletion,
+  },
+  deletedLineText: {
+    color: theme.colors.foreground,
+  },
 }));
 
 function FilePreviewBody({
@@ -197,12 +369,19 @@ function FilePreviewBody({
   isMobile,
   location,
   imagePreviewUri,
+  diffDecorations,
 }: FilePreviewBodyProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const filePath = location.path;
   const textRenderMode =
-    preview?.kind === "text" && !location.lineStart ? getFilePaneRenderMode(filePath) : "code";
+    preview?.kind === "text"
+      ? getFilePaneContentRenderMode({
+          filePath,
+          hasLineSelection: Boolean(location.lineStart),
+          hasDiffContext: Boolean(location.diffContext),
+        })
+      : "code";
 
   const previewScrollRef = useRef<RNScrollView>(null);
   const webScrollbarStyle = useWebScrollbarStyle();
@@ -218,10 +397,15 @@ function FilePreviewBody({
     return highlightCode(preview.content ?? "", filePath);
   }, [textRenderMode, preview, filePath]);
 
+  const maxDeletedLineNumber = useMemo(
+    () => getMaxDeletedLineNumber(diffDecorations),
+    [diffDecorations],
+  );
   const gutterWidth = useMemo(() => {
-    if (!highlightedLines) return 0;
-    return lineNumberGutterWidth(highlightedLines.length, theme.fontSize.code);
-  }, [highlightedLines, theme.fontSize.code]);
+    const lineCount = Math.max(highlightedLines?.length ?? 0, maxDeletedLineNumber);
+    if (lineCount <= 0) return 0;
+    return lineNumberGutterWidth(lineCount, theme.fontSize.code);
+  }, [highlightedLines, maxDeletedLineNumber, theme.fontSize.code]);
   const lineHeight = theme.fontSize.code * 1.45;
   const lineSelection = useMemo(() => {
     if (!highlightedLines) {
@@ -237,6 +421,10 @@ function FilePreviewBody({
   const imageSource = useMemo(
     () => (imagePreviewUri ? { uri: imagePreviewUri } : null),
     [imagePreviewUri],
+  );
+  const deletedFallbackRows = useMemo(
+    () => collectDeletedRowsForFallback(diffDecorations),
+    [diffDecorations],
   );
 
   useEffect(() => {
@@ -257,6 +445,29 @@ function FilePreviewBody({
       <View style={styles.centerState}>
         <ActivityIndicator size="small" />
         <Text style={styles.loadingText}>{t("panels.file.loading")}</Text>
+      </View>
+    );
+  }
+
+  if (!preview && deletedFallbackRows.length > 0) {
+    return (
+      <View style={styles.previewScrollContainer}>
+        <RNScrollView
+          ref={previewScrollRef}
+          style={styles.previewContent}
+          onLayout={scrollbar.onLayout}
+          onScroll={scrollbar.onScroll}
+          onContentSizeChange={scrollbar.onContentSizeChange}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={!showDesktopWebScrollbar}
+        >
+          <View style={styles.previewCodeScrollContent} dataSet={CODE_SURFACE_DATASET}>
+            {deletedFallbackRows.map((row) => (
+              <DeletedCodeLine key={`deleted-${row.key}`} row={row} gutterWidth={gutterWidth} />
+            ))}
+          </View>
+        </RNScrollView>
+        {scrollbar.overlay}
       </View>
     );
   }
@@ -316,20 +527,36 @@ function FilePreviewBody({
       tokens,
       lineNumber: index + 1,
     }));
+    const deletedRowsAfterRenderedLines = getDeletedRowsAfterRenderedLines({
+      decorations: diffDecorations,
+      lineCount: keyedLines.length,
+    });
     const codeLines = (
       <View dataSet={CODE_SURFACE_DATASET}>
         {keyedLines.map(({ key, tokens, lineNumber }) => (
-          <CodeLine
-            key={key}
-            tokens={tokens}
-            lineNumber={lineNumber}
-            gutterWidth={gutterWidth}
-            highlighted={
-              Boolean(lineSelection) &&
-              lineNumber >= (lineSelection?.lineStart ?? 0) &&
-              lineNumber <= (lineSelection?.lineEnd ?? 0)
-            }
-          />
+          <React.Fragment key={key}>
+            {(diffDecorations?.deletedRowsBeforeLineNumber.get(lineNumber) ?? []).map((row) => (
+              <DeletedCodeLine
+                key={`deleted-before-${row.key}`}
+                row={row}
+                gutterWidth={gutterWidth}
+              />
+            ))}
+            <CodeLine
+              tokens={tokens}
+              lineNumber={lineNumber}
+              gutterWidth={gutterWidth}
+              highlighted={
+                Boolean(lineSelection) &&
+                lineNumber >= (lineSelection?.lineStart ?? 0) &&
+                lineNumber <= (lineSelection?.lineEnd ?? 0)
+              }
+              diffState={diffDecorations?.lineStatesByLineNumber.get(lineNumber)}
+            />
+          </React.Fragment>
+        ))}
+        {deletedRowsAfterRenderedLines.map((row) => (
+          <DeletedCodeLine key={`deleted-after-${row.key}`} row={row} gutterWidth={gutterWidth} />
         ))}
       </View>
     );
@@ -437,14 +664,15 @@ export function FilePane({
   // gate itself lives in isFileQueryEnabled.
   const isActive = useContext(MountedTabActiveContext);
   const isAppVisible = useAppVisible();
+  const fileQueryEnabled = isFileQueryEnabled({
+    hasReadTarget: Boolean(client && readTarget),
+    isTabActive: isActive,
+    isAppVisible,
+  });
 
   const query = useQuery({
     queryKey: ["workspaceFile", serverId, readTarget?.cwd ?? null, readTarget?.path ?? null],
-    enabled: isFileQueryEnabled({
-      hasReadTarget: Boolean(client && readTarget),
-      isTabActive: isActive,
-      isAppVisible,
-    }),
+    enabled: fileQueryEnabled,
     queryFn: async () => {
       if (!client || !readTarget) {
         return {
@@ -471,11 +699,20 @@ export function FilePane({
     staleTime: 5_000,
     refetchOnMount: true,
   });
+  const diffDecorations = useWorkspaceFileDiffDecorations({
+    serverId,
+    normalizedWorkspaceRoot,
+    normalizedFilePath,
+    location,
+    isActive,
+    isAppVisible,
+  });
   const imagePreviewUri = useAttachmentPreviewUrl(query.data?.imageAttachment ?? null);
+  const hasDeletedDiffFallback = collectDeletedRowsForFallback(diffDecorations).length > 0;
 
   return (
     <View style={styles.container} testID="workspace-file-pane">
-      {query.data?.error ? (
+      {query.data?.error && !hasDeletedDiffFallback ? (
         <View style={styles.centerState}>
           <Text style={styles.errorText}>{query.data.error}</Text>
         </View>
@@ -488,6 +725,7 @@ export function FilePane({
         isMobile={isMobile}
         location={location}
         imagePreviewUri={imagePreviewUri}
+        diffDecorations={diffDecorations}
       />
     </View>
   );

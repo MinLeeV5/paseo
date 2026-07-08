@@ -21,6 +21,28 @@ describe("normalizeWorkspaceFileLocation", () => {
     });
   });
 
+  it("normalizes optional git diff context for file tabs opened from changes", () => {
+    expect(
+      normalizeWorkspaceFileLocation({
+        path: "src/app.ts",
+        diffContext: {
+          cwd: " /Users/me/repo ",
+          mode: "base",
+          baseRef: " refs/heads/main ",
+          ignoreWhitespace: true,
+        },
+      }),
+    ).toEqual({
+      path: "src/app.ts",
+      diffContext: {
+        cwd: "/Users/me/repo",
+        mode: "base",
+        baseRef: "refs/heads/main",
+        ignoreWhitespace: true,
+      },
+    });
+  });
+
   it("drops invalid or backwards line ranges", () => {
     expect(normalizeWorkspaceFileLocation({ path: "src/app.ts", lineStart: -1 })).toEqual({
       path: "src/app.ts",
@@ -58,6 +80,18 @@ describe("workspace file tab targets", () => {
       workspaceFileLocationsEqual(
         { path: "src/app.ts", lineStart: 12 },
         { path: "src/app.ts", lineStart: 13 },
+      ),
+    ).toBe(false);
+    expect(
+      workspaceFileLocationsEqual(
+        {
+          path: "src/app.ts",
+          diffContext: { cwd: "/repo", mode: "uncommitted", ignoreWhitespace: false },
+        },
+        {
+          path: "src/app.ts",
+          diffContext: { cwd: "/repo", mode: "uncommitted", ignoreWhitespace: true },
+        },
       ),
     ).toBe(false);
   });

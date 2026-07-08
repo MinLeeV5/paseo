@@ -1,11 +1,12 @@
 import {
   createWorkspaceFileTabTarget,
   normalizeWorkspaceFileLocation,
+  type WorkspaceFileLocation,
 } from "@/workspace/file-open";
 import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 
 interface OpenWorkspaceFileFromExplorerInput {
-  filePath: string;
+  location: WorkspaceFileLocation;
   persistenceKey: string | null;
   showMobileAgent: () => void;
   openWorkspaceTabFocused: (workspaceKey: string, target: WorkspaceTabTarget) => string | null;
@@ -17,7 +18,7 @@ export function openWorkspaceFileFromExplorer(input: OpenWorkspaceFileFromExplor
   if (!input.persistenceKey) {
     return;
   }
-  const location = normalizeWorkspaceFileLocation({ path: input.filePath });
+  const location = normalizeWorkspaceFileLocation(input.location);
   if (!location) {
     return;
   }

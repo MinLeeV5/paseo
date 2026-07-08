@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getFilePaneContentRenderMode,
   getFilePaneRenderMode,
   isRenderedMarkdownFile,
   isStandaloneMermaidFile,
@@ -41,5 +42,34 @@ describe("getFilePaneRenderMode", () => {
   it("renders non-preview text files as code", () => {
     expect(getFilePaneRenderMode("src/index.ts")).toBe("code");
     expect(isStandaloneMermaidFile("README.md")).toBe(false);
+  });
+});
+
+describe("getFilePaneContentRenderMode", () => {
+  it("forces previewable text files through code rendering when diff context is present", () => {
+    expect(
+      getFilePaneContentRenderMode({
+        filePath: "README.md",
+        hasLineSelection: false,
+        hasDiffContext: true,
+      }),
+    ).toBe("code");
+    expect(
+      getFilePaneContentRenderMode({
+        filePath: "diagram.mmd",
+        hasLineSelection: false,
+        hasDiffContext: true,
+      }),
+    ).toBe("code");
+  });
+
+  it("keeps regular preview behavior when no diff context is present", () => {
+    expect(
+      getFilePaneContentRenderMode({
+        filePath: "README.md",
+        hasLineSelection: false,
+        hasDiffContext: false,
+      }),
+    ).toBe("markdown");
   });
 });

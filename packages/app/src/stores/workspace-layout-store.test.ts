@@ -386,6 +386,53 @@ describe("workspace-layout-store actions", () => {
     ]);
   });
 
+  it("opens a diff-context file as a separate tab from an existing plain file tab", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    const plainTabId = store.openTabFocused(workspaceKey, {
+      kind: "file",
+      path: "/repo/worktree/a.ts",
+    });
+    const diffTabId = store.openTabFocused(workspaceKey, {
+      kind: "file",
+      path: "/repo/worktree/a.ts",
+      diffContext: {
+        cwd: "/repo/worktree",
+        mode: "uncommitted",
+        ignoreWhitespace: false,
+      },
+    });
+    const layout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey];
+    const pane = findPaneById(layout.root, "main")!;
+
+    expect(diffTabId).not.toBe(plainTabId);
+    expect(pane.focusedTabId).toBe(diffTabId);
+    expect(collectAllTabs(layout.root)).toEqual([
+      {
+        tabId: plainTabId,
+        target: {
+          kind: "file",
+          path: "/repo/worktree/a.ts",
+        },
+        createdAt: expect.any(Number),
+      },
+      {
+        tabId: diffTabId,
+        target: {
+          kind: "file",
+          path: "/repo/worktree/a.ts",
+          diffContext: {
+            cwd: "/repo/worktree",
+            mode: "uncommitted",
+            ignoreWhitespace: false,
+          },
+        },
+        createdAt: expect.any(Number),
+      },
+    ]);
+  });
+
   it("openTabInBackground inserts a tab without stealing focus", () => {
     const workspaceKey = createWorkspaceKey();
     const store = workspaceLayoutStore.getState();

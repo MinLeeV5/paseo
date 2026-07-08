@@ -41,6 +41,7 @@ import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { isWeb } from "@/constants/platform";
 import { buildWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
+import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 
 const MIN_CHAT_WIDTH = 400;
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
@@ -51,6 +52,7 @@ interface ExplorerSidebarProps {
   workspaceRoot: string;
   isGit: boolean;
   onOpenFile?: (filePath: string) => void;
+  onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }
 
 interface ExplorerSidebarSharedState {
@@ -81,6 +83,7 @@ export function CompactExplorerSidebar({
   workspaceRoot,
   isGit,
   onOpenFile,
+  onOpenWorkspaceFile,
 }: ExplorerSidebarProps) {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
@@ -296,6 +299,7 @@ export function CompactExplorerSidebar({
             isMobile
             isOpen={isOpen}
             onOpenFile={onOpenFile}
+            onOpenWorkspaceFile={onOpenWorkspaceFile}
           />
         </Animated.View>
       </GestureDetector>
@@ -309,6 +313,7 @@ export function ExplorerSidebar({
   workspaceRoot,
   isGit,
   onOpenFile,
+  onOpenWorkspaceFile,
 }: ExplorerSidebarProps) {
   const insets = useSafeAreaInsets();
   const explorerWidth = usePanelStore((state) => state.explorerWidth);
@@ -396,6 +401,7 @@ export function ExplorerSidebar({
           isMobile={false}
           isOpen={isOpen}
           onOpenFile={onOpenFile}
+          onOpenWorkspaceFile={onOpenWorkspaceFile}
         />
       </View>
     </Animated.View>
@@ -441,6 +447,7 @@ interface SidebarContentProps {
   isMobile: boolean;
   isOpen: boolean;
   onOpenFile?: (filePath: string) => void;
+  onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }
 
 function ExplorerSidebarContent({
@@ -454,6 +461,7 @@ function ExplorerSidebarContent({
   isMobile,
   isOpen,
   onOpenFile,
+  onOpenWorkspaceFile,
 }: SidebarContentProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -478,6 +486,16 @@ function ExplorerSidebarContent({
       toast.error(error instanceof Error ? error.message : t("workspace.git.diff.failedRefresh"));
     });
   }, [refreshGitActions, serverId, t, toast, workspaceRoot]);
+  const handleOpenWorkspaceFile = useCallback(
+    (request: WorkspaceFileOpenRequest) => {
+      if (onOpenWorkspaceFile) {
+        onOpenWorkspaceFile(request);
+        return;
+      }
+      onOpenFile?.(request.location.path);
+    },
+    [onOpenFile, onOpenWorkspaceFile],
+  );
   const workspaceAttachmentScopeKey = useMemo(
     () => buildWorkspaceAttachmentScopeKey({ serverId, workspaceId, cwd: workspaceRoot }),
     [serverId, workspaceId, workspaceRoot],
@@ -544,6 +562,7 @@ function ExplorerSidebarContent({
             workspaceId={workspaceId}
             cwd={workspaceRoot}
             enabled={isOpen}
+            onOpenWorkspaceFile={handleOpenWorkspaceFile}
           />
         )}
         {resolvedTab === "files" && (

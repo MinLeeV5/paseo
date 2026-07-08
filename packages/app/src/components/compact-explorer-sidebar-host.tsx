@@ -15,6 +15,7 @@ import {
   resolveCompactExplorerSidebarHostModel,
   type CompactExplorerSidebarHostModel,
 } from "@/components/compact-explorer-sidebar-host-state";
+import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 
 interface CompactExplorerOpenGestureSurfaceProps {
   children: ReactNode;
@@ -124,7 +125,22 @@ export function CompactExplorerSidebarHost({ children, enabled }: CompactExplore
         return;
       }
       openWorkspaceFileFromExplorer({
-        filePath,
+        location: { path: filePath },
+        persistenceKey: model.persistenceKey,
+        showMobileAgent,
+        openWorkspaceTabFocused,
+        focusWorkspaceTab,
+      });
+    },
+    [focusWorkspaceTab, model, openWorkspaceTabFocused, showMobileAgent],
+  );
+  const handleOpenWorkspaceFile = useCallback(
+    (request: WorkspaceFileOpenRequest) => {
+      if (!model) {
+        return;
+      }
+      openWorkspaceFileFromExplorer({
+        location: request.location,
         persistenceKey: model.persistenceKey,
         showMobileAgent,
         openWorkspaceTabFocused,
@@ -149,6 +165,7 @@ export function CompactExplorerSidebarHost({ children, enabled }: CompactExplore
           workspaceRoot={model.workspaceRoot}
           isGit={model.isGit}
           onOpenFile={handleOpenFile}
+          onOpenWorkspaceFile={handleOpenWorkspaceFile}
         />
       ) : null}
     </>

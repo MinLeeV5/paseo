@@ -2,10 +2,18 @@ import { isAbsolutePath } from "@/utils/path";
 
 export type OpenFileDisposition = "main" | "side";
 
+export interface WorkspaceFileDiffContext {
+  cwd: string;
+  mode: "uncommitted" | "base";
+  baseRef?: string;
+  ignoreWhitespace: boolean;
+}
+
 export interface WorkspaceFileLocation {
   path: string;
   lineStart?: number;
   lineEnd?: number;
+  diffContext?: WorkspaceFileDiffContext;
 }
 
 export type WorkspaceFileTabTarget = { kind: "file" } & WorkspaceFileLocation;
@@ -29,10 +37,12 @@ export function normalizeWorkspaceFileLocation(
 
   const lineStart = normalizeLineNumber(location.lineStart);
   const lineEnd = normalizeLineNumber(location.lineEnd);
+  const diffContext = normalizeWorkspaceFileDiffContext(location.diffContext);
   return {
     path,
     ...(lineStart ? { lineStart } : {}),
     ...(lineStart && lineEnd && lineEnd >= lineStart ? { lineEnd } : {}),
+    ...(diffContext ? { diffContext } : {}),
   };
 }
 
@@ -41,7 +51,10 @@ export function workspaceFileLocationsEqual(
   right: WorkspaceFileLocation,
 ): boolean {
   return (
-    left.path === right.path && left.lineStart === right.lineStart && left.lineEnd === right.lineEnd
+    left.path === right.path &&
+    left.lineStart === right.lineStart &&
+    left.lineEnd === right.lineEnd &&
+    workspaceFileDiffContextsEqual(left.diffContext, right.diffContext)
   );
 }
 
@@ -58,6 +71,41 @@ function normalizeLineNumber(value: number | null | undefined): number | undefin
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : undefined;
+}
+
+function normalizeWorkspaceFileDiffContext(
+  context: WorkspaceFileDiffContext | null | undefined,
+): WorkspaceFileDiffContext | undefined {
+  if (!context) {
+    return undefined;
+  }
+  const cwd = context.cwd.trim();
+  if (!cwd) {
+    return undefined;
+  }
+  const mode = context.mode === "base" ? "base" : "uncommitted";
+  const baseRef = context.baseRef?.trim();
+  return {
+    cwd,
+    mode,
+    ...(mode === "base" && baseRef ? { baseRef } : {}),
+    ignoreWhitespace: context.ignoreWhitespace === true,
+  };
+}
+
+function workspaceFileDiffContextsEqual(
+  left: WorkspaceFileDiffContext | undefined,
+  right: WorkspaceFileDiffContext | undefined,
+): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+  return (
+    left.cwd === right.cwd &&
+    left.mode === right.mode &&
+    left.baseRef === right.baseRef &&
+    left.ignoreWhitespace === right.ignoreWhitespace
+  );
 }
 
 function trimTrailingSlashes(value: string): string {

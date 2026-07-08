@@ -5,7 +5,7 @@ import {
   normalizeWorkspaceTabTarget,
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
-import type { WorkspaceFileTabTarget } from "@/workspace/file-open";
+import type { WorkspaceFileDiffContext, WorkspaceFileTabTarget } from "@/workspace/file-open";
 
 export interface WorkspaceDraftTabSetup {
   provider: AgentProvider;
@@ -495,6 +495,23 @@ function extractMigrationRawSources(persistedState: unknown): MigrationRawSource
   };
 }
 
+function coerceWorkspaceFileDiffContext(raw: unknown): WorkspaceFileDiffContext | undefined {
+  const diffContextRecord = toObjectRecord(raw);
+  if (
+    !diffContextRecord ||
+    typeof diffContextRecord.cwd !== "string" ||
+    (diffContextRecord.mode !== "uncommitted" && diffContextRecord.mode !== "base")
+  ) {
+    return undefined;
+  }
+  return {
+    cwd: diffContextRecord.cwd,
+    mode: diffContextRecord.mode,
+    baseRef: typeof diffContextRecord.baseRef === "string" ? diffContextRecord.baseRef : undefined,
+    ignoreWhitespace: diffContextRecord.ignoreWhitespace === true,
+  };
+}
+
 function coerceWorkspaceTabTarget(raw: Record<string, unknown>): WorkspaceTabTarget | null {
   const kind = typeof raw.kind === "string" ? raw.kind : null;
   if (kind === "draft" && typeof raw.draftId === "string") {
@@ -515,11 +532,13 @@ function coerceWorkspaceTabTarget(raw: Record<string, unknown>): WorkspaceTabTar
     return normalizeWorkspaceTabTarget({ kind: "browser", browserId: raw.browserId });
   }
   if (kind === "file" && typeof raw.path === "string") {
+    const diffContext = coerceWorkspaceFileDiffContext(raw.diffContext);
     return normalizeWorkspaceTabTarget({
       kind: "file",
       path: raw.path,
       lineStart: typeof raw.lineStart === "number" ? raw.lineStart : undefined,
       lineEnd: typeof raw.lineEnd === "number" ? raw.lineEnd : undefined,
+      ...(diffContext ? { diffContext } : {}),
     });
   }
   if (kind === "setup" && typeof raw.workspaceId === "string") {

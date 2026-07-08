@@ -140,7 +140,24 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
   if (target.kind === "setup") {
     return `setup_${target.workspaceId}`;
   }
-  return `file_${target.path}`;
+  return buildFileTabId(target);
+}
+
+function buildFileTabId(target: Extract<WorkspaceTabTarget, { kind: "file" }>): string {
+  const baseTabId = `file_${target.path}`;
+  const diffContext = target.diffContext;
+  if (!diffContext) {
+    return baseTabId;
+  }
+  const encodedDiffContext = [
+    diffContext.cwd,
+    diffContext.mode,
+    diffContext.baseRef ?? "",
+    diffContext.ignoreWhitespace ? "ignore-ws" : "keep-ws",
+  ]
+    .map((part) => encodeURIComponent(part))
+    .join(":");
+  return `${baseTabId}#diff:${encodedDiffContext}`;
 }
 
 function trimNonEmpty(value: string | null | undefined): string | null {

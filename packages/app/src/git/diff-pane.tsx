@@ -21,6 +21,7 @@ import {
   type NativeSyntheticEvent,
   type NativeScrollEvent,
   type PressableStateCallbackType,
+  type GestureResponderEvent,
   type FlatListProps,
   type StyleProp,
   type ViewStyle,
@@ -41,6 +42,7 @@ import {
   GitCommitHorizontal,
   GitFork,
   GitMerge,
+  FileText,
   List,
   ListChevronsDownUp,
   ListChevronsUpDown,
@@ -123,11 +125,16 @@ import {
   useInlineReviewController,
   type InlineReviewActions,
 } from "@/review";
+import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
 function fileHeaderPressableStyle({ pressed }: PressableStateCallbackType) {
   return [styles.fileHeader, pressed && styles.fileHeaderPressed];
+}
+
+function fileOpenButtonStyle({ pressed }: PressableStateCallbackType) {
+  return [styles.fileOpenButton, pressed && styles.fileOpenButtonPressed];
 }
 
 interface HighlightedTextProps {
@@ -204,6 +211,7 @@ interface DiffFileSectionProps {
   showDirectory: boolean;
   directoryPrefix?: string;
   onToggle: (path: string) => void;
+  onOpenFile?: (file: ParsedDiffFile) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
   testID?: string;
 }
@@ -898,12 +906,42 @@ function SplitDiffColumn({
   );
 }
 
+function DiffFileOpenButton({
+  label,
+  testID,
+  onPress,
+}: {
+  label: string;
+  testID?: string;
+  onPress: (event: GestureResponderEvent) => void;
+}) {
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          testID={testID}
+          style={fileOpenButtonStyle}
+          onPress={onPress}
+        >
+          <ThemedFileText size={14} uniProps={foregroundMutedIconColorMapping} />
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <Text style={styles.tooltipText}>{label}</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 const DiffFileHeader = memo(function DiffFileHeader({
   file,
   isExpanded,
   showDirectory,
   directoryPrefix,
   onToggle,
+  onOpenFile,
   onHeaderHeightChange,
   testID,
 }: DiffFileSectionProps) {
@@ -916,6 +954,14 @@ const DiffFileHeader = memo(function DiffFileHeader({
     pressHandledRef.current = true;
     onToggle(file.path);
   }, [file.path, onToggle]);
+  const handleOpenFile = useCallback(
+    (event: GestureResponderEvent) => {
+      pressHandledRef.current = true;
+      event.stopPropagation();
+      onOpenFile?.(file);
+    },
+    [file, onOpenFile],
+  );
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -969,6 +1015,7 @@ const DiffFileHeader = memo(function DiffFileHeader({
       ? parentDirectory.slice(nestedPrefix.length)
       : parentDirectory;
   }, [directoryPrefix, file.path, showDirectory]);
+  const openFileLabel = t("message.actions.openFile");
 
   return (
     <View style={containerStyle} onLayout={handleLayout} testID={testID}>
@@ -1004,6 +1051,13 @@ const DiffFileHeader = memo(function DiffFileHeader({
               )}
             </View>
             <View style={styles.fileHeaderRight}>
+              {onOpenFile ? (
+                <DiffFileOpenButton
+                  label={openFileLabel}
+                  testID={testID ? `${testID}-open-file` : undefined}
+                  onPress={handleOpenFile}
+                />
+              ) : null}
               <DiffStat additions={file.additions} deletions={file.deletions} />
             </View>
           </Pressable>
@@ -1249,6 +1303,7 @@ interface GitDiffPaneProps {
   workspaceId?: string | null;
   cwd: string;
   enabled?: boolean;
+  onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }
 
 type PressableStyleFn = (
@@ -1278,6 +1333,7 @@ const ThemedRefreshCcw = withUnistyles(RefreshCcw);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronRight = withUnistyles(ChevronRight);
+const ThemedFileText = withUnistyles(FileText);
 
 interface DiffLayoutToggleGroupProps {
   layout: "unified" | "split";
@@ -1900,7 +1956,13 @@ function shouldEnableCheckoutDiff(input: { paneEnabled: boolean; isGit: boolean 
   return input.paneEnabled && input.isGit;
 }
 
-export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPaneProps) {
+export function GitDiffPane({
+  serverId,
+  workspaceId,
+  cwd,
+  enabled,
+  onOpenWorkspaceFile,
+}: GitDiffPaneProps) {
   const { settings: appSettings } = useAppSettings();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
@@ -2091,6 +2153,23 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     ignoreWhitespace: changesPreferences.hideWhitespace,
     enabled: shouldEnableCheckoutDiff({ paneEnabled: enabled !== false, isGit }),
   });
+  const handleOpenDiffFile = useCallback(
+    (file: ParsedDiffFile) => {
+      onOpenWorkspaceFile?.({
+        disposition: "main",
+        location: {
+          path: file.path,
+          diffContext: {
+            cwd,
+            mode: diffMode,
+            ...(diffMode === "base" && baseRef ? { baseRef } : {}),
+            ignoreWhitespace: changesPreferences.hideWhitespace,
+          },
+        },
+      });
+    },
+    [baseRef, changesPreferences.hideWhitespace, cwd, diffMode, onOpenWorkspaceFile],
+  );
   const reviewDraftKey = useMemo(
     () =>
       buildReviewDraftKey({
@@ -2453,6 +2532,7 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
               effectiveFileGrouping === "submodule" ? item.file.submodulePath : undefined
             }
             onToggle={handleToggleExpanded}
+            onOpenFile={onOpenWorkspaceFile ? handleOpenDiffFile : undefined}
             onHeaderHeightChange={handleHeaderHeightChange}
             testID={`diff-file-${item.fileIndex}`}
           />
@@ -2478,8 +2558,10 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
       effectiveFileGrouping,
       handleBodyHeightChange,
       handleHeaderHeightChange,
+      handleOpenDiffFile,
       handleToggleGroupCollapsed,
       handleToggleExpanded,
+      onOpenWorkspaceFile,
       reviewActions,
       rootDirectoryLabel,
       workspaceRootLabel,
@@ -2961,6 +3043,16 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
     flexShrink: 0,
+  },
+  fileOpenButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 24,
+    height: 24,
+    borderRadius: theme.borderRadius.base,
+  },
+  fileOpenButtonPressed: {
+    backgroundColor: theme.colors.surface2,
   },
   fileName: {
     fontSize: theme.fontSize.sm,

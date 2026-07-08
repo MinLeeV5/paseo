@@ -17,6 +17,17 @@ export function getFilePaneRenderMode(filePath: string): FilePaneRenderMode {
   return "code";
 }
 
+export function getFilePaneContentRenderMode(input: {
+  filePath: string;
+  hasLineSelection: boolean;
+  hasDiffContext: boolean;
+}): FilePaneRenderMode {
+  if (input.hasLineSelection || input.hasDiffContext) {
+    return "code";
+  }
+  return getFilePaneRenderMode(input.filePath);
+}
+
 export function isRenderedMarkdownFile(filePath: string): boolean {
   return getFilePaneRenderMode(filePath) === "markdown";
 }
