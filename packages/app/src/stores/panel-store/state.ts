@@ -245,6 +245,13 @@ export function migratePanelState(
   ) {
     state.diffExpandedPathsByWorkspace = {};
   }
+  if (
+    version < 12 ||
+    typeof state.diffCollapsedGroupsByWorkspace !== "object" ||
+    !state.diffCollapsedGroupsByWorkspace
+  ) {
+    state.diffCollapsedGroupsByWorkspace = {};
+  }
   if (typeof state.explorerShowHiddenFiles !== "boolean") {
     state.explorerShowHiddenFiles = true;
   }

@@ -293,6 +293,21 @@ describe("agent detach RPC", () => {
     }
     expect(parsed.features?.agentDetach).toBe(true);
   });
+
+  test("parses the checkoutDiffSubmodulePaths server feature gate", () => {
+    const parsed = parseServerInfoStatusPayload({
+      status: "server_info",
+      serverId: "srv-test",
+      features: {
+        checkoutDiffSubmodulePaths: true,
+      },
+    });
+
+    if (!parsed) {
+      throw new Error("Expected server info payload to parse");
+    }
+    expect(parsed.features?.checkoutDiffSubmodulePaths).toBe(true);
+  });
 });
 
 describe("agent setting action responses", () => {

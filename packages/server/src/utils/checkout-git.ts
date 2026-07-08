@@ -171,6 +171,7 @@ export function __setCheckoutShortstatCacheTtlForTests(ttlMs: number): void {
 
 interface CheckoutFileChange {
   path: string;
+  submodulePath?: string;
   oldPath?: string;
   status: string;
   isNew: boolean;
@@ -793,6 +794,7 @@ async function listSubmoduleFileChanges(input: {
         if (change.isUntracked) {
           untracked.push({
             path: joinGitPath(displaySubmodulePath, change.path),
+            submodulePath: displaySubmodulePath,
             status: "U",
             isNew: true,
             isDeleted: false,
@@ -831,7 +833,13 @@ async function listSubmoduleFileChanges(input: {
 async function getSubmoduleTrackedDiffTextForPath(input: {
   trackedChange: SubmoduleTrackedFileChange;
   ignoreWhitespace: boolean;
-}): Promise<{ path: string; text: string; truncated: boolean; change: CheckoutFileChange }> {
+}): Promise<{
+  path: string;
+  submodulePath: string;
+  text: string;
+  truncated: boolean;
+  change: CheckoutFileChange;
+}> {
   const { trackedChange } = input;
   const path = joinGitPath(trackedChange.displayPrefix, trackedChange.change.path);
   const result = await runGitCommand(
@@ -855,6 +863,7 @@ async function getSubmoduleTrackedDiffTextForPath(input: {
 
   return {
     path,
+    submodulePath: trackedChange.displayPrefix,
     text: result.stdout,
     truncated: result.truncated,
     change: trackedChange.change,
@@ -891,6 +900,7 @@ async function processSubmoduleTrackedChanges(input: {
           buildPlaceholderParsedDiffFile(
             {
               path: fileDiff.path,
+              submodulePath: fileDiff.submodulePath,
               status: fileDiff.change.status,
               isNew: fileDiff.change.isNew,
               isDeleted: fileDiff.change.isDeleted,
@@ -922,6 +932,7 @@ async function processSubmoduleTrackedChanges(input: {
     structured.push({
       ...parsedFile,
       path: fileDiff.path,
+      submodulePath: fileDiff.submodulePath,
       isNew: fileDiff.change.isNew,
       isDeleted: fileDiff.change.isDeleted,
       status: "ok",
@@ -2076,6 +2087,7 @@ function buildPlaceholderParsedDiffFile(
 ): ParsedDiffFile {
   return {
     path: change.path,
+    ...(change.submodulePath !== undefined ? { submodulePath: change.submodulePath } : null),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     additions: options.stat?.additions ?? 0,
@@ -2479,7 +2491,7 @@ async function appendStructuredTrackedDiffs(
     const nestedParsedFiles = getNestedParsedFilesForChange(parsedTrackedFiles, change);
     if (nestedParsedFiles.length > 0) {
       for (const nestedFile of nestedParsedFiles) {
-        structured.push({ ...nestedFile, status: "ok" });
+        structured.push({ ...nestedFile, submodulePath: change.path, status: "ok" });
       }
       continue;
     }
@@ -2559,6 +2571,7 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
   structured.push({
     ...parsedFile,
     path: change.path,
+    ...(change.submodulePath !== undefined ? { submodulePath: change.submodulePath } : null),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     status: "ok",

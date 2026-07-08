@@ -10,7 +10,7 @@ import {
 } from "./storage";
 
 describe("loadChangesPreferencesFromStorage", () => {
-  it("defaults to unified layout with visible whitespace and writes the defaults back", async () => {
+  it("defaults to unified layout, flat file grouping, and visible whitespace", async () => {
     const storage = createInMemoryKeyValueStorage();
 
     const result = await loadChangesPreferencesFromStorage(storage);
@@ -28,15 +28,17 @@ describe("loadChangesPreferencesFromStorage", () => {
 
     expect(result).toEqual({
       layout: "unified",
+      fileGrouping: "flat",
       wrapLines: true,
       hideWhitespace: false,
     });
     expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(JSON.stringify(result));
   });
 
-  it("loads persisted layout and whitespace preferences without rewriting storage", async () => {
+  it("loads persisted layout, grouping, and whitespace preferences without rewriting storage", async () => {
     const persisted = JSON.stringify({
       layout: "split",
+      fileGrouping: "submodule",
       hideWhitespace: true,
       wrapLines: false,
     });
@@ -48,6 +50,7 @@ describe("loadChangesPreferencesFromStorage", () => {
 
     expect(result).toEqual({
       layout: "split",
+      fileGrouping: "submodule",
       hideWhitespace: true,
       wrapLines: false,
     });
@@ -64,11 +67,16 @@ describe("saveChangesPreferences", () => {
 
     await saveChangesPreferences({
       queryClient,
-      updates: { layout: "split", hideWhitespace: true },
+      updates: { layout: "split", fileGrouping: "submodule", hideWhitespace: true },
       storage,
     });
 
-    const expected = { ...DEFAULT_CHANGES_PREFERENCES, layout: "split", hideWhitespace: true };
+    const expected = {
+      ...DEFAULT_CHANGES_PREFERENCES,
+      layout: "split",
+      fileGrouping: "submodule",
+      hideWhitespace: true,
+    };
     expect(queryClient.getQueryData(CHANGES_PREFERENCES_QUERY_KEY)).toEqual(expected);
     expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(JSON.stringify(expected));
   });

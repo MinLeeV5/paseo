@@ -72,6 +72,7 @@ export interface PanelState {
   explorerTabByCheckout: Record<string, ExplorerTab>;
   expandedPathsByWorkspace: Record<string, string[]>;
   diffExpandedPathsByWorkspace: Record<string, string[]>;
+  diffCollapsedGroupsByWorkspace: Record<string, string[]>;
   sidebarWidth: number;
   explorerWidth: number;
   explorerSortOption: SortOption;
@@ -98,6 +99,7 @@ export interface PanelState {
   setExplorerTabForCheckout: (params: ExplorerCheckoutContext & { tab: ExplorerTab }) => void;
   setExpandedPathsForWorkspace: (workspaceKey: string, paths: string[]) => void;
   setDiffExpandedPathsForWorkspace: (workspaceKey: string, paths: string[]) => void;
+  setDiffCollapsedGroupsForWorkspace: (workspaceKey: string, groupKeys: string[]) => void;
   activateExplorerTabForCheckout: (checkout: ExplorerCheckoutContext) => void;
   setSidebarWidth: (width: number) => void;
   setExplorerWidth: (width: number) => void;
@@ -126,6 +128,7 @@ export const usePanelStore = create<PanelState>()(
       explorerTabByCheckout: {},
       expandedPathsByWorkspace: {},
       diffExpandedPathsByWorkspace: {},
+      diffCollapsedGroupsByWorkspace: {},
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
       explorerWidth: DEFAULT_EXPLORER_SIDEBAR_WIDTH,
       explorerSortOption: "name",
@@ -253,6 +256,13 @@ export const usePanelStore = create<PanelState>()(
             [workspaceKey]: paths,
           },
         })),
+      setDiffCollapsedGroupsForWorkspace: (workspaceKey, groupKeys) =>
+        set((state) => ({
+          diffCollapsedGroupsByWorkspace: {
+            ...state.diffCollapsedGroupsByWorkspace,
+            [workspaceKey]: groupKeys,
+          },
+        })),
       activateExplorerTabForCheckout: (checkout) =>
         set((state) => ({
           explorerTab: resolveExplorerTabForCheckout({
@@ -276,7 +286,7 @@ export const usePanelStore = create<PanelState>()(
     }),
     {
       name: "panel-state",
-      version: 11,
+      version: 12,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persistedState, version) =>
         migratePanelState(persistedState, version, { isWeb }) as unknown as PanelState,
@@ -287,6 +297,7 @@ export const usePanelStore = create<PanelState>()(
         explorerTabByCheckout: state.explorerTabByCheckout,
         expandedPathsByWorkspace: state.expandedPathsByWorkspace,
         diffExpandedPathsByWorkspace: state.diffExpandedPathsByWorkspace,
+        diffCollapsedGroupsByWorkspace: state.diffCollapsedGroupsByWorkspace,
         sidebarWidth: state.sidebarWidth,
         explorerWidth: state.explorerWidth,
         explorerSortOption: state.explorerSortOption,

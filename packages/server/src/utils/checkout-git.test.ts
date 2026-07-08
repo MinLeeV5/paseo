@@ -408,6 +408,7 @@ describe("checkout git utilities", () => {
     });
 
     expect(diff.structured?.map((file) => file.path)).toEqual(["modules/sub/inner.txt"]);
+    expect(diff.structured?.map((file) => file.submodulePath)).toEqual(["modules/sub"]);
     expect(diff.diff).toContain("diff --git a/modules/sub/inner.txt b/modules/sub/inner.txt");
     expect(diff.diff).toContain("+two");
   });
@@ -452,6 +453,7 @@ describe("checkout git utilities", () => {
     });
 
     expect(diff.structured?.map((file) => file.path)).toEqual(["modules/sub/.npmrc"]);
+    expect(diff.structured?.map((file) => file.submodulePath)).toEqual(["modules/sub"]);
     expect(diff.diff).toContain("diff --git a/modules/sub/.npmrc b/modules/sub/.npmrc");
     expect(diff.diff).toContain("+strict-peer-dependencies=false");
   });
@@ -486,6 +488,7 @@ describe("checkout git utilities", () => {
     });
 
     expect(diff.structured?.map((file) => file.path)).toEqual(["modules/sub/new.txt"]);
+    expect(diff.structured?.map((file) => file.submodulePath)).toEqual(["modules/sub"]);
     expect(diff.diff).toContain("diff --git a/modules/sub/new.txt b/modules/sub/new.txt");
     expect(diff.diff).toContain("+new");
   });

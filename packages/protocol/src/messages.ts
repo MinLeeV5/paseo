@@ -1828,6 +1828,7 @@ const DiffHunkSchema = z.object({
 
 const ParsedDiffFileSchema = z.object({
   path: z.string(),
+  submodulePath: z.string().optional(),
   isNew: z.boolean(),
   isDeleted: z.boolean(),
   additions: z.number(),
@@ -2352,6 +2353,8 @@ export const ServerInfoStatusPayloadSchema = z
         rewind: z.boolean().optional(),
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: z.boolean().optional(),
+        // COMPAT(checkoutDiffSubmodulePaths): added in v0.1.103, remove gate after 2027-01-08.
+        checkoutDiffSubmodulePaths: z.boolean().optional(),
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: z.boolean().optional(),
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.

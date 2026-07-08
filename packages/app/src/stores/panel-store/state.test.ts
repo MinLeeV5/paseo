@@ -103,6 +103,12 @@ describe("panel-store migration", () => {
 
     expect(state.explorerShowHiddenFiles).toBe(true);
   });
+
+  it("initializes collapsed diff groups for older persisted state", () => {
+    const state = migratePanelState({}, 11, { isWeb: false });
+
+    expect(state.diffCollapsedGroupsByWorkspace).toEqual({});
+  });
 });
 
 describe("panel-store visibility selectors", () => {

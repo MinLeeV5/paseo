@@ -34,10 +34,14 @@ import {
   Archive,
   ArrowDownUp,
   ChevronDown,
+  ChevronRight,
   Columns2,
   Download,
+  FolderTree,
   GitCommitHorizontal,
+  GitFork,
   GitMerge,
+  List,
   ListChevronsDownUp,
   ListChevronsUpDown,
   Pilcrow,
@@ -98,6 +102,12 @@ import {
   buildWorkspaceAttachmentScopeKey,
   useWorkspaceAttachmentsStore,
 } from "@/attachments/workspace-attachments-store";
+import {
+  buildCheckoutDiffFileEntries,
+  filterCheckoutDiffFileEntriesForCollapsedGroups,
+  type CheckoutDiffFileGrouping,
+  type CheckoutDiffFileGroupKind,
+} from "@/git/diff-order";
 import {
   buildReviewDraftScopeKey,
   buildReviewDraftKey,
@@ -191,6 +201,8 @@ function HighlightedText({
 interface DiffFileSectionProps {
   file: ParsedDiffFile;
   isExpanded: boolean;
+  showDirectory: boolean;
+  directoryPrefix?: string;
   onToggle: (path: string) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
   testID?: string;
@@ -889,6 +901,8 @@ function SplitDiffColumn({
 const DiffFileHeader = memo(function DiffFileHeader({
   file,
   isExpanded,
+  showDirectory,
+  directoryPrefix,
   onToggle,
   onHeaderHeightChange,
   testID,
@@ -939,6 +953,22 @@ const DiffFileHeader = memo(function DiffFileHeader({
     () => [styles.fileSectionHeaderContainer, isExpanded && styles.fileSectionHeaderExpanded],
     [isExpanded],
   );
+  const directory = useMemo(() => {
+    if (!showDirectory || !file.path.includes("/")) {
+      return "";
+    }
+    const parentDirectory = file.path.slice(0, file.path.lastIndexOf("/"));
+    if (!directoryPrefix) {
+      return parentDirectory;
+    }
+    if (parentDirectory === directoryPrefix) {
+      return "";
+    }
+    const nestedPrefix = `${directoryPrefix}/`;
+    return parentDirectory.startsWith(nestedPrefix)
+      ? parentDirectory.slice(nestedPrefix.length)
+      : parentDirectory;
+  }, [directoryPrefix, file.path, showDirectory]);
 
   return (
     <View style={containerStyle} onLayout={handleLayout} testID={testID}>
@@ -957,11 +987,11 @@ const DiffFileHeader = memo(function DiffFileHeader({
               <Text style={styles.fileName} numberOfLines={1}>
                 {file.path.split("/").pop()}
               </Text>
-              <Text style={styles.fileDir} numberOfLines={1}>
-                {file.path.includes("/")
-                  ? ` ${file.path.slice(0, file.path.lastIndexOf("/"))}`
-                  : ""}
-              </Text>
+              {showDirectory ? (
+                <Text style={styles.fileDir} numberOfLines={1}>
+                  {directory ? ` ${directory}` : ""}
+                </Text>
+              ) : null}
               {file.isNew && (
                 <View style={styles.newBadge}>
                   <Text style={styles.newBadgeText}>{t("workspace.git.diff.newFile")}</Text>
@@ -985,6 +1015,50 @@ const DiffFileHeader = memo(function DiffFileHeader({
     </View>
   );
 });
+
+function groupHeaderPressableStyle({ pressed }: PressableStateCallbackType) {
+  return [styles.directoryHeader, pressed && styles.directoryHeaderPressed];
+}
+
+interface DiffGroupHeaderProps {
+  groupKey: string;
+  label: string;
+  rootLabel: string;
+  isCollapsed: boolean;
+  onToggle: (groupKey: string) => void;
+  testID?: string;
+}
+
+function DiffGroupHeader({
+  groupKey,
+  label,
+  rootLabel,
+  isCollapsed,
+  onToggle,
+  testID,
+}: DiffGroupHeaderProps) {
+  const displayLabel = label || rootLabel;
+  const accessibilityState = useMemo(() => ({ expanded: !isCollapsed }), [isCollapsed]);
+  const handlePress = useCallback(() => {
+    onToggle(groupKey);
+  }, [groupKey, onToggle]);
+  const Icon = isCollapsed ? ThemedChevronRight : ThemedChevronDown;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={displayLabel}
+      accessibilityState={accessibilityState}
+      style={groupHeaderPressableStyle}
+      testID={testID}
+      onPress={handlePress}
+    >
+      <Icon size={14} uniProps={foregroundMutedIconColorMapping} />
+      <Text style={styles.directoryHeaderText} numberOfLines={1}>
+        {displayLabel}
+      </Text>
+    </Pressable>
+  );
+}
 
 function DiffFileBody({
   file,
@@ -1187,6 +1261,9 @@ const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedAlignJustify = withUnistyles(AlignJustify);
 const ThemedColumns2 = withUnistyles(Columns2);
+const ThemedFolderTree = withUnistyles(FolderTree);
+const ThemedGitFork = withUnistyles(GitFork);
+const ThemedList = withUnistyles(List);
 const ThemedPilcrow = withUnistyles(Pilcrow);
 const ThemedWrapText = withUnistyles(WrapText);
 const ThemedListChevronsDownUp = withUnistyles(ListChevronsDownUp);
@@ -1200,6 +1277,7 @@ const ThemedGitMerge = withUnistyles(GitMerge);
 const ThemedRefreshCcw = withUnistyles(RefreshCcw);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
 
 interface DiffLayoutToggleGroupProps {
   layout: "unified" | "split";
@@ -1267,6 +1345,123 @@ function DiffLayoutToggleGroup({
   );
 }
 
+interface DiffFileGroupingToggleGroupProps {
+  grouping: CheckoutDiffFileGrouping;
+  isMobile: boolean;
+  submoduleSupported: boolean;
+  flatToggleStyle: PressableStyleFn;
+  directoryToggleStyle: PressableStyleFn;
+  submoduleToggleStyle: PressableStyleFn;
+  onFlat: () => void;
+  onDirectory: () => void;
+  onSubmodule: () => void;
+}
+
+function DiffFileGroupingToggleGroup({
+  grouping,
+  isMobile,
+  submoduleSupported,
+  flatToggleStyle,
+  directoryToggleStyle,
+  submoduleToggleStyle,
+  onFlat,
+  onDirectory,
+  onSubmodule,
+}: DiffFileGroupingToggleGroupProps) {
+  const { t } = useTranslation();
+  const flatLabel = t("workspace.git.diff.flatFileList");
+  const directoryLabel = t("workspace.git.diff.groupByDirectory");
+  const submoduleLabel = t("workspace.git.diff.groupBySubmodule");
+  const submoduleTooltipLabel = submoduleSupported
+    ? submoduleLabel
+    : t("message.actions.forkUnavailable");
+  const iconSize = isMobile ? 18 : 14;
+  const flatAccessibilityState = useMemo(() => ({ selected: grouping === "flat" }), [grouping]);
+  const directoryAccessibilityState = useMemo(
+    () => ({ selected: grouping === "directory" }),
+    [grouping],
+  );
+  const submoduleAccessibilityState = useMemo(
+    () => ({ selected: grouping === "submodule", disabled: !submoduleSupported }),
+    [grouping, submoduleSupported],
+  );
+  return (
+    <View style={styles.toggleButtonGroup}>
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={flatLabel}
+            accessibilityState={flatAccessibilityState}
+            testID="changes-grouping-flat"
+            onPress={onFlat}
+            style={flatToggleStyle}
+          >
+            <ThemedList
+              size={iconSize}
+              uniProps={
+                grouping === "flat" ? foregroundIconColorMapping : foregroundMutedIconColorMapping
+              }
+            />
+          </Pressable>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <Text style={styles.tooltipText}>{flatLabel}</Text>
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={directoryLabel}
+            accessibilityState={directoryAccessibilityState}
+            testID="changes-grouping-directory"
+            onPress={onDirectory}
+            style={directoryToggleStyle}
+          >
+            <ThemedFolderTree
+              size={iconSize}
+              uniProps={
+                grouping === "directory"
+                  ? foregroundIconColorMapping
+                  : foregroundMutedIconColorMapping
+              }
+            />
+          </Pressable>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <Text style={styles.tooltipText}>{directoryLabel}</Text>
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={submoduleLabel}
+            accessibilityState={submoduleAccessibilityState}
+            disabled={!submoduleSupported}
+            testID="changes-grouping-submodule"
+            onPress={onSubmodule}
+            style={submoduleToggleStyle}
+          >
+            <ThemedGitFork
+              size={iconSize}
+              uniProps={
+                grouping === "submodule"
+                  ? foregroundIconColorMapping
+                  : foregroundMutedIconColorMapping
+              }
+            />
+          </Pressable>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <Text style={styles.tooltipText}>{submoduleTooltipLabel}</Text>
+        </TooltipContent>
+      </Tooltip>
+    </View>
+  );
+}
+
 interface DiffWhitespaceToggleProps {
   hideWhitespace: boolean;
   isMobile: boolean;
@@ -1306,21 +1501,37 @@ function DiffWhitespaceToggle({
 }
 
 interface DiffFilesToolbarProps {
+  fileGrouping: CheckoutDiffFileGrouping;
   wrapLines: boolean;
   allExpanded: boolean;
   isMobile: boolean;
+  submoduleGroupingSupported: boolean;
+  flatGroupingToggleStyle: PressableStyleFn;
+  directoryGroupingToggleStyle: PressableStyleFn;
+  submoduleGroupingToggleStyle: PressableStyleFn;
   wrapLinesToggleStyle: PressableStyleFn;
   expandAllToggleStyle: PressableStyleFn;
+  onFlatGrouping: () => void;
+  onDirectoryGrouping: () => void;
+  onSubmoduleGrouping: () => void;
   onToggleWrapLines: () => void;
   onToggleExpandAll: () => void;
 }
 
 function DiffFilesToolbar({
+  fileGrouping,
   wrapLines,
   allExpanded,
   isMobile,
+  submoduleGroupingSupported,
+  flatGroupingToggleStyle,
+  directoryGroupingToggleStyle,
+  submoduleGroupingToggleStyle,
   wrapLinesToggleStyle,
   expandAllToggleStyle,
+  onFlatGrouping,
+  onDirectoryGrouping,
+  onSubmoduleGrouping,
   onToggleWrapLines,
   onToggleExpandAll,
 }: DiffFilesToolbarProps) {
@@ -1333,6 +1544,17 @@ function DiffFilesToolbar({
     : t("workspace.git.diff.expandAll");
   return (
     <View style={styles.diffStatusButtons}>
+      <DiffFileGroupingToggleGroup
+        grouping={fileGrouping}
+        isMobile={isMobile}
+        submoduleSupported={submoduleGroupingSupported}
+        flatToggleStyle={flatGroupingToggleStyle}
+        directoryToggleStyle={directoryGroupingToggleStyle}
+        submoduleToggleStyle={submoduleGroupingToggleStyle}
+        onFlat={onFlatGrouping}
+        onDirectory={onDirectoryGrouping}
+        onSubmodule={onSubmoduleGrouping}
+      />
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <Pressable style={wrapLinesToggleStyle} onPress={onToggleWrapLines}>
@@ -1415,6 +1637,14 @@ function DiffRefreshButton({ isRefreshing, toggleStyle, onPress }: DiffRefreshBu
 }
 
 type DiffFlatItem =
+  | {
+      type: "group";
+      kind: CheckoutDiffFileGroupKind;
+      key: string;
+      label: string;
+      groupIndex: number;
+      isCollapsed: boolean;
+    }
   | { type: "header"; file: ParsedDiffFile; fileIndex: number; isExpanded: boolean }
   | { type: "body"; file: ParsedDiffFile; fileIndex: number };
 type DiffFlatItemLayoutGetter = NonNullable<FlatListProps<DiffFlatItem>["getItemLayout"]>;
@@ -1680,6 +1910,13 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     useChangesPreferences();
   const wrapLines = changesPreferences.wrapLines;
   const effectiveLayout = canUseSplitLayout ? changesPreferences.layout : "unified";
+  const submoduleGroupingSupported = useSessionStore(
+    (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutDiffSubmodulePaths === true,
+  );
+  const effectiveFileGrouping: CheckoutDiffFileGrouping =
+    changesPreferences.fileGrouping === "submodule" && !submoduleGroupingSupported
+      ? "flat"
+      : changesPreferences.fileGrouping;
 
   const handleToggleWrapLines = useCallback(() => {
     void updateChangesPreferences({ wrapLines: !wrapLines });
@@ -1688,6 +1925,13 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   const handleLayoutChange = useCallback(
     (nextLayout: "unified" | "split") => {
       void updateChangesPreferences({ layout: nextLayout });
+    },
+    [updateChangesPreferences],
+  );
+
+  const handleFileGroupingChange = useCallback(
+    (fileGrouping: CheckoutDiffFileGrouping) => {
+      void updateChangesPreferences({ fileGrouping });
     },
     [updateChangesPreferences],
   );
@@ -1703,6 +1947,21 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   const handleLayoutSplit = useCallback(() => {
     handleLayoutChange("split");
   }, [handleLayoutChange]);
+
+  const handleFlatGrouping = useCallback(() => {
+    handleFileGroupingChange("flat");
+  }, [handleFileGroupingChange]);
+
+  const handleDirectoryGrouping = useCallback(() => {
+    handleFileGroupingChange("directory");
+  }, [handleFileGroupingChange]);
+
+  const handleSubmoduleGrouping = useCallback(() => {
+    if (!submoduleGroupingSupported) {
+      return;
+    }
+    handleFileGroupingChange("submodule");
+  }, [handleFileGroupingChange, submoduleGroupingSupported]);
 
   const codeFontSize = appSettings.codeFontSize;
   const diffBodyLineHeight = Math.round(codeFontSize * 1.5);
@@ -1735,6 +1994,30 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
         styles.toggleButtonGroupEnd,
       ]),
     [changesPreferences.layout],
+  );
+
+  const flatGroupingToggleStyle = useMemo(
+    () =>
+      buildToggleButtonStyle(effectiveFileGrouping === "flat", [
+        styles.toggleButton,
+        styles.toggleButtonGroupStart,
+      ]),
+    [effectiveFileGrouping],
+  );
+
+  const directoryGroupingToggleStyle = useMemo(
+    () => buildToggleButtonStyle(effectiveFileGrouping === "directory", [styles.toggleButton]),
+    [effectiveFileGrouping],
+  );
+
+  const submoduleGroupingToggleStyle = useMemo(
+    () =>
+      buildToggleButtonStyle(effectiveFileGrouping === "submodule", [
+        styles.toggleButton,
+        !submoduleGroupingSupported && styles.toggleButtonDisabled,
+        styles.toggleButtonGroupEnd,
+      ]),
+    [effectiveFileGrouping, submoduleGroupingSupported],
   );
 
   const hideWhitespaceToggleStyle = useMemo(
@@ -1888,10 +2171,20 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   const expandedPathsArray = usePanelStore((state) =>
     workspaceStateKey ? state.diffExpandedPathsByWorkspace[workspaceStateKey] : undefined,
   );
+  const collapsedGroupKeysArray = usePanelStore((state) =>
+    workspaceStateKey ? state.diffCollapsedGroupsByWorkspace[workspaceStateKey] : undefined,
+  );
   const setDiffExpandedPathsForWorkspace = usePanelStore(
     (state) => state.setDiffExpandedPathsForWorkspace,
   );
+  const setDiffCollapsedGroupsForWorkspace = usePanelStore(
+    (state) => state.setDiffCollapsedGroupsForWorkspace,
+  );
   const expandedPaths = useMemo(() => new Set(expandedPathsArray ?? []), [expandedPathsArray]);
+  const collapsedGroupKeys = useMemo(
+    () => new Set(collapsedGroupKeysArray ?? []),
+    [collapsedGroupKeysArray],
+  );
   const diffListRef = useRef<FlatList<DiffFlatItem>>(null);
   const scrollbar = useWebScrollViewScrollbar(diffListRef, {
     enabled: showDesktopWebScrollbar,
@@ -1904,22 +2197,44 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   const [heightVersion, setHeightVersion] = useState(0);
   const diffBodyChromeHeight = BORDER_WIDTH[1] * 2;
   const statusBodyHeightEstimate = diffBodyChromeHeight + SPACING[4] * 2 + diffBodyLineHeight;
+  const fileEntries = useMemo(
+    () => buildCheckoutDiffFileEntries(files, effectiveFileGrouping),
+    [effectiveFileGrouping, files],
+  );
+  const visibleFileEntries = useMemo(
+    () => filterCheckoutDiffFileEntriesForCollapsedGroups(fileEntries, collapsedGroupKeys),
+    [collapsedGroupKeys, fileEntries],
+  );
   const { flatItems, stickyHeaderIndices } = useMemo(() => {
     const items: DiffFlatItem[] = [];
     const stickyIndices: number[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    let groupIndex = 0;
+    for (const entry of visibleFileEntries) {
+      if (entry.type === "group") {
+        items.push({
+          type: "group",
+          kind: entry.kind,
+          key: entry.key,
+          label: entry.label,
+          groupIndex,
+          isCollapsed: collapsedGroupKeys.has(entry.key),
+        });
+        groupIndex += 1;
+        continue;
+      }
+      const file = entry.file;
+      const fileIndex = entry.fileIndex;
       const isExpanded = expandedPaths.has(file.path);
-      items.push({ type: "header", file, fileIndex: i, isExpanded });
+      items.push({ type: "header", file, fileIndex, isExpanded });
       if (isExpanded) {
         stickyIndices.push(items.length - 1);
       }
       if (isExpanded) {
-        items.push({ type: "body", file, fileIndex: i });
+        items.push({ type: "body", file, fileIndex });
       }
     }
     return { flatItems: items, stickyHeaderIndices: stickyIndices };
-  }, [expandedPaths, files]);
+  }, [collapsedGroupKeys, expandedPaths, visibleFileEntries]);
 
   const getBodyHeightKey = useCallback(
     (file: ParsedDiffFile): string => {
@@ -2013,23 +2328,33 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     [scrollbar],
   );
 
+  const getFlatItemHeight = useCallback(
+    (item: DiffFlatItem): number => {
+      if (item.type === "group") {
+        return DIFF_DIRECTORY_HEADER_HEIGHT;
+      }
+      if (item.type === "header") {
+        return headerHeightByPathRef.current[item.file.path] ?? defaultHeaderHeightRef.current;
+      }
+
+      const bodyHeightKey = getBodyHeightKey(item.file);
+      return bodyHeightByKeyRef.current[bodyHeightKey] ?? estimateBodyHeight(item.file);
+    },
+    [estimateBodyHeight, getBodyHeightKey],
+  );
+
   const computeHeaderOffset = useCallback(
     (path: string): number => {
-      const defaultHeaderHeight = defaultHeaderHeightRef.current;
       let offset = 0;
-      for (const file of files) {
-        if (file.path === path) {
+      for (const item of flatItems) {
+        if (item.type === "header" && item.file.path === path) {
           break;
         }
-        offset += headerHeightByPathRef.current[file.path] ?? defaultHeaderHeight;
-        if (expandedPaths.has(file.path)) {
-          const bodyHeightKey = getBodyHeightKey(file);
-          offset += bodyHeightByKeyRef.current[bodyHeightKey] ?? estimateBodyHeight(file);
-        }
+        offset += getFlatItemHeight(item);
       }
       return Math.max(0, offset);
     },
-    [estimateBodyHeight, expandedPaths, files, getBodyHeightKey],
+    [flatItems, getFlatItemHeight],
   );
 
   const handleToggleExpanded = useCallback(
@@ -2067,6 +2392,21 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     [computeHeaderOffset, expandedPaths, setDiffExpandedPathsForWorkspace, workspaceStateKey],
   );
 
+  const handleToggleGroupCollapsed = useCallback(
+    (groupKey: string) => {
+      if (!workspaceStateKey) {
+        return;
+      }
+      const nextGroupKeys = collapsedGroupKeys.has(groupKey)
+        ? Array.from(collapsedGroupKeys).filter(
+            (collapsedGroupKey) => collapsedGroupKey !== groupKey,
+          )
+        : [...collapsedGroupKeys, groupKey];
+      setDiffCollapsedGroupsForWorkspace(workspaceStateKey, nextGroupKeys);
+    },
+    [collapsedGroupKeys, setDiffCollapsedGroupsForWorkspace, workspaceStateKey],
+  );
+
   const allExpanded = useMemo(() => {
     if (files.length === 0) return false;
     return files.every((file) => expandedPaths.has(file.path));
@@ -2086,13 +2426,32 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     }
   }, [allExpanded, files, setDiffExpandedPathsForWorkspace, workspaceStateKey]);
 
+  const rootDirectoryLabel = t("workspace.git.diff.rootDirectory");
+  const workspaceRootLabel = t("workspace.git.diff.workspaceRoot");
+
   const renderFlatItem = useCallback(
     ({ item }: { item: DiffFlatItem }) => {
+      if (item.type === "group") {
+        return (
+          <DiffGroupHeader
+            groupKey={item.key}
+            label={item.label}
+            rootLabel={item.kind === "directory" ? rootDirectoryLabel : workspaceRootLabel}
+            isCollapsed={item.isCollapsed}
+            onToggle={handleToggleGroupCollapsed}
+            testID={`diff-directory-${item.groupIndex}`}
+          />
+        );
+      }
       if (item.type === "header") {
         return (
           <DiffFileHeader
             file={item.file}
             isExpanded={item.isExpanded}
+            showDirectory={effectiveFileGrouping !== "directory"}
+            directoryPrefix={
+              effectiveFileGrouping === "submodule" ? item.file.submodulePath : undefined
+            }
             onToggle={handleToggleExpanded}
             onHeaderHeightChange={handleHeaderHeightChange}
             testID={`diff-file-${item.fileIndex}`}
@@ -2116,29 +2475,22 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
       codeFontSize,
       diffTextMetricsStyle,
       effectiveLayout,
+      effectiveFileGrouping,
       handleBodyHeightChange,
       handleHeaderHeightChange,
+      handleToggleGroupCollapsed,
       handleToggleExpanded,
       reviewActions,
+      rootDirectoryLabel,
+      workspaceRootLabel,
       wrapLines,
     ],
   );
 
   const flatKeyExtractor = useCallback(
-    (item: DiffFlatItem) => `${item.type}-${item.file.path}`,
+    (item: DiffFlatItem) =>
+      item.type === "group" ? `group-${item.key}` : `${item.type}-${item.file.path}`,
     [],
-  );
-
-  const getFlatItemHeight = useCallback(
-    (item: DiffFlatItem): number => {
-      if (item.type === "header") {
-        return headerHeightByPathRef.current[item.file.path] ?? defaultHeaderHeightRef.current;
-      }
-
-      const bodyHeightKey = getBodyHeightKey(item.file);
-      return bodyHeightByKeyRef.current[bodyHeightKey] ?? estimateBodyHeight(item.file);
-    },
-    [estimateBodyHeight, getBodyHeightKey],
   );
 
   const getFlatItemLayout = useCallback<DiffFlatItemLayoutGetter>(
@@ -2161,18 +2513,22 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
   const flatExtraData = useMemo(
     () => ({
       expandedPathsArray,
+      collapsedGroupKeysArray,
       effectiveLayout,
       diffBodyTypographyKey,
       heightVersion,
       wrapLines,
+      fileGrouping: effectiveFileGrouping,
       reviewActions,
     }),
     [
       expandedPathsArray,
+      collapsedGroupKeysArray,
       effectiveLayout,
       diffBodyTypographyKey,
       heightVersion,
       wrapLines,
+      effectiveFileGrouping,
       reviewActions,
     ],
   );
@@ -2317,11 +2673,19 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
               />
               {files.length > 0 ? (
                 <DiffFilesToolbar
+                  fileGrouping={effectiveFileGrouping}
                   wrapLines={wrapLines}
                   allExpanded={allExpanded}
                   isMobile={isMobile}
+                  submoduleGroupingSupported={submoduleGroupingSupported}
+                  flatGroupingToggleStyle={flatGroupingToggleStyle}
+                  directoryGroupingToggleStyle={directoryGroupingToggleStyle}
+                  submoduleGroupingToggleStyle={submoduleGroupingToggleStyle}
                   wrapLinesToggleStyle={wrapLinesToggleStyle}
                   expandAllToggleStyle={expandAllToggleStyle}
+                  onFlatGrouping={handleFlatGrouping}
+                  onDirectoryGrouping={handleDirectoryGrouping}
+                  onSubmoduleGrouping={handleSubmoduleGrouping}
                   onToggleWrapLines={handleToggleWrapLines}
                   onToggleExpandAll={handleToggleExpandAll}
                 />
@@ -2347,6 +2711,8 @@ export function GitDiffPane({ serverId, workspaceId, cwd, enabled }: GitDiffPane
     </View>
   );
 }
+
+const DIFF_DIRECTORY_HEADER_HEIGHT = 28;
 
 const styles = StyleSheet.create((theme) => ({
   container: {
@@ -2448,6 +2814,9 @@ const styles = StyleSheet.create((theme) => ({
   toggleButtonSelected: {
     backgroundColor: theme.colors.surface2,
   },
+  toggleButtonDisabled: {
+    opacity: theme.opacity[50],
+  },
   refreshIcon: {
     width: ICON_SIZE.md,
     height: ICON_SIZE.md,
@@ -2493,6 +2862,25 @@ const styles = StyleSheet.create((theme) => ({
   },
   contentContainer: {
     paddingBottom: theme.spacing[8],
+  },
+  directoryHeader: {
+    height: DIFF_DIRECTORY_HEADER_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    backgroundColor: theme.colors.surface0,
+    borderBottomWidth: theme.borderWidth[1],
+    borderBottomColor: theme.colors.border,
+  },
+  directoryHeaderPressed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  directoryHeaderText: {
+    flex: 1,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foregroundMuted,
   },
   loadingContainer: {
     flex: 1,
