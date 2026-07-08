@@ -1449,6 +1449,7 @@ export const es: TranslationResources = {
     },
     backToWorkspace: "Atrás",
     addHost: "Agregar anfitrión",
+    enableBuiltInDaemon: "Activar el demonio integrado",
     projects: "Proyectos",
     projectList: {
       hostLoadFailed: "No se pudieron cargar proyectos desde el host{{hostName}}:{{message}}",
@@ -1457,7 +1458,6 @@ export const es: TranslationResources = {
     groupInfo: "Acerca de{{title}}",
     sections: {
       general: "General",
-      daemon: "Daemon",
       appearance: "Apariencia",
       shortcuts: "Atajos",
       integrations: "Integraciones",
@@ -1472,7 +1472,7 @@ export const es: TranslationResources = {
       providers: "Proveedores",
       usage: "Uso",
       terminals: "Terminals",
-      host: "Host",
+      host: "Resumen",
     },
     general: {
       title: "General",

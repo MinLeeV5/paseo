@@ -1441,6 +1441,7 @@ export const ru: TranslationResources = {
     },
     backToWorkspace: "Назад",
     addHost: "Добавить хост",
+    enableBuiltInDaemon: "Включить встроенный демон",
     projects: "Проекты",
     projectList: {
       hostLoadFailed: "Не удалось загрузить проекты с хоста{{hostName}}:{{message}}.",
@@ -1449,7 +1450,6 @@ export const ru: TranslationResources = {
     groupInfo: "О{{title}}",
     sections: {
       general: "Общий",
-      daemon: "Daemon",
       appearance: "Появление",
       shortcuts: "Ярлыки",
       integrations: "Интеграции",
@@ -1464,7 +1464,7 @@ export const ru: TranslationResources = {
       providers: "Провайдеры",
       usage: "Использование",
       terminals: "Terminals",
-      host: "Host",
+      host: "Обзор",
     },
     general: {
       title: "Общий",
