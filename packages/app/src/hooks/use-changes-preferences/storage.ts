@@ -7,21 +7,21 @@ export const CHANGES_PREFERENCES_QUERY_KEY = ["changes-preferences"];
 
 const changesPreferencesSchema = z.object({
   layout: z.enum(["unified", "split"]).optional(),
-  fileGrouping: z.enum(["flat", "directory", "submodule"]).optional(),
+  viewMode: z.enum(["flat", "tree"]).optional(),
   wrapLines: z.boolean().optional(),
   hideWhitespace: z.boolean().optional(),
 });
 
 export interface ChangesPreferences {
   layout: "unified" | "split";
-  fileGrouping: "flat" | "directory" | "submodule";
+  viewMode: "flat" | "tree";
   wrapLines: boolean;
   hideWhitespace: boolean;
 }
 
 export const DEFAULT_CHANGES_PREFERENCES: ChangesPreferences = {
   layout: "unified",
-  fileGrouping: "flat",
+  viewMode: "flat",
   wrapLines: false,
   hideWhitespace: false,
 };

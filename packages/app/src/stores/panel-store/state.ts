@@ -247,10 +247,10 @@ export function migratePanelState(
   }
   if (
     version < 12 ||
-    typeof state.diffCollapsedGroupsByWorkspace !== "object" ||
-    !state.diffCollapsedGroupsByWorkspace
+    typeof state.diffCollapsedFoldersByWorkspace !== "object" ||
+    !state.diffCollapsedFoldersByWorkspace
   ) {
-    state.diffCollapsedGroupsByWorkspace = {};
+    state.diffCollapsedFoldersByWorkspace = {};
   }
   if (typeof state.explorerShowHiddenFiles !== "boolean") {
     state.explorerShowHiddenFiles = true;

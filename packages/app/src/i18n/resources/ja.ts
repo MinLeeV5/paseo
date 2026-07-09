@@ -724,11 +724,19 @@ export const ja: TranslationResources = {
         groupBySubmodule: "サブモジュールでグループ化",
         rootDirectory: "ルート",
         workspaceRoot: "ワークスペース",
+        switchToUnified: "ユニファイド差分に切り替え",
+        switchToSplit: "左右比較差分に切り替え",
+        showTreeView: "フォルダツリーを表示",
+        showFlatView: "フラットなファイル一覧を表示",
+        options: "差分オプション",
         hideWhitespace: "空白を非表示",
+        showWhitespace: "空白を表示",
         scrollLongLines: "長い行をスクロール",
         wrapLongLines: "長い行を折り返す",
         collapseAll: "すべて折りたたむ",
         expandAll: "すべて展開",
+        collapseAllFolders: "すべてのフォルダを折りたたむ",
+        expandAllFolders: "すべてのフォルダを展開",
         refreshing: "更新中",
         refresh: "更新",
         refreshState: "gitとGitHubの状態を更新",
@@ -1067,6 +1075,12 @@ export const ja: TranslationResources = {
         uninstallFailed: "オーケストレーションスキルをアンインストールできません。",
       },
     },
+  },
+  rootError: {
+    kicker: "問題が発生しました",
+    title: "Paseo で問題が発生しました。",
+    body: "アプリを再読み込みするにはもう一度お試しください。繰り返し発生する場合は、以下の詳細を添えて報告してください。",
+    details: "詳細",
   },
   startup: {
     errorTitle: "問題が発生しました",
@@ -1479,6 +1493,10 @@ export const ja: TranslationResources = {
         description: "組み込みターミナルバッファに保持する行数",
         accessibilityLabel: "ターミナルスクロールバック行数",
       },
+      autoExpandReasoning: {
+        label: "常に思考プロセスを展開",
+        description: "デフォルトでAIのエージェント思考・推論ブロックを完全に展開して表示します",
+      },
       language: {
         label: "言語",
         description: "アプリの言語",
@@ -1559,6 +1577,9 @@ export const ja: TranslationResources = {
           ghostty: "Ghostty",
           auto: "システム",
         },
+      },
+      detailLevel: {
+        title: "詳細レベル",
       },
       fonts: {
         title: "フォント",

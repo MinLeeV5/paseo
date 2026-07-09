@@ -72,7 +72,11 @@ export interface PanelState {
   explorerTabByCheckout: Record<string, ExplorerTab>;
   expandedPathsByWorkspace: Record<string, string[]>;
   diffExpandedPathsByWorkspace: Record<string, string[]>;
-  diffCollapsedGroupsByWorkspace: Record<string, string[]>;
+  // Changes-view folder tree. Inverted semantics vs the fields above:
+  // this stores COLLAPSED directory paths (empty = all folders expanded), keyed
+  // by full uncompressed dir path, so folders default to expanded and new
+  // folders stay expanded as the diff changes.
+  diffCollapsedFoldersByWorkspace: Record<string, string[]>;
   sidebarWidth: number;
   explorerWidth: number;
   explorerSortOption: SortOption;
@@ -99,7 +103,7 @@ export interface PanelState {
   setExplorerTabForCheckout: (params: ExplorerCheckoutContext & { tab: ExplorerTab }) => void;
   setExpandedPathsForWorkspace: (workspaceKey: string, paths: string[]) => void;
   setDiffExpandedPathsForWorkspace: (workspaceKey: string, paths: string[]) => void;
-  setDiffCollapsedGroupsForWorkspace: (workspaceKey: string, groupKeys: string[]) => void;
+  setDiffCollapsedFoldersForWorkspace: (workspaceKey: string, dirPaths: string[]) => void;
   activateExplorerTabForCheckout: (checkout: ExplorerCheckoutContext) => void;
   setSidebarWidth: (width: number) => void;
   setExplorerWidth: (width: number) => void;
@@ -128,7 +132,7 @@ export const usePanelStore = create<PanelState>()(
       explorerTabByCheckout: {},
       expandedPathsByWorkspace: {},
       diffExpandedPathsByWorkspace: {},
-      diffCollapsedGroupsByWorkspace: {},
+      diffCollapsedFoldersByWorkspace: {},
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
       explorerWidth: DEFAULT_EXPLORER_SIDEBAR_WIDTH,
       explorerSortOption: "name",
@@ -256,11 +260,11 @@ export const usePanelStore = create<PanelState>()(
             [workspaceKey]: paths,
           },
         })),
-      setDiffCollapsedGroupsForWorkspace: (workspaceKey, groupKeys) =>
+      setDiffCollapsedFoldersForWorkspace: (workspaceKey, dirPaths) =>
         set((state) => ({
-          diffCollapsedGroupsByWorkspace: {
-            ...state.diffCollapsedGroupsByWorkspace,
-            [workspaceKey]: groupKeys,
+          diffCollapsedFoldersByWorkspace: {
+            ...state.diffCollapsedFoldersByWorkspace,
+            [workspaceKey]: dirPaths,
           },
         })),
       activateExplorerTabForCheckout: (checkout) =>
@@ -297,7 +301,7 @@ export const usePanelStore = create<PanelState>()(
         explorerTabByCheckout: state.explorerTabByCheckout,
         expandedPathsByWorkspace: state.expandedPathsByWorkspace,
         diffExpandedPathsByWorkspace: state.diffExpandedPathsByWorkspace,
-        diffCollapsedGroupsByWorkspace: state.diffCollapsedGroupsByWorkspace,
+        diffCollapsedFoldersByWorkspace: state.diffCollapsedFoldersByWorkspace,
         sidebarWidth: state.sidebarWidth,
         explorerWidth: state.explorerWidth,
         explorerSortOption: state.explorerSortOption,

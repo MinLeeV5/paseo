@@ -739,11 +739,19 @@ export const es: TranslationResources = {
         groupBySubmodule: "Agrupar por submódulo",
         rootDirectory: "Raíz",
         workspaceRoot: "Espacio de trabajo",
+        switchToUnified: "Cambiar a diferencia unificada",
+        switchToSplit: "Cambiar a diferencia lado a lado",
+        showTreeView: "Mostrar árbol de carpetas",
+        showFlatView: "Mostrar lista plana de archivos",
+        options: "Opciones de diferencia",
         hideWhitespace: "Ocultar espacios en blanco",
+        showWhitespace: "Mostrar espacios en blanco",
         scrollLongLines: "Desplazarse por largas filas",
         wrapLongLines: "Envolver largas filas",
         collapseAll: "Contraer todos los archivos",
         expandAll: "Expandir todos los archivos",
+        collapseAllFolders: "Contraer todas las carpetas",
+        expandAllFolders: "Expandir todas las carpetas",
         refreshing: "Refrescante",
         refresh: "Refrescar",
         refreshState: "Actualizar el estado de git yGitHub",
@@ -1089,6 +1097,12 @@ export const es: TranslationResources = {
         uninstallFailed: "No se pueden desinstalar las habilidades de orquestación.",
       },
     },
+  },
+  rootError: {
+    kicker: "Algo salió mal",
+    title: "Paseo tuvo un problema.",
+    body: "Vuelve a intentarlo para recargar la app. Si sigue ocurriendo, incluye los detalles de abajo al reportarlo.",
+    details: "Detalles",
   },
   startup: {
     errorTitle: "algo salió mal",
@@ -1503,6 +1517,11 @@ export const es: TranslationResources = {
         description: "Líneas mantenidas en el búfer de terminal incorporado",
         accessibilityLabel: "Líneas del historial de terminal",
       },
+      autoExpandReasoning: {
+        label: "Siempre expandir razonamiento",
+        description:
+          "Mostrar los bloques de pensamiento y razonamiento del agente totalmente expandidos de forma predeterminada",
+      },
       language: {
         label: "Idioma",
         description: "Idioma de la aplicación",
@@ -1583,6 +1602,9 @@ export const es: TranslationResources = {
           ghostty: "fantasmal",
           auto: "Sistema",
         },
+      },
+      detailLevel: {
+        title: "Nivel de detalle",
       },
       fonts: {
         title: "Fuentes",

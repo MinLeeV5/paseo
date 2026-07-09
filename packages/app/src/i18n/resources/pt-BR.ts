@@ -730,11 +730,19 @@ export const ptBR: TranslationResources = {
         groupBySubmodule: "Agrupar por submódulo",
         rootDirectory: "Raiz",
         workspaceRoot: "Espaço de trabalho",
+        switchToUnified: "Alternar para diff unificado",
+        switchToSplit: "Alternar para diff lado a lado",
+        showTreeView: "Mostrar árvore de pastas",
+        showFlatView: "Mostrar lista plana de arquivos",
+        options: "Opções do diff",
         hideWhitespace: "Ocultar espaços em branco",
+        showWhitespace: "Mostrar espaços em branco",
         scrollLongLines: "Rolar linhas longas",
         wrapLongLines: "Quebrar linhas longas",
         collapseAll: "Recolher todos os arquivos",
         expandAll: "Expandir todos os arquivos",
+        collapseAllFolders: "Recolher todas as pastas",
+        expandAllFolders: "Expandir todas as pastas",
         refreshing: "Atualizando",
         refresh: "Atualizar",
         refreshState: "Atualizar estado do git e do GitHub",
@@ -1075,6 +1083,12 @@ export const ptBR: TranslationResources = {
         uninstallFailed: "Não foi possível desinstalar as skills de orquestração.",
       },
     },
+  },
+  rootError: {
+    kicker: "Algo deu errado",
+    title: "O Paseo encontrou um problema.",
+    body: "Tente novamente para recarregar o app. Se isso continuar acontecendo, inclua os detalhes abaixo ao relatar o problema.",
+    details: "Detalhes",
   },
   startup: {
     errorTitle: "Algo deu errado",
@@ -1488,6 +1502,11 @@ export const ptBR: TranslationResources = {
         description: "Linhas mantidas no buffer do terminal integrado",
         accessibilityLabel: "Linhas do scrollback do terminal",
       },
+      autoExpandReasoning: {
+        label: "Sempre expandir raciocínio",
+        description:
+          "Mostrar os blocos de pensamento e raciocínio do agente totalmente expandidos por padrão",
+      },
       language: {
         label: "Idioma",
         description: "Idioma do app",
@@ -1568,6 +1587,9 @@ export const ptBR: TranslationResources = {
           ghostty: "Ghostty",
           auto: "Sistema",
         },
+      },
+      detailLevel: {
+        title: "Nível de detalhe",
       },
       fonts: {
         title: "Fontes",
