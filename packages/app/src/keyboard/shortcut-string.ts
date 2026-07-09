@@ -191,7 +191,7 @@ export function comboStringToShortcutKeys(comboString: string): ShortcutKey[] {
         keys.push("shift");
         break;
       default:
-        keys.push(part.toUpperCase());
+        keys.push(KEY_MAP[part] ? part : part.toUpperCase());
         break;
     }
   }

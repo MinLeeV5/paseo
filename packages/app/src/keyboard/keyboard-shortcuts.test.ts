@@ -197,6 +197,20 @@ describe("keyboard-shortcuts", () => {
       payload: { delta: 1 },
     },
     {
+      name: "matches tab relative navigation on desktop via Ctrl+Tab",
+      event: { key: "Tab", code: "Tab", ctrlKey: true },
+      context: { isMac: true, isDesktop: true },
+      action: "workspace.tab.navigate.relative",
+      payload: { delta: 1 },
+    },
+    {
+      name: "matches tab relative navigation on desktop via Ctrl+Shift+Tab",
+      event: { key: "Tab", code: "Tab", ctrlKey: true, shiftKey: true },
+      context: { isMac: false, isDesktop: true },
+      action: "workspace.tab.navigate.relative",
+      payload: { delta: -1 },
+    },
+    {
       name: "matches tab relative navigation via Alt+Shift+]",
       event: { key: "}", code: "BracketRight", altKey: true, shiftKey: true },
       action: "workspace.tab.navigate.relative",
@@ -393,6 +407,11 @@ describe("keyboard-shortcuts", () => {
     {
       name: "does not keep old Alt+Shift+T binding",
       event: { key: "T", code: "KeyT", altKey: true, shiftKey: true },
+    },
+    {
+      name: "does not match Ctrl+Tab on web",
+      event: { key: "Tab", code: "Tab", ctrlKey: true },
+      context: { isDesktop: false },
     },
     {
       name: "does not keep old Cmd+Shift+O open-project binding after rebind to Cmd+O",
@@ -608,6 +627,8 @@ describe("keyboard-shortcut help sections", () => {
         "new-workspace": ["mod", "N"],
         "workspace-tab-new": ["mod", "T"],
         "workspace-jump-index": ["mod", "1-9"],
+        "workspace-tab-prev": ["ctrl", "shift", "Tab"],
+        "workspace-tab-next": ["ctrl", "Tab"],
         "workspace-tab-jump-index": ["mod", "alt", "1-9"],
         "workspace-tab-close-current": ["meta", "W"],
         "workspace-pane-split-right": ["mod", "\\"],
@@ -618,6 +639,8 @@ describe("keyboard-shortcut help sections", () => {
       name: "uses non-mac desktop defaults for tab jump and close tab",
       context: { isMac: false, isDesktop: true },
       expectedKeys: {
+        "workspace-tab-prev": ["ctrl", "shift", "Tab"],
+        "workspace-tab-next": ["ctrl", "Tab"],
         "workspace-tab-jump-index": ["alt", "1-9"],
         "workspace-tab-close-current": ["ctrl", "W"],
       },
