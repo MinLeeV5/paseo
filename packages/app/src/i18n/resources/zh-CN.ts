@@ -252,6 +252,7 @@ export const zhCN: TranslationResources = {
       forkMissingWorkspace: "此 Agent 不在工作区中。",
       forkFailed: "分叉聊天失败",
       openFile: "打开文件",
+      previewFile: "预览文件",
       copied: "已复制",
     },
     attachments: {

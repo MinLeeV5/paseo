@@ -53,6 +53,7 @@ interface ExplorerSidebarProps {
   isGit: boolean;
   onOpenFile?: (filePath: string) => void;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  onOpenWorkspaceUrl?: (url: string) => void;
 }
 
 interface ExplorerSidebarSharedState {
@@ -84,6 +85,7 @@ export function CompactExplorerSidebar({
   isGit,
   onOpenFile,
   onOpenWorkspaceFile,
+  onOpenWorkspaceUrl,
 }: ExplorerSidebarProps) {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
@@ -300,6 +302,7 @@ export function CompactExplorerSidebar({
             isOpen={isOpen}
             onOpenFile={onOpenFile}
             onOpenWorkspaceFile={onOpenWorkspaceFile}
+            onOpenWorkspaceUrl={onOpenWorkspaceUrl}
           />
         </Animated.View>
       </GestureDetector>
@@ -314,6 +317,7 @@ export function ExplorerSidebar({
   isGit,
   onOpenFile,
   onOpenWorkspaceFile,
+  onOpenWorkspaceUrl,
 }: ExplorerSidebarProps) {
   const insets = useSafeAreaInsets();
   const explorerWidth = usePanelStore((state) => state.explorerWidth);
@@ -402,6 +406,7 @@ export function ExplorerSidebar({
           isOpen={isOpen}
           onOpenFile={onOpenFile}
           onOpenWorkspaceFile={onOpenWorkspaceFile}
+          onOpenWorkspaceUrl={onOpenWorkspaceUrl}
         />
       </View>
     </Animated.View>
@@ -448,6 +453,7 @@ interface SidebarContentProps {
   isOpen: boolean;
   onOpenFile?: (filePath: string) => void;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  onOpenWorkspaceUrl?: (url: string) => void;
 }
 
 function ExplorerSidebarContent({
@@ -462,6 +468,7 @@ function ExplorerSidebarContent({
   isOpen,
   onOpenFile,
   onOpenWorkspaceFile,
+  onOpenWorkspaceUrl,
 }: SidebarContentProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -563,6 +570,7 @@ function ExplorerSidebarContent({
             cwd={workspaceRoot}
             enabled={isOpen}
             onOpenWorkspaceFile={handleOpenWorkspaceFile}
+            onOpenWorkspaceUrl={onOpenWorkspaceUrl}
           />
         )}
         {resolvedTab === "files" && (

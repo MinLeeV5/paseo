@@ -44,6 +44,7 @@ import {
 import type { AttachmentMetadata, BrowserElementAttachment } from "@/attachments/types";
 import { persistAttachmentFromDataUrl } from "@/attachments/service";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { getUnsafeNavigationMessage } from "@/components/browser-navigation";
 import {
   getDesktopHost,
   isElectronRuntime,
@@ -140,8 +141,6 @@ function formatDevicePresetLabel(preset: DeviceSizePreset, responsiveLabel: stri
 }
 
 const ERR_ABORTED = -3;
-const ALLOWED_BROWSER_PROTOCOLS = new Set(["http:", "https:"]);
-
 function truncateText(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength).trim()}...` : value;
 }
@@ -183,21 +182,6 @@ function getLoadUrlRejectionMessage(error: unknown, failedToLoadLabel: string): 
     return error.trim();
   }
   return failedToLoadLabel;
-}
-
-function getUnsafeNavigationMessage(
-  url: string,
-  labels: { invalidUrl: string; unsupportedProtocol: (protocol: string) => string },
-): string | null {
-  try {
-    const parsed = new URL(url);
-    if (ALLOWED_BROWSER_PROTOCOLS.has(parsed.protocol) || parsed.href === "about:blank") {
-      return null;
-    }
-    return labels.unsupportedProtocol(parsed.protocol);
-  } catch {
-    return labels.invalidUrl;
-  }
 }
 
 function formatElementAttachment(

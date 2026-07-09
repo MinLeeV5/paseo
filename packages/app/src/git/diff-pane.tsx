@@ -37,6 +37,7 @@ import {
   ChevronDown,
   Columns2,
   Download,
+  Eye,
   FolderTree,
   GitCommitHorizontal,
   GitMerge,
@@ -108,6 +109,7 @@ import {
   buildWorkspaceAttachmentScopeKey,
   useWorkspaceAttachmentsStore,
 } from "@/attachments/workspace-attachments-store";
+import { createDiffFileOpenTarget, createDiffFilePreviewTarget } from "@/git/diff-file-open";
 import {
   buildReviewDraftScopeKey,
   buildReviewDraftKey,
@@ -212,6 +214,7 @@ interface DiffFileSectionProps {
   showDir?: boolean;
   onToggle: (path: string) => void;
   onOpenFile?: (file: ParsedDiffFile) => void;
+  onPreviewFile?: (file: ParsedDiffFile) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
   testID?: string;
 }
@@ -910,11 +913,14 @@ function DiffFileOpenButton({
   label,
   testID,
   onPress,
+  icon,
 }: {
   label: string;
   testID?: string;
   onPress: (event: GestureResponderEvent) => void;
+  icon: "file" | "preview";
 }) {
+  const Icon = icon === "preview" ? ThemedEye : ThemedFileText;
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
@@ -925,7 +931,7 @@ function DiffFileOpenButton({
           style={fileOpenButtonStyle}
           onPress={onPress}
         >
-          <ThemedFileText size={14} uniProps={foregroundMutedIconColorMapping} />
+          <Icon size={14} uniProps={foregroundMutedIconColorMapping} />
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="bottom">
@@ -942,6 +948,7 @@ const DiffFileHeader = memo(function DiffFileHeader({
   showDir = true,
   onToggle,
   onOpenFile,
+  onPreviewFile,
   onHeaderHeightChange,
   testID,
 }: DiffFileSectionProps) {
@@ -961,6 +968,14 @@ const DiffFileHeader = memo(function DiffFileHeader({
       onOpenFile?.(file);
     },
     [file, onOpenFile],
+  );
+  const handlePreviewFile = useCallback(
+    (event: GestureResponderEvent) => {
+      pressHandledRef.current = true;
+      event.stopPropagation();
+      onPreviewFile?.(file);
+    },
+    [file, onPreviewFile],
   );
 
   const handleLayout = useCallback(
@@ -1000,6 +1015,8 @@ const DiffFileHeader = memo(function DiffFileHeader({
     [isExpanded],
   );
   const openFileLabel = t("message.actions.openFile");
+  const previewFileLabel = t("message.actions.previewFile");
+  const canPreviewFile = Boolean(onPreviewFile) && !file.isDeleted;
 
   const headerPressableStyle = useCallback(
     (state: PressableStateCallbackType) =>
@@ -1060,11 +1077,20 @@ const DiffFileHeader = memo(function DiffFileHeader({
               )}
             </View>
             <View style={styles.fileHeaderRight}>
+              {canPreviewFile ? (
+                <DiffFileOpenButton
+                  label={previewFileLabel}
+                  testID={testID ? `${testID}-preview-file` : undefined}
+                  onPress={handlePreviewFile}
+                  icon="preview"
+                />
+              ) : null}
               {onOpenFile ? (
                 <DiffFileOpenButton
                   label={openFileLabel}
                   testID={testID ? `${testID}-open-file` : undefined}
                   onPress={handleOpenFile}
+                  icon="file"
                 />
               ) : null}
               <DiffStat additions={file.additions} deletions={file.deletions} />
@@ -1269,6 +1295,7 @@ interface GitDiffPaneProps {
   cwd: string;
   enabled?: boolean;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  onOpenWorkspaceUrl?: (url: string) => void;
 }
 
 type PressableStyleFn = (
@@ -1296,6 +1323,7 @@ const ThemedRefreshCcw = withUnistyles(RefreshCcw);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedFileText = withUnistyles(FileText);
+const ThemedEye = withUnistyles(Eye);
 
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
@@ -1795,6 +1823,7 @@ export function GitDiffPane({
   cwd,
   enabled,
   onOpenWorkspaceFile,
+  onOpenWorkspaceUrl,
 }: GitDiffPaneProps) {
   const { settings: appSettings } = useAppSettings();
   const { t } = useTranslation();
@@ -1909,20 +1938,35 @@ export function GitDiffPane({
   });
   const handleOpenDiffFile = useCallback(
     (file: ParsedDiffFile) => {
-      onOpenWorkspaceFile?.({
-        disposition: "main",
-        location: {
-          path: file.path,
-          diffContext: {
-            cwd,
-            mode: diffMode,
-            ...(diffMode === "base" && baseRef ? { baseRef } : {}),
-            ignoreWhitespace: changesPreferences.hideWhitespace,
-          },
+      const target = createDiffFileOpenTarget({
+        filePath: file.path,
+        diffContext: {
+          cwd,
+          mode: diffMode,
+          ...(diffMode === "base" && baseRef ? { baseRef } : {}),
+          ignoreWhitespace: changesPreferences.hideWhitespace,
         },
       });
+      onOpenWorkspaceFile?.(target.request);
     },
     [baseRef, changesPreferences.hideWhitespace, cwd, diffMode, onOpenWorkspaceFile],
+  );
+  const handlePreviewDiffFile = useCallback(
+    (file: ParsedDiffFile) => {
+      const target = createDiffFilePreviewTarget({
+        filePath: file.path,
+        workspaceRoot: cwd,
+      });
+      if (target.kind === "browser" && onOpenWorkspaceUrl) {
+        onOpenWorkspaceUrl(target.url);
+        return;
+      }
+      onOpenWorkspaceFile?.({
+        disposition: "main",
+        location: { path: file.path },
+      });
+    },
+    [cwd, onOpenWorkspaceFile, onOpenWorkspaceUrl],
   );
   const reviewDraftKey = useMemo(
     () =>
@@ -2322,6 +2366,7 @@ export function GitDiffPane({
             showDir={viewMode === "flat"}
             onToggle={handleToggleExpanded}
             onOpenFile={onOpenWorkspaceFile ? handleOpenDiffFile : undefined}
+            onPreviewFile={onOpenWorkspaceFile ? handlePreviewDiffFile : undefined}
             onHeaderHeightChange={handleHeaderHeightChange}
             testID={`diff-file-${item.fileIndex}`}
           />
@@ -2348,6 +2393,7 @@ export function GitDiffPane({
       handleFolderRowHeightChange,
       handleHeaderHeightChange,
       handleOpenDiffFile,
+      handlePreviewDiffFile,
       handleToggleExpanded,
       onOpenWorkspaceFile,
       reviewActions,

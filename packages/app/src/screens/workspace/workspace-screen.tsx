@@ -3673,6 +3673,7 @@ function WorkspaceScreenContent({
                   isGit={isGitCheckout}
                   onOpenFile={handleOpenFileFromExplorer}
                   onOpenWorkspaceFile={handleOpenWorkspaceFileFromExplorer}
+                  onOpenWorkspaceUrl={handleOpenUrlInBrowserTab}
                 />
               ) : null}
             </View>
