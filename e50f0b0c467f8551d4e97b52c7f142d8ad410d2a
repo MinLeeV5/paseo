@@ -1,0 +1,12 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "e50f0b0c467f8551d4e97b52c7f142d8ad410d2a",
+  "prompts": {},
+  "humans": {
+    "h_7fde3c99c7e1be": {
+      "author": "李伟民"
+    }
+  }
+}
