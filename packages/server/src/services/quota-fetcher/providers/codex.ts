@@ -95,6 +95,10 @@ function codexWindow(
   };
 }
 
+async function cancelResponseBody(response: Response): Promise<void> {
+  await response.body?.cancel();
+}
+
 export class CodexQuotaProvider implements ProviderUsageFetcher {
   readonly providerId = "codex";
   readonly displayName = "Codex";
@@ -270,8 +274,14 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
       "https://chatgpt.com/backend-api/wham/usage",
       requestInit,
     );
-    if (res.status === 401 || res.status === 403) return "NEEDS_AUTH";
-    if (!res.ok) throw new Error(`Codex usage API returned ${res.status}`);
+    if (res.status === 401 || res.status === 403) {
+      await cancelResponseBody(res);
+      return "NEEDS_AUTH";
+    }
+    if (!res.ok) {
+      await cancelResponseBody(res);
+      throw new Error(`Codex usage API returned ${res.status}`);
+    }
     const text = await res.text();
     if (text.trim().startsWith("<")) return "NEEDS_AUTH";
     return CodexUsageResponseSchema.parse(JSON.parse(text));
@@ -297,7 +307,10 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
       "https://auth.openai.com/oauth/token",
       requestInit,
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      await cancelResponseBody(res);
+      return null;
+    }
     return CodexTokenRefreshSchema.parse(await res.json());
   }
 

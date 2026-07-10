@@ -123,10 +123,12 @@ function createLogger() {
   return logger as never;
 }
 
-function createTestProxyDispatcher() {
+function createTestProxyDispatcher(onClose: () => void = () => {}) {
   const dispatcher = {
     dispatch: vi.fn(),
-    close: vi.fn(async () => {}),
+    close: vi.fn(async () => {
+      onClose();
+    }),
   };
   const createProxyAgent = vi.fn(() => dispatcher as never);
   return { dispatcher, createProxyAgent };
@@ -368,6 +370,7 @@ describe("real provider usage fetchers", () => {
     options: {
       platform?: typeof process.platform;
       keychain?: () => Promise<unknown | null>;
+      codexProxyAgentFactory?: (proxyUrl: string) => never;
       kimiHomeDir?: string;
       miniMaxConfigPath?: string;
       miniMaxCredentialsPath?: string;
@@ -387,7 +390,12 @@ describe("real provider usage fetchers", () => {
           platform: options.platform,
           fetch: fetchThroughTestDouble,
         }),
-        new CodexQuotaProvider({ logger, codexHome, fetch: fetchThroughTestDouble }),
+        new CodexQuotaProvider({
+          logger,
+          codexHome,
+          fetch: fetchThroughTestDouble,
+          createProxyAgent: options.codexProxyAgentFactory,
+        }),
         new CopilotQuotaProvider({ logger, fetch: fetchThroughTestDouble }),
         new CursorQuotaProvider({ logger, fetch: fetchThroughTestDouble }),
         new ZaiQuotaProvider({ logger, fetch: fetchThroughTestDouble }),
@@ -604,6 +612,27 @@ describe("real provider usage fetchers", () => {
     expect(dispatcher.close).toHaveBeenCalledOnce();
   });
 
+  it("keeps the Codex proxy dispatcher isolated from other provider usage requests", async () => {
+    writeClaudeCredentials(claudeHome, "at_claude_valid");
+    writeCodexAuth(codexHome, "at_codex_valid");
+    writeFileSync(join(codexHome, ".env"), "HTTPS_PROXY=http://127.0.0.1:7897\n");
+    const { dispatcher, createProxyAgent } = createTestProxyDispatcher();
+    fetchApi = mockFetch(
+      new Map([
+        ["https://api.anthropic.com/api/oauth/usage", () => jsonResponse(makeClaudeResponse())],
+        ["https://chatgpt.com/backend-api/wham/usage", () => jsonResponse(makeCodexResponse())],
+      ]),
+    );
+
+    await service({ codexProxyAgentFactory: createProxyAgent }).listUsage();
+
+    const calls = vi.mocked(fetchApi).mock.calls;
+    const claudeCall = calls.find(([url]) => url.toString().includes("api.anthropic.com"));
+    const codexCall = calls.find(([url]) => url.toString().includes("chatgpt.com"));
+    expect(claudeCall?.[1]).toEqual(expect.not.objectContaining({ dispatcher: expect.anything() }));
+    expect(codexCall?.[1]).toEqual(expect.objectContaining({ dispatcher }));
+  });
+
   it("falls back to HTTP_PROXY for Codex usage", async () => {
     writeCodexAuth(codexHome, "at_codex_valid");
     writeFileSync(join(codexHome, ".env"), "HTTP_PROXY=http://127.0.0.1:7897\n");
@@ -666,16 +695,28 @@ describe("real provider usage fetchers", () => {
   it("uses one Codex proxy dispatcher across token refresh and retry", async () => {
     writeCodexAuth(codexHome, "at_codex_stale", "rt_codex_valid");
     writeFileSync(join(codexHome, ".env"), "HTTPS_PROXY=http://127.0.0.1:7897\n");
-    const { dispatcher, createProxyAgent } = createTestProxyDispatcher();
+    const events: string[] = [];
+    const { dispatcher, createProxyAgent } = createTestProxyDispatcher(() => {
+      events.push("close");
+    });
     let usageCalls = 0;
     fetchApi = vi.fn(async (url: RequestInfo | URL) => {
       if (url.toString() === "https://chatgpt.com/backend-api/wham/usage") {
         usageCalls += 1;
         return usageCalls === 1
-          ? new Response(null, { status: 401 })
+          ? new Response(
+              new ReadableStream({
+                cancel: () => {
+                  events.push("cancel");
+                },
+              }),
+              { status: 401 },
+            )
           : jsonResponse(makeCodexResponse());
       }
       if (url.toString() === "https://auth.openai.com/oauth/token") {
+        expect(events).toEqual(["cancel"]);
+        events.push("refresh");
         return jsonResponse({
           access_token: "at_codex_fresh",
           refresh_token: "rt_codex_fresh",
@@ -698,6 +739,64 @@ describe("real provider usage fetchers", () => {
       expect(init).toEqual(expect.objectContaining({ dispatcher }));
     }
     expect(dispatcher.close).toHaveBeenCalledOnce();
+    expect(events).toEqual(["cancel", "refresh", "close"]);
+  });
+
+  it("cancels a Codex error response before closing the proxy dispatcher", async () => {
+    writeCodexAuth(codexHome, "at_codex_valid");
+    writeFileSync(join(codexHome, ".env"), "HTTPS_PROXY=http://127.0.0.1:7897\n");
+    const events: string[] = [];
+    const { createProxyAgent } = createTestProxyDispatcher(() => {
+      events.push("close");
+    });
+    fetchApi = vi.fn(async () => {
+      return new Response(
+        new ReadableStream({
+          cancel: () => {
+            events.push("cancel");
+          },
+        }),
+        { status: 500 },
+      );
+    }) as never;
+    const provider = new CodexQuotaProvider({
+      logger: createLogger(),
+      codexHome,
+      fetch: fetchApi,
+      createProxyAgent,
+    });
+
+    await expect(provider.fetchUsage()).rejects.toThrow("Codex usage API returned 500");
+    expect(events).toEqual(["cancel", "close"]);
+  });
+
+  it("cancels a Codex token refresh error response before closing the proxy dispatcher", async () => {
+    writeCodexAuth(codexHome, "at_codex_stale", "rt_codex_valid");
+    writeFileSync(join(codexHome, ".env"), "HTTPS_PROXY=http://127.0.0.1:7897\n");
+    const events: string[] = [];
+    const { createProxyAgent } = createTestProxyDispatcher(() => {
+      events.push("close");
+    });
+    fetchApi = vi.fn(async (url: RequestInfo | URL) => {
+      const event = url.toString().includes("oauth/token") ? "refresh-cancel" : "usage-cancel";
+      return new Response(
+        new ReadableStream({
+          cancel: () => {
+            events.push(event);
+          },
+        }),
+        { status: 401 },
+      );
+    }) as never;
+    const provider = new CodexQuotaProvider({
+      logger: createLogger(),
+      codexHome,
+      fetch: fetchApi,
+      createProxyAgent,
+    });
+
+    await expect(provider.fetchUsage()).resolves.toMatchObject({ status: "unavailable" });
+    expect(events).toEqual(["usage-cancel", "refresh-cancel", "close"]);
   });
 
   it("closes the Codex proxy dispatcher when the usage request fails", async () => {
