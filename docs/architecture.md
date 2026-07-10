@@ -140,6 +140,8 @@ Electron wrapper for macOS, Linux, and Windows.
 >
 > **In-app browser panes are not yet per-window.** Browser webviews are tracked by one process-global registry that keeps a single current `WebContents` per browser id. Human focus still records the workspace-active browser for UI state and `list_tabs` reporting, but agent automation targets only explicit browser ids returned by `browser_new_tab` or `browser_list_tabs`. The webview registration queue (`pendingBrowserWebviewIds` in `main.ts`) is still process-global. With browser panes open in two windows, a menu Reload can target the other window's webview, and near-simultaneous webview attach across windows can register under the wrong browser id. Multi-window v1 ships windows; making the browser-webview subsystem window-scoped is a follow-up.
 
+> **Local HTML previews use the system browser.** Electron browser webviews intentionally allow only `http:`, `https:`, and `about:blank` navigation. Git diff preview opens local `.html`/`.htm` files through the desktop external opener instead of trying to load `file://` URLs in an in-app browser pane.
+
 ### `packages/website` — Marketing site
 
 TanStack Router + Cloudflare Workers. Serves paseo.sh.

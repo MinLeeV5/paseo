@@ -25,10 +25,13 @@ describe("desktop opener", () => {
     vi.mocked(shell.openExternal).mockReset();
   });
 
-  it("allows only http and https external URLs", () => {
+  it("allows web URLs and local HTML file URLs", () => {
     expect(isAllowedExternalUrl("https://example.com/path")).toBe(true);
     expect(isAllowedExternalUrl("http://localhost:8081")).toBe(true);
+    expect(isAllowedExternalUrl("file:///repo/site/index.html")).toBe(true);
+    expect(isAllowedExternalUrl("file:///repo/site/preview.HTM")).toBe(true);
     expect(isAllowedExternalUrl("file:///etc/passwd")).toBe(false);
+    expect(isAllowedExternalUrl("file:///repo/site/script.js")).toBe(false);
     expect(isAllowedExternalUrl("javascript:alert(1)")).toBe(false);
     expect(isAllowedExternalUrl("paseo://settings")).toBe(false);
     expect(isAllowedExternalUrl("/relative/path")).toBe(false);

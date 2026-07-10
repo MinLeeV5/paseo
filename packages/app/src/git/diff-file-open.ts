@@ -10,12 +10,12 @@ export interface DiffFileFileTarget {
   request: WorkspaceFileOpenRequest;
 }
 
-export interface DiffFileBrowserTarget {
-  kind: "browser";
+export interface DiffFileExternalUrlTarget {
+  kind: "externalUrl";
   url: string;
 }
 
-export type DiffFileOpenTarget = DiffFileFileTarget | DiffFileBrowserTarget;
+export type DiffFileOpenTarget = DiffFileFileTarget | DiffFileExternalUrlTarget;
 
 function isHtmlFile(filePath: string): boolean {
   const normalizedPath = filePath.trim().toLowerCase();
@@ -49,7 +49,7 @@ export function createDiffFilePreviewTarget(input: {
     });
     if (resolvedFile) {
       return {
-        kind: "browser",
+        kind: "externalUrl",
         url: pathToFileUri(resolvedFile.absolutePath),
       };
     }

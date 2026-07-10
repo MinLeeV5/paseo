@@ -42,14 +42,14 @@ describe("changed file open targets", () => {
     });
   });
 
-  it("opens HTML previews as local file URLs in a browser tab", () => {
+  it("opens HTML previews as local file URLs in the system browser", () => {
     expect(
       createDiffFilePreviewTarget({
         filePath: "site/index.html",
         workspaceRoot: "/repo",
       }),
     ).toEqual({
-      kind: "browser",
+      kind: "externalUrl",
       url: "file:///repo/site/index.html",
     });
   });

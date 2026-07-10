@@ -1295,7 +1295,7 @@ interface GitDiffPaneProps {
   cwd: string;
   enabled?: boolean;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
-  onOpenWorkspaceUrl?: (url: string) => void;
+  onOpenExternalUrl?: (url: string) => void;
 }
 
 type PressableStyleFn = (
@@ -1823,7 +1823,7 @@ export function GitDiffPane({
   cwd,
   enabled,
   onOpenWorkspaceFile,
-  onOpenWorkspaceUrl,
+  onOpenExternalUrl,
 }: GitDiffPaneProps) {
   const { settings: appSettings } = useAppSettings();
   const { t } = useTranslation();
@@ -1957,8 +1957,8 @@ export function GitDiffPane({
         filePath: file.path,
         workspaceRoot: cwd,
       });
-      if (target.kind === "browser" && onOpenWorkspaceUrl) {
-        onOpenWorkspaceUrl(target.url);
+      if (target.kind === "externalUrl" && onOpenExternalUrl) {
+        onOpenExternalUrl(target.url);
         return;
       }
       onOpenWorkspaceFile?.({
@@ -1966,7 +1966,7 @@ export function GitDiffPane({
         location: { path: file.path },
       });
     },
-    [cwd, onOpenWorkspaceFile, onOpenWorkspaceUrl],
+    [cwd, onOpenExternalUrl, onOpenWorkspaceFile],
   );
   const reviewDraftKey = useMemo(
     () =>
