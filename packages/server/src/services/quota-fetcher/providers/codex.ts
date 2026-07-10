@@ -233,9 +233,20 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw error;
     }
-    const value = parseDotenv(content)["HTTPS_PROXY"]?.trim();
+    const parsed = parseDotenv(content);
+    const value = parsed["HTTPS_PROXY"]?.trim() || parsed["HTTP_PROXY"]?.trim();
     if (!value) return null;
-    return new URL(value).toString();
+
+    let proxyUrl: URL;
+    try {
+      proxyUrl = new URL(value);
+    } catch {
+      throw new Error("Codex proxy URL is invalid");
+    }
+    if (proxyUrl.protocol !== "http:" && proxyUrl.protocol !== "https:") {
+      throw new Error("Codex proxy URL must use http: or https:");
+    }
+    return proxyUrl.toString();
   }
 
   private async callCodexApi(

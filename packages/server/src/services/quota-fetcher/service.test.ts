@@ -572,6 +572,10 @@ describe("real provider usage fetchers", () => {
       ]),
       balances: [expect.objectContaining({ id: "credits", remaining: 0 })],
     });
+    expect(fetchApi).toHaveBeenCalledWith(
+      "https://chatgpt.com/backend-api/wham/usage",
+      expect.not.objectContaining({ dispatcher: expect.anything() }),
+    );
   });
 
   it("routes Codex usage through HTTPS_PROXY from the Codex home", async () => {
@@ -598,6 +602,65 @@ describe("real provider usage fetchers", () => {
       expect.objectContaining({ dispatcher }),
     );
     expect(dispatcher.close).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to HTTP_PROXY for Codex usage", async () => {
+    writeCodexAuth(codexHome, "at_codex_valid");
+    writeFileSync(join(codexHome, ".env"), "HTTP_PROXY=http://127.0.0.1:7897\n");
+    const { createProxyAgent } = createTestProxyDispatcher();
+    fetchApi = mockFetch(
+      new Map([
+        ["https://chatgpt.com/backend-api/wham/usage", () => jsonResponse(makeCodexResponse())],
+      ]),
+    );
+
+    const provider = new CodexQuotaProvider({
+      logger: createLogger(),
+      codexHome,
+      fetch: fetchApi,
+      createProxyAgent,
+    });
+
+    await provider.fetchUsage();
+    expect(createProxyAgent).toHaveBeenCalledWith("http://127.0.0.1:7897/");
+  });
+
+  it("prefers HTTPS_PROXY over HTTP_PROXY for Codex usage", async () => {
+    writeCodexAuth(codexHome, "at_codex_valid");
+    writeFileSync(
+      join(codexHome, ".env"),
+      "HTTP_PROXY=http://127.0.0.1:7000\nHTTPS_PROXY=http://127.0.0.1:7897\n",
+    );
+    const { createProxyAgent } = createTestProxyDispatcher();
+    fetchApi = mockFetch(
+      new Map([
+        ["https://chatgpt.com/backend-api/wham/usage", () => jsonResponse(makeCodexResponse())],
+      ]),
+    );
+
+    const provider = new CodexQuotaProvider({
+      logger: createLogger(),
+      codexHome,
+      fetch: fetchApi,
+      createProxyAgent,
+    });
+
+    await provider.fetchUsage();
+    expect(createProxyAgent).toHaveBeenCalledWith("http://127.0.0.1:7897/");
+  });
+
+  it("reports an invalid Codex proxy without attempting a direct request", async () => {
+    writeCodexAuth(codexHome, "at_codex_valid");
+    writeFileSync(join(codexHome, ".env"), "HTTPS_PROXY=ftp://proxy.example\n");
+    const fetchSpy = vi.fn() as never;
+    const provider = new CodexQuotaProvider({
+      logger: createLogger(),
+      codexHome,
+      fetch: fetchSpy,
+    });
+
+    await expect(provider.fetchUsage()).rejects.toThrow("Codex proxy URL must use http: or https:");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("treats a Codex HTML usage response as auth failure", async () => {
