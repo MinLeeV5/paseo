@@ -1,7 +1,9 @@
 import { existsSync, promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { parse as parseDotenv } from "dotenv";
 import type { Logger } from "pino";
+import { ProxyAgent, type Dispatcher } from "undici";
 import { z } from "zod";
 import type {
   ProviderUsage,
@@ -72,10 +74,15 @@ interface CodexAuthRecord {
   path: string;
 }
 
+type CodexProxyDispatcher = Dispatcher & { close(): Promise<void> };
+type CodexProxyAgentFactory = (proxyUrl: string) => CodexProxyDispatcher;
+type RequestInitWithDispatcher = RequestInit & { dispatcher?: Dispatcher };
+
 interface CodexQuotaProviderOptions {
   logger: Logger;
   codexHome?: string;
   fetch?: ProviderApiFetch;
+  createProxyAgent?: CodexProxyAgentFactory;
 }
 
 function codexWindow(
@@ -94,10 +101,12 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
 
   private readonly codexHome: string;
   private readonly fetchApi: ProviderApiFetch;
+  private readonly createProxyAgent: CodexProxyAgentFactory;
 
   constructor(options: CodexQuotaProviderOptions) {
     this.codexHome = options.codexHome || process.env["CODEX_HOME"] || join(homedir(), ".codex");
     this.fetchApi = options.fetch ?? fetch;
+    this.createProxyAgent = options.createProxyAgent ?? ((proxyUrl) => new ProxyAgent(proxyUrl));
   }
 
   async fetchUsage(): Promise<ProviderUsage> {
@@ -109,7 +118,9 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
     }
 
     const { refresh_token, account_id } = auth.tokens ?? {};
-    let resp = await this.callCodexApi(accessToken, account_id);
+    const proxyUrl = await this.readCodexProxyUrl();
+    const dispatcher = proxyUrl ? this.createProxyAgent(proxyUrl) : null;
+    let resp = await this.callCodexApi(accessToken, account_id, dispatcher ?? undefined);
 
     if (resp === "NEEDS_AUTH") {
       if (!refresh_token) {
@@ -121,13 +132,15 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
       }
 
       await this.saveCodexAuth(authRecord.path, auth, refreshed);
-      resp = await this.callCodexApi(refreshed.access_token, account_id);
+      resp = await this.callCodexApi(refreshed.access_token, account_id, dispatcher ?? undefined);
       if (resp === "NEEDS_AUTH") {
         return unavailableUsage(this);
       }
     }
 
-    return this.toUsage(resp);
+    const usage = this.toUsage(resp);
+    if (dispatcher) await dispatcher.close();
+    return usage;
   }
 
   private toUsage(resp: CodexUsageResponse): ProviderUsage {
@@ -211,9 +224,24 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
     return null;
   }
 
+  private async readCodexProxyUrl(): Promise<string | null> {
+    const envPath = join(this.codexHome, ".env");
+    let content: string;
+    try {
+      content = await fs.readFile(envPath, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+    const value = parseDotenv(content)["HTTPS_PROXY"]?.trim();
+    if (!value) return null;
+    return new URL(value).toString();
+  }
+
   private async callCodexApi(
     token: string,
     accountId?: string,
+    dispatcher?: Dispatcher,
   ): Promise<CodexUsageResponse | "NEEDS_AUTH"> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
@@ -222,12 +250,12 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
     };
     if (accountId) headers["ChatGPT-Account-Id"] = accountId;
 
+    const requestInit: RequestInitWithDispatcher = { headers };
+    if (dispatcher) requestInit.dispatcher = dispatcher;
     const res = await fetchProviderApi(
       this.fetchApi,
       "https://chatgpt.com/backend-api/wham/usage",
-      {
-        headers,
-      },
+      requestInit,
     );
     if (res.status === 401 || res.status === 403) return "NEEDS_AUTH";
     if (!res.ok) throw new Error(`Codex usage API returned ${res.status}`);

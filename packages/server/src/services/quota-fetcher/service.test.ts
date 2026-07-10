@@ -123,6 +123,15 @@ function createLogger() {
   return logger as never;
 }
 
+function createTestProxyDispatcher() {
+  const dispatcher = {
+    dispatch: vi.fn(),
+    close: vi.fn(async () => {}),
+  };
+  const createProxyAgent = vi.fn(() => dispatcher as never);
+  return { dispatcher, createProxyAgent };
+}
+
 function usageFetcher(usage: ProviderUsage): ProviderUsageFetcher {
   return {
     providerId: usage.providerId,
@@ -563,6 +572,32 @@ describe("real provider usage fetchers", () => {
       ]),
       balances: [expect.objectContaining({ id: "credits", remaining: 0 })],
     });
+  });
+
+  it("routes Codex usage through HTTPS_PROXY from the Codex home", async () => {
+    writeCodexAuth(codexHome, "at_codex_valid");
+    writeFileSync(join(codexHome, ".env"), 'HTTPS_PROXY="http://127.0.0.1:7897"\n');
+    const { dispatcher, createProxyAgent } = createTestProxyDispatcher();
+    fetchApi = mockFetch(
+      new Map([
+        ["https://chatgpt.com/backend-api/wham/usage", () => jsonResponse(makeCodexResponse())],
+      ]),
+    );
+
+    const provider = new CodexQuotaProvider({
+      logger: createLogger(),
+      codexHome,
+      fetch: fetchApi,
+      createProxyAgent,
+    });
+
+    await expect(provider.fetchUsage()).resolves.toMatchObject({ status: "available" });
+    expect(createProxyAgent).toHaveBeenCalledWith("http://127.0.0.1:7897/");
+    expect(fetchApi).toHaveBeenCalledWith(
+      "https://chatgpt.com/backend-api/wham/usage",
+      expect.objectContaining({ dispatcher }),
+    );
+    expect(dispatcher.close).toHaveBeenCalledOnce();
   });
 
   it("treats a Codex HTML usage response as auth failure", async () => {
