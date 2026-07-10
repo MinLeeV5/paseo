@@ -663,6 +663,61 @@ describe("real provider usage fetchers", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("uses one Codex proxy dispatcher across token refresh and retry", async () => {
+    writeCodexAuth(codexHome, "at_codex_stale", "rt_codex_valid");
+    writeFileSync(join(codexHome, ".env"), "HTTPS_PROXY=http://127.0.0.1:7897\n");
+    const { dispatcher, createProxyAgent } = createTestProxyDispatcher();
+    let usageCalls = 0;
+    fetchApi = vi.fn(async (url: RequestInfo | URL) => {
+      if (url.toString() === "https://chatgpt.com/backend-api/wham/usage") {
+        usageCalls += 1;
+        return usageCalls === 1
+          ? new Response(null, { status: 401 })
+          : jsonResponse(makeCodexResponse());
+      }
+      if (url.toString() === "https://auth.openai.com/oauth/token") {
+        return jsonResponse({
+          access_token: "at_codex_fresh",
+          refresh_token: "rt_codex_fresh",
+        });
+      }
+      throw new Error(`Unmocked fetch: ${url.toString()}`);
+    }) as never;
+
+    const provider = new CodexQuotaProvider({
+      logger: createLogger(),
+      codexHome,
+      fetch: fetchApi,
+      createProxyAgent,
+    });
+
+    await expect(provider.fetchUsage()).resolves.toMatchObject({ status: "available" });
+    expect(createProxyAgent).toHaveBeenCalledOnce();
+    expect(fetchApi).toHaveBeenCalledTimes(3);
+    for (const [, init] of vi.mocked(fetchApi).mock.calls) {
+      expect(init).toEqual(expect.objectContaining({ dispatcher }));
+    }
+    expect(dispatcher.close).toHaveBeenCalledOnce();
+  });
+
+  it("closes the Codex proxy dispatcher when the usage request fails", async () => {
+    writeCodexAuth(codexHome, "at_codex_valid");
+    writeFileSync(join(codexHome, ".env"), "HTTPS_PROXY=http://127.0.0.1:7897\n");
+    const { dispatcher, createProxyAgent } = createTestProxyDispatcher();
+    fetchApi = vi.fn(async () => {
+      throw new Error("proxy connection failed");
+    }) as never;
+    const provider = new CodexQuotaProvider({
+      logger: createLogger(),
+      codexHome,
+      fetch: fetchApi,
+      createProxyAgent,
+    });
+
+    await expect(provider.fetchUsage()).rejects.toThrow("proxy connection failed");
+    expect(dispatcher.close).toHaveBeenCalledOnce();
+  });
+
   it("treats a Codex HTML usage response as auth failure", async () => {
     writeCodexAuth(codexHome, "at_codex_stale");
     fetchApi = mockFetch(

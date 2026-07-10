@@ -120,27 +120,29 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
     const { refresh_token, account_id } = auth.tokens ?? {};
     const proxyUrl = await this.readCodexProxyUrl();
     const dispatcher = proxyUrl ? this.createProxyAgent(proxyUrl) : null;
-    let resp = await this.callCodexApi(accessToken, account_id, dispatcher ?? undefined);
+    try {
+      let resp = await this.callCodexApi(accessToken, account_id, dispatcher ?? undefined);
 
-    if (resp === "NEEDS_AUTH") {
-      if (!refresh_token) {
-        return unavailableUsage(this);
-      }
-      const refreshed = await this.refreshCodexToken(refresh_token);
-      if (!refreshed?.access_token) {
-        return unavailableUsage(this);
-      }
-
-      await this.saveCodexAuth(authRecord.path, auth, refreshed);
-      resp = await this.callCodexApi(refreshed.access_token, account_id, dispatcher ?? undefined);
       if (resp === "NEEDS_AUTH") {
-        return unavailableUsage(this);
-      }
-    }
+        if (!refresh_token) {
+          return unavailableUsage(this);
+        }
+        const refreshed = await this.refreshCodexToken(refresh_token, dispatcher ?? undefined);
+        if (!refreshed?.access_token) {
+          return unavailableUsage(this);
+        }
 
-    const usage = this.toUsage(resp);
-    if (dispatcher) await dispatcher.close();
-    return usage;
+        await this.saveCodexAuth(authRecord.path, auth, refreshed);
+        resp = await this.callCodexApi(refreshed.access_token, account_id, dispatcher ?? undefined);
+        if (resp === "NEEDS_AUTH") {
+          return unavailableUsage(this);
+        }
+      }
+
+      return this.toUsage(resp);
+    } finally {
+      if (dispatcher) await dispatcher.close();
+    }
   }
 
   private toUsage(resp: CodexUsageResponse): ProviderUsage {
@@ -275,17 +277,26 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
     return CodexUsageResponseSchema.parse(JSON.parse(text));
   }
 
-  private async refreshCodexToken(refreshToken: string): Promise<CodexTokenRefresh | null> {
+  private async refreshCodexToken(
+    refreshToken: string,
+    dispatcher?: Dispatcher,
+  ): Promise<CodexTokenRefresh | null> {
     const params = new URLSearchParams({
       grant_type: "refresh_token",
       client_id: CODEX_CLIENT_ID,
       refresh_token: refreshToken,
     });
-    const res = await fetchProviderApi(this.fetchApi, "https://auth.openai.com/oauth/token", {
+    const requestInit: RequestInitWithDispatcher = {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
-    });
+    };
+    if (dispatcher) requestInit.dispatcher = dispatcher;
+    const res = await fetchProviderApi(
+      this.fetchApi,
+      "https://auth.openai.com/oauth/token",
+      requestInit,
+    );
     if (!res.ok) return null;
     return CodexTokenRefreshSchema.parse(await res.json());
   }
