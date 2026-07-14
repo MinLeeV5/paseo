@@ -9,15 +9,22 @@ import {
   type ViewStyle,
 } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Maximize2, X } from "lucide-react-native";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { mermaidWebViewHtml } from "@/components/mermaid/webview/mermaid-webview-html";
+import type { Theme } from "@/styles/theme";
 import { type MermaidThemePayload, useMermaidThemePayload } from "./theme";
 
 export interface MermaidDiagramProps {
   diagram: string;
 }
+
+interface MermaidDiagramContentProps extends MermaidDiagramProps {
+  theme: Theme;
+}
+
+const mermaidThemeMapping = (theme: Theme) => ({ theme });
 
 interface MermaidRenderedMessage {
   type: "rendered";
@@ -202,8 +209,7 @@ function MermaidWebViewSurface({
   );
 }
 
-export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
-  const { theme } = useUnistyles();
+function MermaidDiagramContent({ diagram, theme }: MermaidDiagramContentProps) {
   const themePayload = useMermaidThemePayload(theme);
   const [height, setHeight] = useState(MIN_WEBVIEW_HEIGHT);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -274,6 +280,12 @@ export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
       ) : null}
     </View>
   );
+}
+
+const ThemedMermaidDiagram = withUnistyles(MermaidDiagramContent);
+
+export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
+  return <ThemedMermaidDiagram diagram={diagram} uniProps={mermaidThemeMapping} />;
 }
 
 const styles = StyleSheet.create((theme) => ({

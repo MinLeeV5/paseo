@@ -19,6 +19,7 @@ export interface WorkspaceDraftTabSetup {
 export type WorkspaceTabTarget =
   | { kind: "draft"; draftId: string; setup?: WorkspaceDraftTabSetup }
   | { kind: "agent"; agentId: string }
+  | { kind: "provider_subagent"; parentAgentId: string; subagentId: string }
   | { kind: "terminal"; terminalId: string }
   | { kind: "browser"; browserId: string }
   | WorkspaceFileTabTarget
@@ -512,8 +513,22 @@ function coerceWorkspaceFileDiffContext(raw: unknown): WorkspaceFileDiffContext 
   };
 }
 
+function coerceWorkspaceFileTarget(raw: Record<string, unknown>): WorkspaceTabTarget | null {
+  if (typeof raw.path !== "string") {
+    return null;
+  }
+  const diffContext = coerceWorkspaceFileDiffContext(raw.diffContext);
+  return normalizeWorkspaceTabTarget({
+    kind: "file",
+    path: raw.path,
+    lineStart: typeof raw.lineStart === "number" ? raw.lineStart : undefined,
+    lineEnd: typeof raw.lineEnd === "number" ? raw.lineEnd : undefined,
+    ...(diffContext ? { diffContext } : {}),
+  });
+}
+
 function coerceWorkspaceTabTarget(raw: Record<string, unknown>): WorkspaceTabTarget | null {
-  const kind = typeof raw.kind === "string" ? raw.kind : null;
+  const kind = raw.kind;
   if (kind === "draft" && typeof raw.draftId === "string") {
     const setup = normalizeWorkspaceDraftTabSetup(raw.setup);
     return normalizeWorkspaceTabTarget({
@@ -525,21 +540,25 @@ function coerceWorkspaceTabTarget(raw: Record<string, unknown>): WorkspaceTabTar
   if (kind === "agent" && typeof raw.agentId === "string") {
     return normalizeWorkspaceTabTarget({ kind: "agent", agentId: raw.agentId });
   }
+  if (
+    kind === "provider_subagent" &&
+    typeof raw.parentAgentId === "string" &&
+    typeof raw.subagentId === "string"
+  ) {
+    return normalizeWorkspaceTabTarget({
+      kind: "provider_subagent",
+      parentAgentId: raw.parentAgentId,
+      subagentId: raw.subagentId,
+    });
+  }
   if (kind === "terminal" && typeof raw.terminalId === "string") {
     return normalizeWorkspaceTabTarget({ kind: "terminal", terminalId: raw.terminalId });
   }
   if (kind === "browser" && typeof raw.browserId === "string") {
     return normalizeWorkspaceTabTarget({ kind: "browser", browserId: raw.browserId });
   }
-  if (kind === "file" && typeof raw.path === "string") {
-    const diffContext = coerceWorkspaceFileDiffContext(raw.diffContext);
-    return normalizeWorkspaceTabTarget({
-      kind: "file",
-      path: raw.path,
-      lineStart: typeof raw.lineStart === "number" ? raw.lineStart : undefined,
-      lineEnd: typeof raw.lineEnd === "number" ? raw.lineEnd : undefined,
-      ...(diffContext ? { diffContext } : {}),
-    });
+  if (kind === "file") {
+    return coerceWorkspaceFileTarget(raw);
   }
   if (kind === "setup" && typeof raw.workspaceId === "string") {
     return normalizeWorkspaceTabTarget({ kind: "setup", workspaceId: raw.workspaceId });

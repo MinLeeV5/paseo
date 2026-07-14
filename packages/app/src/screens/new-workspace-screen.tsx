@@ -5,7 +5,7 @@ import type { TFunction } from "i18next";
 import { Pressable, Text, View } from "react-native";
 import type { PressableStateCallbackType } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNameId } from "mnemonic-id";
 import { useQuery } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import {
   Check,
   ChevronDown,
   Folder,
+  FolderPlus,
   GitBranch,
   GitPullRequest,
   Play,
@@ -29,6 +30,7 @@ import { ProjectIconView } from "@/components/project-icon-view";
 import { Combobox, ComboboxItem } from "@/components/ui/combobox";
 import type { ComboboxOption as ComboboxOptionType, ComboboxProps } from "@/components/ui/combobox";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
+import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
@@ -46,12 +48,15 @@ import {
 } from "@/runtime/host-runtime";
 import { useHostFeature, useHostFeatureMap } from "@/runtime/host-features";
 import type { HostProfile } from "@/types/host-connection";
-import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
-import { useLastWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
+import {
+  navigateToWorkspace,
+  useLastWorkspaceSelection,
+} from "@/stores/navigation-active-workspace-store";
 import { normalizeWorkspaceDescriptor, useSessionStore } from "@/stores/session-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
-import { generateDraftId } from "@/stores/draft-keys";
+import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
 import { useDraftStore } from "@/stores/draft-store";
+import { useProjectPickerStore } from "@/stores/project-picker-store";
 import { isActiveCreateFlowForDraft, useCreateFlowStore } from "@/stores/create-flow-store";
 import {
   useWorkspaceDraftSubmissionStore,
@@ -59,11 +64,11 @@ import {
 } from "@/stores/workspace-draft-submission-store";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
+import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { generateMessageId } from "@/types/stream";
 import { toErrorMessage } from "@/utils/error-messages";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
-import { navigateToPreparedWorkspaceTab } from "@/utils/workspace-navigation";
 import {
   getHostProjectSourceDirectory,
   hostProjectFromRoute,
@@ -72,6 +77,7 @@ import {
   type HostProjectListItem,
 } from "@/projects/host-projects";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
@@ -93,12 +99,22 @@ import {
   type PickerCheckoutRequest,
   type PickerItem,
 } from "./new-workspace-picker-item";
-import { findCheckoutHintPrAttachment, syncPickerPrAttachment } from "./new-workspace-picker-state";
+import {
+  clearPickerPrAttachmentForTargetChange,
+  findCheckoutHintPrAttachment,
+  syncPickerPrAttachment,
+} from "./new-workspace-picker-state";
 import {
   resolveNewWorkspaceAutomaticServerId,
   resolveNewWorkspaceInitialServerId,
 } from "./new-workspace-initial-context";
 import { useNewWorkspaceProjectPicker } from "./new-workspace/project-picker";
+
+const ThemedFolderPlus = withUnistyles(FolderPlus);
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const addProjectIcon = (
+  <ThemedFolderPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+);
 
 function resolveCheckoutRequest(
   selectedItem: PickerItem | null,
@@ -174,7 +190,6 @@ interface PickerOptionData {
 
 interface PickerSelection {
   item: PickerItem;
-  attachedPrNumber: number | null;
 }
 
 const BRANCH_OPTION_PREFIX = "branch:";
@@ -609,6 +624,25 @@ function NewWorkspaceProjectPickerOption({
   );
 }
 
+function AddProjectPickerAction({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  const openProjectKeys = useShortcutKeys("new-agent");
+  const shortcut = useMemo(
+    () => (openProjectKeys ? <Shortcut chord={openProjectKeys} /> : null),
+    [openProjectKeys],
+  );
+
+  return (
+    <ComboboxItem
+      testID="new-workspace-project-picker-add-project"
+      label={t("sidebar.actions.addProject")}
+      onPress={onPress}
+      leadingSlot={addProjectIcon}
+      trailingSlot={shortcut}
+    />
+  );
+}
+
 function formatPrLabel(item: { number: number; title: string }): string {
   return `#${item.number} ${item.title}`;
 }
@@ -760,18 +794,6 @@ function getContentStyle(input: { isCompact: boolean; insetBottom: number }) {
     return [styles.content, styles.contentCompact, { paddingBottom: input.insetBottom }];
   }
   return [styles.content, styles.contentCentered];
-}
-
-function buildNewWorkspaceDraftKey(input: {
-  selectedServerId: string;
-  selectedSourceDirectory: string | null;
-  draftId?: string;
-}): string {
-  const explicitDraftId = input.draftId?.trim();
-  if (explicitDraftId) {
-    return `new-workspace:draft:${explicitDraftId}`;
-  }
-  return `new-workspace:${input.selectedServerId}:${input.selectedSourceDirectory ?? "choose-project"}`;
 }
 
 function getSelectedPickerItem(selection: PickerSelection | null): PickerItem | null {
@@ -1160,7 +1182,7 @@ function submitWorkspaceDraft(input: SubmitDraftInput): void {
     ...(submission.featureValues ? { featureValues: submission.featureValues } : {}),
     allowEmptyText: true,
   });
-  navigateToPreparedWorkspaceTab({
+  navigateToWorkspace({
     serverId,
     workspaceId,
     target: submission.target,
@@ -1373,6 +1395,7 @@ interface NewWorkspaceFormStackInput {
     iconDataByProjectKey: Map<string, string | null>;
     selectedOptionId: string;
     onSelect: (id: string) => void;
+    onAddProject: () => void;
     renderOption: RefPickerRenderOption;
   };
   host: FormPickerControl & {
@@ -1410,6 +1433,10 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
     host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
   const showHostControl = host.allHosts.length > 1;
   const isolationTriggerLabel = isolationLabel(t, isolation.effectiveIsolation);
+  const addProjectAction = useMemo(
+    () => <AddProjectPickerAction onPress={project.onAddProject} />,
+    [project.onAddProject],
+  );
 
   const badgePressableStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -1426,7 +1453,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
       <ProjectPickerTrigger
         pickerAnchorRef={project.anchorRef}
         onPress={project.open}
-        disabled={isPending || project.options.length === 0}
+        disabled={isPending}
         badgePressableStyle={badgePressableStyle}
         label={project.triggerLabel}
         projectKey={project.selectedProject?.projectKey ?? null}
@@ -1451,6 +1478,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
         anchorRef={project.anchorRef}
         emptyText="No projects available."
         renderOption={project.renderOption}
+        footer={addProjectAction}
       />
     </View>
   );
@@ -1605,6 +1633,7 @@ export function NewWorkspaceScreen({
   const [manualPickerSelection, setManualPickerSelection] = useState<PickerSelection | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const openAddProjectPicker = useProjectPickerStore((state) => state.open);
   const [isolationPickerOpen, setIsolationPickerOpen] = useState(false);
   const [pickerSearchQuery, setPickerSearchQuery] = useState("");
   const [debouncedPickerSearchQuery, setDebouncedPickerSearchQuery] = useState("");
@@ -1639,7 +1668,6 @@ export function NewWorkspaceScreen({
     lastActiveProject,
     allowAllProjects: supportsWorkspaceMultiplicity,
   });
-
   const projectIconTargets = useMemo(
     () =>
       projects.flatMap((project) => {
@@ -1655,11 +1683,7 @@ export function NewWorkspaceScreen({
   const projectIconDataByProjectKey = useProjectIconDataByProjectKey({
     projects: projectIconTargets,
   });
-  const draftKey = buildNewWorkspaceDraftKey({
-    selectedServerId,
-    selectedSourceDirectory,
-    draftId,
-  });
+  const draftKey = buildNewWorkspaceDraftKey(draftId);
   const forkDraftSetup = usePendingWorkspaceDraftSetup(draftId);
   const draftContextScopeKey = useDraftWorkspaceAttachmentScopeKey(draftId);
   const visibleDraftContextScopeKeys = useMemo(
@@ -1774,22 +1798,16 @@ export function NewWorkspaceScreen({
   }, [selectedItem]);
   const selectPickerItem = useCallback(
     (item: PickerItem) => {
-      const next = syncPickerPrAttachment({
+      const nextAttachments = syncPickerPrAttachment({
         attachments: chatDraft.attachments,
-        previousPickerPrNumber: manualPickerSelection?.attachedPrNumber ?? null,
         item,
       });
 
-      setManualPickerSelection({
-        item,
-        attachedPrNumber: next.attachedPrNumber,
-      });
-      if (next.attachments !== chatDraft.attachments) {
-        chatDraft.setAttachments(next.attachments);
-      }
+      setManualPickerSelection({ item });
+      chatDraft.setAttachments(nextAttachments);
       setPickerOpen(false);
     },
-    [chatDraft, manualPickerSelection?.attachedPrNumber],
+    [chatDraft],
   );
 
   const handleSelectOption = useCallback(
@@ -1801,6 +1819,20 @@ export function NewWorkspaceScreen({
     [itemById, selectPickerItem],
   );
 
+  const clearManualPickerSelectionForTargetChange = useCallback(
+    (currentTargetId: string, nextTargetId: string) => {
+      const nextAttachments = clearPickerPrAttachmentForTargetChange({
+        attachments: chatDraft.attachments,
+        currentTargetId,
+        nextTargetId,
+      });
+      if (nextAttachments === chatDraft.attachments) return;
+      chatDraft.setAttachments(nextAttachments);
+      setManualPickerSelection(null);
+    },
+    [chatDraft],
+  );
+
   const handleSelectProjectOption = useCallback(
     (id: string) => {
       // selectProjectOption enforces selectability (worktree-only when
@@ -1808,10 +1840,23 @@ export function NewWorkspaceScreen({
       // canCreateWorktree or non-git projects become unselectable.
       selectProjectOption(id);
       setProjectPickerOpen(false);
-      setManualPickerSelection(null);
+      clearManualPickerSelectionForTargetChange(selectedProjectOptionId, id);
     },
-    [selectProjectOption],
+    [clearManualPickerSelectionForTargetChange, selectProjectOption, selectedProjectOptionId],
   );
+
+  const handleSelectWorkspaceHost = useCallback(
+    (id: string) => {
+      handleSelectHost(id);
+      clearManualPickerSelectionForTargetChange(selectedServerId, id);
+    },
+    [clearManualPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
+  );
+
+  const handleAddProject = useCallback(() => {
+    setProjectPickerOpen(false);
+    openAddProjectPicker(selectedServerId);
+  }, [openAddProjectPicker, selectedServerId]);
 
   const checkoutHintPrAttachment = useMemo(
     () =>
@@ -2013,7 +2058,7 @@ export function NewWorkspaceScreen({
             ensureWorkspace,
             serverId: selectedServerId,
             navigate: (targetServerId, workspaceId) =>
-              navigateToWorkspace(targetServerId, workspaceId),
+              navigateToWorkspace({ serverId: targetServerId, workspaceId }),
           });
           return;
         }
@@ -2055,7 +2100,8 @@ export function NewWorkspaceScreen({
         },
         ensureWorkspace,
         serverId: selectedServerId,
-        navigate: (targetServerId, workspaceId) => navigateToWorkspace(targetServerId, workspaceId),
+        navigate: (targetServerId, workspaceId) =>
+          navigateToWorkspace({ serverId: targetServerId, workspaceId }),
       });
     } catch (error) {
       const message = toErrorMessage(error);
@@ -2150,6 +2196,7 @@ export function NewWorkspaceScreen({
       iconDataByProjectKey: projectIconDataByProjectKey,
       selectedOptionId: selectedProjectOptionId,
       onSelect: handleSelectProjectOption,
+      onAddProject: handleAddProject,
       openState: projectPickerOpen,
       onOpenChange: handleProjectPickerOpenChange,
       renderOption: renderProjectOption,
@@ -2157,7 +2204,7 @@ export function NewWorkspaceScreen({
     host: {
       allHosts,
       selectedServerId,
-      onSelect: handleSelectHost,
+      onSelect: handleSelectWorkspaceHost,
       openState: hostPickerOpen,
       onOpenChange: handleHostPickerOpenChange,
       anchorRef: hostPickerAnchorRef,

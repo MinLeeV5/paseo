@@ -2,15 +2,22 @@ import mermaid from "mermaid";
 import React from "react";
 import { type CSSProperties, useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Modal, Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Maximize2, X } from "lucide-react-native";
 import { isWeb } from "@/constants/platform";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
+import type { Theme } from "@/styles/theme";
 import { useMermaidThemePayload } from "./theme";
 
 export interface MermaidDiagramProps {
   diagram: string;
 }
+
+interface MermaidDiagramContentProps extends MermaidDiagramProps {
+  theme: Theme;
+}
+
+const mermaidThemeMapping = (theme: Theme) => ({ theme });
 
 interface MermaidRenderState {
   kind: "loading" | "rendered" | "failed";
@@ -56,8 +63,7 @@ function previewButtonStyle({ hovered, pressed }: PressableStateCallbackType) {
   return [styles.previewButton, (hovered || pressed) && styles.previewButtonActive];
 }
 
-export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
-  const { theme } = useUnistyles();
+function MermaidDiagramContent({ diagram, theme }: MermaidDiagramContentProps) {
   const reactId = useId();
   const renderId = useMemo(() => normalizeMermaidRenderId(reactId), [reactId]);
   const themePayload = useMermaidThemePayload(theme);
@@ -194,6 +200,12 @@ export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
       ) : null}
     </View>
   );
+}
+
+const ThemedMermaidDiagram = withUnistyles(MermaidDiagramContent);
+
+export function MermaidDiagram({ diagram }: MermaidDiagramProps) {
+  return <ThemedMermaidDiagram diagram={diagram} uniProps={mermaidThemeMapping} />;
 }
 
 const styles = StyleSheet.create((theme) => ({

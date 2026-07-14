@@ -47,7 +47,14 @@ vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     create: (styles: unknown) => (typeof styles === "function" ? styles(theme) : styles),
   },
-  useUnistyles: () => ({ theme }),
+  withUnistyles:
+    (Component: React.ComponentType<Record<string, unknown>>) =>
+    ({
+      uniProps,
+      ...props
+    }: Record<string, unknown> & { uniProps?: (theme: unknown) => object }) => (
+      <Component {...props} {...uniProps?.(theme)} />
+    ),
 }));
 
 vi.mock("lucide-react-native", () => ({
