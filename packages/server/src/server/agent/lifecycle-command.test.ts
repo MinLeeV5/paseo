@@ -59,6 +59,19 @@ class FakeLifecycleAgentManager implements LifecycleAgentManager {
     return this.inFlightAgentIds.delete(agentId);
   }
 
+  async stopAgent(agentId: string): Promise<boolean> {
+    this.cancelledAgentIds.push(agentId);
+    const agent = this.liveAgents.get(agentId);
+    const pausedGoal = agent?.goal?.status === "active";
+    if (agent?.goal) {
+      this.liveAgents.set(agentId, {
+        ...agent,
+        goal: { ...agent.goal, status: "paused" },
+      });
+    }
+    return this.inFlightAgentIds.delete(agentId) || pausedGoal;
+  }
+
   async clearAgentAttention(agentId: string): Promise<void> {
     this.clearedAttentionAgentIds.push(agentId);
   }
@@ -166,6 +179,21 @@ describe("agent lifecycle commands", () => {
       cancelled: true,
     });
     expect(manager.cancelledAgentIds).toEqual(["agent-1"]);
+  });
+
+  test("stops an idle agent when its goal is active", async () => {
+    const storage = new FakeLifecycleAgentStorage();
+    const manager = new FakeLifecycleAgentManager(storage);
+    manager.liveAgents.set("agent-1", {
+      ...managedAgent("agent-1", "idle"),
+      goal: { objective: "Ship Goal state support", status: "active" },
+    });
+
+    const result = await cancelAgentRunCommand({ agentManager: manager, logger }, "agent-1");
+
+    expect(result.cancelled).toBe(true);
+    expect(manager.cancelledAgentIds).toEqual(["agent-1"]);
+    expect(manager.liveAgents.get("agent-1")?.goal?.status).toBe("paused");
   });
 
   test("archives a live agent after canceling and clearing attention", async () => {
@@ -301,6 +329,7 @@ function managedAgent(
     id,
     cwd: "/workspace/project",
     lifecycle,
+    goal: null,
   };
 }
 

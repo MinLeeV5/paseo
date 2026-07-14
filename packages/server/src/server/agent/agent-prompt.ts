@@ -314,6 +314,19 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
           return;
         }
         if (event.agent.lifecycle === "idle" && hasSeenRunning) {
+          const goalStatus = event.agent.goal?.status;
+          if (goalStatus === "active" || goalStatus === "paused") {
+            return;
+          }
+          if (
+            goalStatus === "blocked" ||
+            goalStatus === "usageLimited" ||
+            goalStatus === "budgetLimited" ||
+            goalStatus === "unknown"
+          ) {
+            void notify("errored");
+            return;
+          }
           void notify("finished");
           return;
         }
@@ -342,7 +355,7 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
     unsubscribe();
     return;
   }
-  if (childSnapshot.lifecycle === "running") {
+  if (childSnapshot.lifecycle === "running" || childSnapshot.goal?.status === "active") {
     hasSeenRunning = true;
   } else if (childSnapshot.lifecycle === "error") {
     void notify("errored");

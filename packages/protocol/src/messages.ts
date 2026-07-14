@@ -657,6 +657,7 @@ export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
           serverId: z.string(),
           agentId: z.string(),
           reason: z.enum(["finished", "error", "permission"]),
+          goalStatus: z.string().optional(),
         }),
       })
       .optional(),
@@ -681,6 +682,14 @@ const AgentRuntimeInfoSchema: z.ZodType<AgentRuntimeInfo> = z.object({
   extra: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const AgentGoalPayloadSchema = z.object({
+  objective: z.string(),
+  // Keep this structural so clients remain compatible with future provider statuses.
+  status: z.string(),
+});
+
+export type AgentGoalPayload = z.infer<typeof AgentGoalPayloadSchema>;
+
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
   provider: AgentProviderSchema,
@@ -694,6 +703,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   updatedAt: z.string(),
   lastUserMessageAt: z.string().nullable(),
   status: AgentStatusSchema,
+  goal: AgentGoalPayloadSchema.nullable().optional(),
   capabilities: AgentCapabilityFlagsSchema,
   currentModeId: z.string().nullable(),
   availableModes: z.array(AgentModeSchema),
@@ -2441,6 +2451,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspacePinning: z.boolean().optional(),
         // COMPAT(workspaceGithubClone): added in v0.1.108, remove gate after 2027-01-13.
         workspaceGithubClone: z.boolean().optional(),
+        // COMPAT(agentGoalState): added in v1.1.111, remove gate after 2027-01-14.
+        agentGoalState: z.boolean().optional(),
       })
       .optional(),
   })

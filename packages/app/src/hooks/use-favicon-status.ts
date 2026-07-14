@@ -5,6 +5,7 @@ import { getDesktopHost } from "@/desktop/host";
 import { useWorkspaceStatusesForBadges } from "@/stores/session-store-hooks";
 import { deriveMacDockBadgeCountFromWorkspaceStatuses } from "@/utils/desktop-badge-state";
 import { isNative } from "@/constants/platform";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 
 type FaviconStatus = "none" | "running" | "attention";
 type ColorScheme = "dark" | "light";
@@ -27,7 +28,9 @@ const FAVICON_IMAGES: Record<ColorScheme, Record<FaviconStatus, { uri: string } 
 function deriveFaviconStatus(
   agents: ReturnType<typeof useAggregatedAgents>["agents"],
 ): FaviconStatus {
-  const hasRunning = agents.some((agent) => agent.status === "running");
+  const hasRunning = agents.some((agent) =>
+    isAgentOngoing({ status: agent.status, goalStatus: agent.goal?.status }),
+  );
   if (hasRunning) {
     return "running";
   }

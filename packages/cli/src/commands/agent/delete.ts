@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import { isSameOrDescendantPath } from "../../utils/paths.js";
+import { isAgentStopCandidate } from "./stop.js";
 
 export function addDeleteOptions(cmd: Command): Command {
   return cmd
@@ -91,7 +92,7 @@ export async function runDeleteCommand(
     const deleteResults = await Promise.all(
       agents.map(async (agent) => {
         try {
-          if (agent.status === "running") {
+          if (isAgentStopCandidate(agent)) {
             await client.cancelAgent(agent.id);
           }
           await client.deleteAgent(agent.id);

@@ -1,9 +1,11 @@
 import type { Agent } from "@/stores/session-store";
 import type { ConfirmDialogInput } from "@/utils/confirm-dialog";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 
 export interface ResolveArchiveSubagentDialogInput {
   title: Agent["title"] | null | undefined;
   status: Agent["status"] | null | undefined;
+  goalStatus?: string | null;
 }
 
 function resolveSubagentLabel(title: Agent["title"] | null | undefined): string | null {
@@ -24,7 +26,9 @@ export function resolveArchiveSubagentDialog(
   input: ResolveArchiveSubagentDialogInput,
 ): ConfirmDialogInput {
   const subagentLabel = resolveSubagentLabel(input.title) ?? "this subagent";
-  const isRunning = input.status === "running";
+  const isRunning = input.status
+    ? isAgentOngoing({ status: input.status, goalStatus: input.goalStatus })
+    : false;
 
   return {
     title: isRunning ? "Archive running subagent?" : "Archive subagent?",
@@ -58,6 +62,7 @@ export async function requestArchiveSubagent(
     resolveArchiveSubagentDialog({
       title: subagent?.title,
       status: subagent?.status,
+      goalStatus: subagent?.goalStatus,
     }),
   );
   if (!confirmed) {

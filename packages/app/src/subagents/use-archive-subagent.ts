@@ -27,8 +27,12 @@ export function useArchiveSubagent(input: UseArchiveSubagentInput): (subagentId:
       void requestArchiveSubagent(
         { serverId, subagentId },
         {
-          getSubagent: (id): ResolveArchiveSubagentDialogInput | undefined =>
-            useSessionStore.getState().sessions[serverId]?.agents?.get(id),
+          getSubagent: (id): ResolveArchiveSubagentDialogInput | undefined => {
+            const agent = useSessionStore.getState().sessions[serverId]?.agents?.get(id);
+            return agent
+              ? { title: agent.title, status: agent.status, goalStatus: agent.goal?.status }
+              : undefined;
+          },
           confirm: confirmDialog,
           archiveAgent,
           reportError: (error) => {

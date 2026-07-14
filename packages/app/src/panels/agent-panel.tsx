@@ -45,6 +45,7 @@ import {
   reconcileMissingAgentStateWithPresentAgent,
 } from "@/panels/agent-panel-load-state";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
+import { AgentGoalStatus } from "@/panels/agent-goal-status";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { RenderProfile } from "@/utils/render-profiler";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
@@ -294,13 +295,12 @@ function useAgentPanelDescriptor(
 ): PanelDescriptor {
   const descriptorState = useSessionStore(
     useShallow((state) => {
-      const session = state.sessions[context.serverId];
-      const agent =
-        session?.agents?.get(target.agentId) ?? session?.agentDetails?.get(target.agentId) ?? null;
+      const agent = resolveChatAgentFromSession(state, context.serverId, target.agentId);
       return {
         provider: agent?.provider ?? "codex",
         title: agent?.title ?? null,
         status: agent?.status ?? null,
+        goalStatus: agent?.goal?.status ?? null,
         pendingPermissionCount: agent?.pendingPermissions.length ?? 0,
         requiresAttention: agent?.requiresAttention ?? false,
         attentionReason: agent?.attentionReason ?? null,
@@ -319,6 +319,7 @@ function useAgentPanelDescriptor(
     statusBucket: descriptorState.status
       ? deriveSidebarStateBucket({
           status: descriptorState.status,
+          goalStatus: descriptorState.goalStatus,
           pendingPermissionCount: descriptorState.pendingPermissionCount,
           requiresAttention: descriptorState.requiresAttention,
           attentionReason: descriptorState.attentionReason,
@@ -1492,6 +1493,7 @@ function ActiveAgentComposer({
         onArchiveSubagent={handleArchiveSubagent}
         onDetachSubagent={canDetachSubagents ? handleDetachSubagent : undefined}
       />
+      <AgentGoalStatus serverId={serverId} agentId={agentId} />
       <Composer
         agentId={agentId}
         serverId={serverId}

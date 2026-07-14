@@ -7,6 +7,7 @@ import type {
   OutputSchema,
   CommandError,
 } from "../../output/index.js";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 
 /** Result type for agent archive command */
 export interface AgentArchiveResult {
@@ -97,7 +98,10 @@ export async function runArchiveCommand(
     }
 
     // Check if agent is running and reject unless --force is set
-    if (agent.status === "running" && !options.force) {
+    if (
+      isAgentOngoing({ status: agent.status, goalStatus: agent.goal?.status }) &&
+      !options.force
+    ) {
       const error: CommandError = {
         code: "AGENT_RUNNING",
         message: `Agent ${agentId.slice(0, 7)} is currently running`,

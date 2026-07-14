@@ -261,6 +261,7 @@ function buildLegacyWorkspaces(entries: FetchAgentsEntry[]): Map<string, Workspa
     const workspaceId = entry.agent.workspaceId ?? resolveLegacyWorkspaceId(entry);
     const status = deriveAgentStateBucket({
       status: entry.agent.status,
+      goalStatus: entry.agent.goal?.status,
       pendingPermissionCount: entry.agent.pendingPermissions.length,
       requiresAttention: entry.agent.requiresAttention,
       attentionReason: entry.agent.attentionReason,

@@ -29,7 +29,7 @@ import {
   type AgentAttentionNotificationPayload,
   type NotificationPermissionRequest,
 } from "@getpaseo/protocol/agent-attention-notification";
-import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { AgentSessionConfig } from "@getpaseo/protocol/agent-types";
 import type { GitSetupOptions } from "@getpaseo/protocol/messages";
@@ -63,7 +63,8 @@ import { resolveProjectPlacement } from "@/utils/project-placement";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
-import { reconcilePreviousAgentStatuses } from "@/contexts/session-status-tracking";
+import { reconcilePreviousAgentOngoing } from "@/contexts/session-status-tracking";
+import { shouldShowAgentAttentionNotification } from "@/contexts/session-attention-notifications";
 import { patchWorkspaceScripts } from "@/contexts/session-workspace-scripts";
 import {
   clearWorkspaceArchivePending,
@@ -557,7 +558,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   );
   const sessionAgents = useSessionStore((state) => state.sessions[serverId]?.agents);
 
-  const previousAgentStatusRef = useRef<Map<string, AgentLifecycleStatus>>(new Map());
+  const previousAgentOngoingRef = useRef<Map<string, boolean>>(new Map());
   const sendAgentMessageRef = useRef<
     | ((
         agentId: string,
@@ -589,8 +590,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   }, []);
 
   useEffect(() => {
-    previousAgentStatusRef.current = reconcilePreviousAgentStatuses(
-      previousAgentStatusRef.current,
+    previousAgentOngoingRef.current = reconcilePreviousAgentOngoing(
+      previousAgentOngoingRef.current,
       sessionAgents,
     );
   }, [sessionAgents]);
@@ -712,8 +713,12 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         return next;
       });
 
-      const prevStatus = previousAgentStatusRef.current.get(agent.id);
-      if (prevStatus === "running" && agent.status !== "running") {
+      const ongoing = isAgentOngoing({
+        status: agent.status,
+        goalStatus: agent.goal?.status,
+      });
+      const wasOngoing = previousAgentOngoingRef.current.get(agent.id);
+      if (wasOngoing === true && !ongoing) {
         const session = useSessionStore.getState().sessions[serverId];
         const queue = session?.queuedMessages.get(agent.id);
         if (queue && queue.length > 0) {
@@ -735,7 +740,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         }
       }
 
-      previousAgentStatusRef.current.set(agent.id, agent.status);
+      previousAgentOngoingRef.current.set(agent.id, ongoing);
     },
     [
       queryClient,
@@ -882,7 +887,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       const appState = appStateRef.current;
       const session = useSessionStore.getState().sessions[serverId];
       const attentionFocusedAgentId = session?.focusedAgentId ?? null;
-      if (params.reason === "error") {
+      if (!shouldShowAgentAttentionNotification(params)) {
         return;
       }
       const isActivelyVisible = getIsAppActivelyVisible(appState);
@@ -1033,7 +1038,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     (update: AgentUpdatePayload) => {
       if (update.kind === "remove") {
         const agentId = update.agentId;
-        previousAgentStatusRef.current.delete(agentId);
+        previousAgentOngoingRef.current.delete(agentId);
         deletePendingAgentUpdate(serverId, agentId);
         clearArchiveAgentPending({ queryClient, serverId, agentId });
 

@@ -68,6 +68,39 @@ describe("buildAgentAttentionNotificationPayload", () => {
       },
     });
   });
+
+  it("builds goal-specific completion and limit notifications", () => {
+    expect(
+      buildAgentAttentionNotificationPayload({
+        reason: "finished",
+        serverId: "srv-4",
+        agentId: "agent-4",
+        goal: { objective: "Ship Goal state support", status: "complete" },
+      }),
+    ).toEqual({
+      title: "Goal completed",
+      body: "Ship Goal state support",
+      data: {
+        serverId: "srv-4",
+        agentId: "agent-4",
+        reason: "finished",
+        goalStatus: "complete",
+      },
+    });
+
+    expect(
+      buildAgentAttentionNotificationPayload({
+        reason: "error",
+        serverId: "srv-5",
+        agentId: "agent-5",
+        goal: { objective: "Ship Goal state support", status: "budgetLimited" },
+      }),
+    ).toMatchObject({
+      title: "Goal budget reached",
+      body: "Ship Goal state support",
+      data: { goalStatus: "budgetLimited" },
+    });
+  });
 });
 
 describe("findLatestAssistantMessageFromTimeline", () => {

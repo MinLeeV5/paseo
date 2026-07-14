@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Agent } from "@/stores/session-store";
-import { reconcilePreviousAgentStatuses } from "./session-status-tracking";
+import { reconcilePreviousAgentOngoing } from "./session-status-tracking";
 
 function createAgent(status: Agent["status"]): Agent {
   return {
@@ -8,6 +8,7 @@ function createAgent(status: Agent["status"]): Agent {
     id: "agent-1",
     provider: "codex",
     status,
+    goal: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
     lastUserMessageAt: null,
@@ -33,40 +34,49 @@ function createAgent(status: Agent["status"]): Agent {
   };
 }
 
-describe("reconcilePreviousAgentStatuses", () => {
-  it("preserves previously seen status for existing agents", () => {
-    const previous = new Map([["agent-1", "running" as const]]);
+describe("reconcilePreviousAgentOngoing", () => {
+  it("preserves previously seen ongoing state for existing agents", () => {
+    const previous = new Map([["agent-1", true]]);
     const sessionAgents = new Map([["agent-1", createAgent("idle")]]);
 
-    const result = reconcilePreviousAgentStatuses(previous, sessionAgents);
+    const result = reconcilePreviousAgentOngoing(previous, sessionAgents);
 
-    expect(result).toEqual(new Map([["agent-1", "running"]]));
+    expect(result).toEqual(new Map([["agent-1", true]]));
   });
 
   it("seeds newly seen agents from the current snapshot", () => {
     const sessionAgents = new Map([["agent-1", createAgent("idle")]]);
 
-    const result = reconcilePreviousAgentStatuses(new Map(), sessionAgents);
+    const result = reconcilePreviousAgentOngoing(new Map(), sessionAgents);
 
-    expect(result).toEqual(new Map([["agent-1", "idle"]]));
+    expect(result).toEqual(new Map([["agent-1", false]]));
+  });
+
+  it("seeds active-goal idle agents as ongoing", () => {
+    const agent = createAgent("idle");
+    agent.goal = { objective: "Ship Goal state support", status: "active" };
+
+    const result = reconcilePreviousAgentOngoing(new Map(), new Map([[agent.id, agent]]));
+
+    expect(result).toEqual(new Map([["agent-1", true]]));
   });
 
   it("removes agents that are no longer present", () => {
     const previous = new Map([
-      ["agent-1", "running" as const],
-      ["agent-2", "idle" as const],
+      ["agent-1", true],
+      ["agent-2", false],
     ]);
     const sessionAgents = new Map([["agent-1", createAgent("idle")]]);
 
-    const result = reconcilePreviousAgentStatuses(previous, sessionAgents);
+    const result = reconcilePreviousAgentOngoing(previous, sessionAgents);
 
-    expect(result).toEqual(new Map([["agent-1", "running"]]));
+    expect(result).toEqual(new Map([["agent-1", true]]));
   });
 
   it("clears all tracked statuses when the session is unavailable", () => {
-    const previous = new Map([["agent-1", "running" as const]]);
+    const previous = new Map([["agent-1", true]]);
 
-    const result = reconcilePreviousAgentStatuses(previous, undefined);
+    const result = reconcilePreviousAgentOngoing(previous, undefined);
 
     expect(result).toEqual(new Map());
   });

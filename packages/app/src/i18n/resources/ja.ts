@@ -207,6 +207,17 @@ export const ja: TranslationResources = {
       callout: "このエージェントはアーカイブされています",
       unarchive: "アーカイブ解除",
     },
+    goal: {
+      status: {
+        active: "実行中",
+        paused: "一時停止",
+        complete: "完了",
+        blocked: "ブロック",
+        usageLimited: "使用量上限",
+        budgetLimited: "予算上限",
+        needsAttention: "要確認",
+      },
+    },
   },
   sessions: {
     title: "履歴",

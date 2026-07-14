@@ -33,6 +33,7 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     id: snapshot.id,
     provider: snapshot.provider,
     status: snapshot.status,
+    goal: snapshot.goal ?? null,
     createdAt,
     updatedAt,
     lastUserMessageAt,

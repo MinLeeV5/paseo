@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 import { DiffStat } from "@/components/diff-stat";
 import {
   CopyX,
@@ -2571,7 +2572,9 @@ function WorkspaceScreenContent({
         const agent =
           useSessionStore.getState().sessions[normalizedServerId]?.agents?.get(agentId) ?? null;
         const closePolicy = resolveCloseAgentTabPolicy(agent);
-        const isRunning = agent?.status === "running";
+        const isRunning = agent
+          ? isAgentOngoing({ status: agent.status, goalStatus: agent.goal?.status })
+          : false;
 
         if (isRunning && closePolicy.kind === "archive-on-close") {
           const confirmed = await confirmDialog({

@@ -161,6 +161,55 @@ test("finish notifications tell the parent the child's last assistant message", 
   );
 });
 
+test("finish notifications wait through active-goal idle gaps", async () => {
+  let subscriber: ((event: AgentManagerEvent) => void) | null = null;
+  const prompts: string[] = [];
+  const childAgent: ManagedAgent = Object.create(null);
+  Reflect.set(childAgent, "id", "child-agent");
+  Reflect.set(childAgent, "lifecycle", "idle");
+  Reflect.set(childAgent, "goal", {
+    objective: "Ship Goal state support",
+    status: "active",
+  });
+  const agentManager: AgentManager = Object.create(AgentManager.prototype);
+  Reflect.set(agentManager, "getAgent", () => childAgent);
+  Reflect.set(agentManager, "subscribe", (callback: (event: AgentManagerEvent) => void) => {
+    subscriber = callback;
+    return () => {
+      subscriber = null;
+    };
+  });
+  Reflect.set(agentManager, "getLastAssistantMessage", async () => null);
+  Reflect.set(agentManager, "tryRunOutOfBand", () => false);
+  Reflect.set(agentManager, "hasInFlightRun", () => false);
+  Reflect.set(agentManager, "streamAgent", (_agentId: string, prompt: string) => {
+    prompts.push(prompt);
+    return (async function* noop() {})();
+  });
+  const agentStorage: AgentStorage = Object.create(AgentStorage.prototype);
+  Reflect.set(agentStorage, "get", async () => ({ title: "Child Agent" }));
+
+  setupFinishNotification({
+    agentManager,
+    agentStorage,
+    childAgentId: "child-agent",
+    callerAgentId: "caller-agent",
+    logger: createTestLogger(),
+  });
+
+  childAgent.lifecycle = "running";
+  subscriber?.({ type: "agent_state", agent: childAgent });
+  childAgent.lifecycle = "idle";
+  subscriber?.({ type: "agent_state", agent: childAgent });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  expect(prompts).toEqual([]);
+
+  childAgent.goal = { ...childAgent.goal!, status: "complete" };
+  subscriber?.({ type: "agent_state", agent: childAgent });
+  await vi.waitFor(() => expect(prompts).toHaveLength(1));
+  expect(prompts[0]).toContain("finished");
+});
+
 it("does not notify archived callers", async () => {
   let subscriber: ((event: AgentManagerEvent) => void) | null = null;
 

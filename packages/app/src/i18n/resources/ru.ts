@@ -206,6 +206,17 @@ export const ru: TranslationResources = {
       callout: "Этот агент находится в архиве",
       unarchive: "Разархивировать",
     },
+    goal: {
+      status: {
+        active: "Активна",
+        paused: "Приостановлена",
+        complete: "Завершена",
+        blocked: "Заблокирована",
+        usageLimited: "Лимит использования",
+        budgetLimited: "Лимит бюджета",
+        needsAttention: "Требует внимания",
+      },
+    },
   },
   sessions: {
     title: "История",

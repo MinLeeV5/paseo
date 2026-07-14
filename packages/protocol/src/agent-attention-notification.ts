@@ -7,6 +7,7 @@ export interface AgentAttentionNotificationData {
   serverId: string;
   agentId: string;
   reason: AgentAttentionReason;
+  goalStatus?: string;
 }
 
 export interface AgentAttentionNotificationPayload {
@@ -21,6 +22,7 @@ interface BuildAgentAttentionNotificationPayloadInput {
   agentId: string;
   assistantMessage?: string | null;
   permissionRequest?: NotificationPermissionRequest | null;
+  goal?: { objective: string; status: string } | null;
 }
 
 export interface NotificationPermissionRequest {
@@ -167,7 +169,16 @@ export function findLatestPermissionRequest(
   return latest;
 }
 
-function resolveAgentAttentionTitle(reason: AgentAttentionReason): string {
+function resolveAgentAttentionTitle(
+  reason: AgentAttentionReason,
+  goal: BuildAgentAttentionNotificationPayloadInput["goal"],
+): string {
+  if (goal) {
+    if (goal.status === "complete") return "Goal completed";
+    if (goal.status === "usageLimited") return "Goal usage limit reached";
+    if (goal.status === "budgetLimited") return "Goal budget reached";
+    return "Goal needs attention";
+  }
   if (reason === "permission") return "Agent needs permission";
   if (reason === "error") return "Agent needs attention";
   return "Agent finished";
@@ -176,6 +187,9 @@ function resolveAgentAttentionTitle(reason: AgentAttentionReason): string {
 function resolveAgentAttentionPreview(
   input: BuildAgentAttentionNotificationPayloadInput,
 ): string | null {
+  if (input.goal) {
+    return buildNotificationPreview(input.goal.objective);
+  }
   if (input.reason === "finished") {
     return buildNotificationPreview(input.assistantMessage);
   }
@@ -194,7 +208,7 @@ function resolveAgentAttentionFallbackBody(reason: AgentAttentionReason): string
 export function buildAgentAttentionNotificationPayload(
   input: BuildAgentAttentionNotificationPayloadInput,
 ): AgentAttentionNotificationPayload {
-  const title = resolveAgentAttentionTitle(input.reason);
+  const title = resolveAgentAttentionTitle(input.reason, input.goal);
   const preview = resolveAgentAttentionPreview(input);
   const body = preview ?? resolveAgentAttentionFallbackBody(input.reason);
 
@@ -205,6 +219,7 @@ export function buildAgentAttentionNotificationPayload(
       serverId: input.serverId,
       agentId: input.agentId,
       reason: input.reason,
+      ...(input.goal ? { goalStatus: input.goal.status } : {}),
     },
   };
 }

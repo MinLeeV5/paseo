@@ -2,6 +2,7 @@ import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import type { SubagentRow } from "./select";
 import { providerSubagentLifecycleStatus } from "./provider-store";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 
 function presentationStatus(row: SubagentRow) {
   if (row.kind === "paseo") return row.status;
@@ -28,6 +29,7 @@ export function buildSubagentRowPresentationData(row: SubagentRow): SubagentRowP
     titleState: label ? "ready" : "loading",
     statusBucket: deriveSidebarStateBucket({
       status,
+      goalStatus: row.kind === "paseo" ? row.goalStatus : null,
       requiresAttention: false,
     }),
   };
@@ -36,7 +38,11 @@ export function buildSubagentRowPresentationData(row: SubagentRow): SubagentRowP
 export function formatHeaderLabel(rows: readonly SubagentRow[]): string {
   let runningCount = 0;
   for (const row of rows) {
-    if (row.status === "running") {
+    const running =
+      row.kind === "paseo"
+        ? isAgentOngoing({ status: row.status, goalStatus: row.goalStatus })
+        : row.status === "running";
+    if (running) {
       runningCount += 1;
     }
   }

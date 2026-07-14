@@ -1,29 +1,32 @@
-import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 import type { Agent } from "@/stores/session-store";
 
-export function reconcilePreviousAgentStatuses(
-  previousStatuses: Map<string, AgentLifecycleStatus>,
+export function reconcilePreviousAgentOngoing(
+  previousOngoing: Map<string, boolean>,
   sessionAgents: Map<string, Agent> | undefined,
-): Map<string, AgentLifecycleStatus> {
+): Map<string, boolean> {
   if (!sessionAgents) {
     return new Map();
   }
 
-  const nextStatuses = new Map(previousStatuses);
+  const nextOngoing = new Map(previousOngoing);
   const seenAgentIds = new Set<string>();
 
   for (const agent of sessionAgents.values()) {
     seenAgentIds.add(agent.id);
-    if (!nextStatuses.has(agent.id)) {
-      nextStatuses.set(agent.id, agent.status);
+    if (!nextOngoing.has(agent.id)) {
+      nextOngoing.set(
+        agent.id,
+        isAgentOngoing({ status: agent.status, goalStatus: agent.goal?.status }),
+      );
     }
   }
 
-  for (const agentId of nextStatuses.keys()) {
+  for (const agentId of nextOngoing.keys()) {
     if (!seenAgentIds.has(agentId)) {
-      nextStatuses.delete(agentId);
+      nextOngoing.delete(agentId);
     }
   }
 
-  return nextStatuses;
+  return nextOngoing;
 }

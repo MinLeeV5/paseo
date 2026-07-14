@@ -1,28 +1,27 @@
 import { useMemo } from "react";
 import { View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
 } from "@getpaseo/protocol/agent-lifecycle";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
-import { getStatusDotColor } from "@/utils/status-dot-color";
 
 export function AgentStatusDot({
   status,
+  goalStatus,
   requiresAttention,
   attentionReason,
   pendingPermissionCount,
   showInactive = false,
 }: {
   status: string | null | undefined;
+  goalStatus?: string | null;
   requiresAttention: boolean | null | undefined;
   attentionReason?: "finished" | "error" | "permission" | null;
   pendingPermissionCount?: number;
   showInactive?: boolean;
 }) {
-  const { theme } = useUnistyles();
-
   if (!status) {
     return null;
   }
@@ -32,21 +31,20 @@ export function AgentStatusDot({
 
   const bucket = deriveSidebarStateBucket({
     status,
+    goalStatus,
     requiresAttention: Boolean(requiresAttention),
     attentionReason: attentionReason ?? null,
     pendingPermissionCount: pendingPermissionCount ?? 0,
   });
-  const color = getStatusDotColor({ theme, bucket, showDoneAsInactive: showInactive });
-
-  if (!color) {
+  if (bucket === "done" && !showInactive) {
     return null;
   }
 
-  return <AgentStatusDotView color={color} />;
+  return <AgentStatusDotView bucket={bucket} />;
 }
 
-function AgentStatusDotView({ color }: { color: string }) {
-  const dotStyle = useMemo(() => [styles.dot, { backgroundColor: color }], [color]);
+function AgentStatusDotView({ bucket }: { bucket: keyof typeof dotColorStyles }) {
+  const dotStyle = useMemo(() => [styles.dot, dotColorStyles[bucket]], [bucket]);
   return <View style={dotStyle} />;
 }
 
@@ -60,4 +58,27 @@ const styles = StyleSheet.create((theme) => ({
     height: 8,
     borderRadius: theme.borderRadius.full,
   },
+  needsInput: {
+    backgroundColor: theme.colors.palette.amber[500],
+  },
+  failed: {
+    backgroundColor: theme.colors.palette.red[500],
+  },
+  running: {
+    backgroundColor: theme.colors.palette.blue[500],
+  },
+  attention: {
+    backgroundColor: theme.colors.palette.green[500],
+  },
+  done: {
+    backgroundColor: theme.colors.border,
+  },
 }));
+
+const dotColorStyles = {
+  needs_input: styles.needsInput,
+  failed: styles.failed,
+  running: styles.running,
+  attention: styles.attention,
+  done: styles.done,
+} as const;

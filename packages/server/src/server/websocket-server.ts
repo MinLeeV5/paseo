@@ -1268,6 +1268,8 @@ export class VoiceAssistantWebSocketServer {
         workspacePinning: true,
         // COMPAT(workspaceGithubClone): added in v0.1.108, remove gate after 2027-01-13.
         workspaceGithubClone: true,
+        // COMPAT(agentGoalState): added in v1.1.111, remove gate after 2027-01-14.
+        agentGoalState: true,
       },
     };
   }
@@ -1955,6 +1957,7 @@ export class VoiceAssistantWebSocketServer {
     agentId: string;
     provider: AgentProvider;
     reason: "finished" | "error" | "permission";
+    goal?: { objective: string; status: string };
   }): Promise<void> {
     const clientEntries: Array<{
       ws: WebSocketLike;
@@ -1978,12 +1981,13 @@ export class VoiceAssistantWebSocketServer {
       agentId: params.agentId,
       assistantMessage,
       permissionRequest: agent ? findLatestPermissionRequest(agent.pendingPermissions) : null,
+      goal: params.goal,
     });
 
     const plan = computeNotificationPlan({
       allStates,
       focusTarget: { kind: "agent", id: params.agentId },
-      pushEligible: isPushEligibleAttentionReason(params.reason),
+      pushEligible: isPushEligibleAttentionReason(params.reason, params.goal?.status),
       nowMs,
     });
 

@@ -203,6 +203,17 @@ export const en = {
       callout: "This agent is archived",
       unarchive: "Unarchive",
     },
+    goal: {
+      status: {
+        active: "Active",
+        paused: "Paused",
+        complete: "Complete",
+        blocked: "Blocked",
+        usageLimited: "Usage limit",
+        budgetLimited: "Budget limit",
+        needsAttention: "Needs attention",
+      },
+    },
   },
   sessions: {
     title: "History",

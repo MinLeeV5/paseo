@@ -6,6 +6,7 @@ function agent(input: {
   id: string;
   workspaceId?: string;
   status?: Agent["status"];
+  goal?: Agent["goal"];
   updatedAt: string;
   attentionTimestamp?: string | null;
   requiresAttention?: boolean;
@@ -19,6 +20,7 @@ function agent(input: {
     id: input.id,
     provider: "codex",
     status: input.status ?? "idle",
+    goal: input.goal ?? null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date(input.updatedAt),
     lastUserMessageAt: null,
@@ -55,6 +57,25 @@ function agent(input: {
 }
 
 describe("workspace agent activity index", () => {
+  it("keeps an active goal running between turns", () => {
+    const index = buildWorkspaceAgentActivityIndex(
+      new Map([
+        [
+          "goal",
+          agent({
+            id: "goal",
+            workspaceId: "workspace-a",
+            status: "idle",
+            goal: { objective: "Ship the feature", status: "active" },
+            updatedAt: "2026-06-01T10:00:00.000Z",
+          }),
+        ],
+      ]),
+    );
+
+    expect(index.get("workspace-a")?.status).toBe("running");
+  });
+
   it("keeps the latest active root agent for each workspace", () => {
     const index = buildWorkspaceAgentActivityIndex(
       new Map([

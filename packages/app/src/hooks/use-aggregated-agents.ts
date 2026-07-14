@@ -1,5 +1,6 @@
 import { useMemo, useCallback, useRef, useSyncExternalStore } from "react";
 import equal from "fast-deep-equal";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 import { useShallow } from "zustand/shallow";
 import { useSessionStore } from "@/stores/session-store";
 import type { AgentDirectoryEntry } from "@/types/agent-directory";
@@ -76,6 +77,7 @@ export function useAggregatedAgents(options?: {
           serverLabel,
           title: agent.title ?? null,
           status: agent.status,
+          goal: agent.goal,
           lastActivityAt: agent.lastActivityAt,
           cwd: agent.cwd,
           workspaceId: agent.workspaceId,
@@ -99,8 +101,14 @@ export function useAggregatedAgents(options?: {
 
     // Sort by: running agents first, then by most recent activity
     allAgents.sort((left, right) => {
-      const leftRunning = left.status === "running";
-      const rightRunning = right.status === "running";
+      const leftRunning = isAgentOngoing({
+        status: left.status,
+        goalStatus: left.goal?.status,
+      });
+      const rightRunning = isAgentOngoing({
+        status: right.status,
+        goalStatus: right.goal?.status,
+      });
       if (leftRunning && !rightRunning) {
         return -1;
       }

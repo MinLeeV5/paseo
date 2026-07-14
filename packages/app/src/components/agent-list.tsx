@@ -23,6 +23,7 @@ import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useQueryClient } from "@tanstack/react-query";
 import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -424,7 +425,10 @@ export function AgentList({
 
   const handleAgentLongPress = useCallback(
     (agent: AggregatedAgent) => {
-      const isRunning = agent.status === "running";
+      const isRunning = isAgentOngoing({
+        status: agent.status,
+        goalStatus: agent.goal?.status,
+      });
       if (isRunning) {
         setActionAgent(agent);
         return;

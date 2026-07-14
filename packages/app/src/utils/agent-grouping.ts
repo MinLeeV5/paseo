@@ -1,4 +1,5 @@
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 
 /**
  * Derives the project key for grouping agents.
@@ -264,7 +265,9 @@ const MAX_INACTIVE_PER_PROJECT = 5;
  */
 function isAgentTrulyActive(agent: AggregatedAgent): boolean {
   return (
-    agent.status === "running" || agent.requiresAttention || (agent.pendingPermissionCount ?? 0) > 0
+    isAgentOngoing({ status: agent.status, goalStatus: agent.goal?.status }) ||
+    agent.requiresAttention ||
+    (agent.pendingPermissionCount ?? 0) > 0
   );
 }
 

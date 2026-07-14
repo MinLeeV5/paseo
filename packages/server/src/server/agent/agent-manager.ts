@@ -15,11 +15,14 @@ import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 
 import {
+  AGENT_GOAL_STATUSES,
   getAgentStreamEventTurnId,
   type AgentCapabilityFlags,
   type AgentClient,
   type AgentCreateSessionOptions,
   type AgentFeature,
+  type AgentGoal,
+  type AgentGoalStatus,
   type AgentLaunchContext,
   type AgentSlashCommand,
   type AgentMode,
@@ -188,6 +191,7 @@ export type AgentAttentionCallback = (params: {
   agentId: string;
   provider: AgentProvider;
   reason: "finished" | "error" | "permission";
+  goal?: AgentGoal;
 }) => void;
 
 export type AgentArchivedCallback = (agentId: string) => Promise<void> | void;
@@ -300,6 +304,7 @@ interface ManagedAgentBase {
   availableModes: AgentMode[];
   features?: AgentFeature[];
   currentModeId: string | null;
+  goal: AgentGoal | null;
   pendingPermissions: Map<string, AgentPermissionRequest>;
   bufferedPermissionResolutions: Map<
     string,
@@ -421,6 +426,39 @@ const AgentIdSchema = z.guid();
 
 function isAgentBusy(status: AgentLifecycleStatus): boolean {
   return BUSY_STATUSES.has(status);
+}
+
+function isActiveGoal(agent: {
+  lifecycle: ManagedAgent["lifecycle"];
+  goal: AgentGoal | null;
+}): boolean {
+  return agent.lifecycle !== "closed" && agent.goal?.status === "active";
+}
+
+function getGoalAttentionReason(
+  status: AgentGoalStatus | null | undefined,
+): "finished" | "error" | null {
+  if (status === "complete") return "finished";
+  if (
+    status === "blocked" ||
+    status === "usageLimited" ||
+    status === "budgetLimited" ||
+    status === "unknown"
+  ) {
+    return "error";
+  }
+  return null;
+}
+
+function normalizeStoredGoal(
+  goal: { objective: string; status: string } | null | undefined,
+): AgentGoal | null {
+  if (!goal) {
+    return null;
+  }
+  const status =
+    AGENT_GOAL_STATUSES.find((knownStatus) => knownStatus === goal.status) ?? "unknown";
+  return { objective: goal.objective, status };
 }
 
 function isTurnTerminalEvent(event: AgentStreamEvent): boolean {
@@ -549,6 +587,7 @@ export class AgentManager {
   private readonly registry?: AgentStorage;
   private readonly durableTimelineStore?: AgentTimelineStore;
   private readonly previousStatuses = new Map<string, AgentLifecycleStatus>();
+  private readonly previousGoalStatuses = new Map<string, AgentGoalStatus | null>();
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentRegistrationTasks = new Set<Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
@@ -1319,6 +1358,10 @@ export class AgentManager {
       throw new Error("Agent storage is not configured");
     }
 
+    if (isActiveGoal(agent) || this.hasInFlightRun(agentId)) {
+      await this.stopAgent(agentId);
+    }
+
     await this.registry.applySnapshot(agent, {
       internal: agent.internal,
     });
@@ -1413,6 +1456,7 @@ export class AgentManager {
         availableModes: [],
         features: record.features,
         currentModeId: record.lastModeId ?? null,
+        goal: normalizeStoredGoal(record.goal),
         pendingPermissions: new Map(),
         bufferedPermissionResolutions: new Map(),
         inFlightPermissionResponses: new Set(),
@@ -2245,6 +2289,50 @@ export class AgentManager {
     return true;
   }
 
+  async stopAgent(agentId: string): Promise<boolean> {
+    const agent = this.requireSessionAgent(agentId);
+    let pausedGoal = false;
+    let pauseError: unknown = null;
+
+    if (isActiveGoal(agent)) {
+      try {
+        if (!agent.session.pauseGoal) {
+          throw new Error(`Provider ${agent.provider} cannot pause an active goal`);
+        }
+        const paused = await agent.session.pauseGoal();
+        if (!paused || paused.status === "active") {
+          throw new Error(`Provider ${agent.provider} did not confirm that the goal was paused`);
+        }
+        pausedGoal = true;
+        if (this.agents.get(agentId) === agent && agent.goal?.status === "active") {
+          agent.goal = paused;
+          this.touchUpdatedAt(agent);
+          this.emitState(agent);
+        }
+      } catch (error) {
+        pauseError = error;
+      }
+    }
+
+    let interrupted = false;
+    let interruptError: unknown = null;
+    if (this.hasInFlightRun(agentId)) {
+      try {
+        interrupted = await this.cancelAgentRun(agentId);
+      } catch (error) {
+        interruptError = error;
+      }
+    }
+
+    if (pauseError) {
+      throw pauseError;
+    }
+    if (interruptError) {
+      throw interruptError;
+    }
+    return pausedGoal || interrupted;
+  }
+
   private async interruptSession(session: AgentSession, agentId: string): Promise<void> {
     try {
       const result = await this.waitWithTimeout({
@@ -2435,7 +2523,7 @@ export class AgentManager {
     }
 
     const initialStatus = snapshot.lifecycle;
-    const initialBusy = isAgentBusy(initialStatus) || hasForegroundTurn;
+    const initialBusy = isAgentBusy(initialStatus) || hasForegroundTurn || isActiveGoal(snapshot);
     const waitForActive = options?.waitForActive ?? false;
     if (!waitForActive && !initialBusy) {
       return {
@@ -2467,6 +2555,7 @@ export class AgentManager {
       let currentStatus: AgentLifecycleStatus = initialStatus;
       let hasStarted =
         isAgentBusy(initialStatus) ||
+        isActiveGoal(snapshot) ||
         Boolean(snapshot.activeForegroundTurnId) ||
         Boolean(pendingForegroundRun?.started);
       let terminalStatusOverride: AgentLifecycleStatus | null = null;
@@ -2537,7 +2626,7 @@ export class AgentManager {
               finish(pending);
               return;
             }
-            if (isAgentBusy(event.agent.lifecycle)) {
+            if (isAgentBusy(event.agent.lifecycle) || isActiveGoal(event.agent)) {
               hasStarted = true;
               return;
             }
@@ -2629,6 +2718,7 @@ export class AgentManager {
       registered = true;
       // Initialize previousStatus to track transitions
       this.previousStatuses.set(resolvedAgentId, managed.lifecycle);
+      this.previousGoalStatuses.set(resolvedAgentId, managed.goal?.status ?? null);
       await this.refreshRuntimeInfo(managed, { emit: false });
       this.assertAgentRegistrationActive(managed);
       await this.persistSnapshot(managed, {
@@ -2746,6 +2836,7 @@ export class AgentManager {
       updatedAt: options?.updatedAt ?? now,
       availableModes: [],
       currentModeId: null,
+      goal: null,
       pendingPermissions: new Map<string, AgentPermissionRequest>(),
       bufferedPermissionResolutions: new Map(),
       inFlightPermissionResponses: new Set(),
@@ -2789,6 +2880,7 @@ export class AgentManager {
     this.agentStreamCoalescer.flushAndDiscard(agent.id);
     this.agents.delete(agent.id);
     this.previousStatuses.delete(agent.id);
+    this.previousGoalStatuses.delete(agent.id);
     if (agent.unsubscribeSession) {
       agent.unsubscribeSession();
       agent.unsubscribeSession = null;
@@ -2978,6 +3070,20 @@ export class AgentManager {
       agent.pendingPermissions = new Map(pending.map((request) => [request.id, request]));
     } catch {
       agent.pendingPermissions.clear();
+    }
+
+    if (agent.session.getGoal) {
+      try {
+        agent.goal = await agent.session.getGoal();
+      } catch (error) {
+        agent.goal = null;
+        this.logger.warn(
+          { err: error, agentId: agent.id, provider: agent.provider },
+          "Failed to refresh agent goal state",
+        );
+      }
+    } else {
+      agent.goal = null;
     }
 
     this.syncFeaturesFromSession(agent);
@@ -3262,43 +3368,15 @@ export class AgentManager {
     flags: StreamEventFlags;
   }): Promise<void> | undefined {
     const { agent, event, options, isForegroundEvent, eventTurnId, flags } = params;
+    if (this.dispatchStateProjectionEvent(agent, event, flags)) {
+      return undefined;
+    }
     switch (event.type) {
       case "thread_started":
         this.onStreamThreadStarted(agent);
         return undefined;
       case "usage_updated":
         agent.lastUsage = event.usage;
-        this.emitState(agent);
-        return undefined;
-      case "mode_changed":
-        agent.currentModeId = event.currentModeId;
-        agent.availableModes = event.availableModes;
-        if (agent.runtimeInfo) {
-          agent.runtimeInfo = { ...agent.runtimeInfo, modeId: event.currentModeId };
-        }
-        flags.shouldDispatchEvent = false;
-        this.emitState(agent);
-        return undefined;
-      case "model_changed":
-        agent.runtimeInfo = event.runtimeInfo;
-        if (!agent.persistence && event.runtimeInfo.sessionId) {
-          agent.persistence = attachPersistenceCwd(
-            { provider: agent.provider, sessionId: event.runtimeInfo.sessionId },
-            agent.cwd,
-          );
-        }
-        agent.currentModeId = event.runtimeInfo.modeId ?? agent.currentModeId;
-        flags.shouldDispatchEvent = false;
-        this.emitState(agent);
-        return undefined;
-      case "thinking_option_changed":
-        if (agent.runtimeInfo) {
-          agent.runtimeInfo = {
-            ...agent.runtimeInfo,
-            thinkingOptionId: event.thinkingOptionId,
-          };
-        }
-        flags.shouldDispatchEvent = false;
         this.emitState(agent);
         return undefined;
       case "timeline":
@@ -3328,6 +3406,57 @@ export class AgentManager {
         return undefined;
       default:
         return undefined;
+    }
+  }
+
+  private dispatchStateProjectionEvent(
+    agent: ActiveManagedAgent,
+    event: AgentStreamEvent,
+    flags: StreamEventFlags,
+  ): boolean {
+    switch (event.type) {
+      case "mode_changed":
+        agent.currentModeId = event.currentModeId;
+        agent.availableModes = event.availableModes;
+        if (agent.runtimeInfo) {
+          agent.runtimeInfo = { ...agent.runtimeInfo, modeId: event.currentModeId };
+        }
+        flags.shouldDispatchEvent = false;
+        this.emitState(agent);
+        return true;
+      case "model_changed":
+        agent.runtimeInfo = event.runtimeInfo;
+        if (!agent.persistence && event.runtimeInfo.sessionId) {
+          agent.persistence = attachPersistenceCwd(
+            { provider: agent.provider, sessionId: event.runtimeInfo.sessionId },
+            agent.cwd,
+          );
+        }
+        agent.currentModeId = event.runtimeInfo.modeId ?? agent.currentModeId;
+        flags.shouldDispatchEvent = false;
+        this.emitState(agent);
+        return true;
+      case "thinking_option_changed":
+        if (agent.runtimeInfo) {
+          agent.runtimeInfo = {
+            ...agent.runtimeInfo,
+            thinkingOptionId: event.thinkingOptionId,
+          };
+        }
+        flags.shouldDispatchEvent = false;
+        this.emitState(agent);
+        return true;
+      case "goal_changed":
+        agent.goal = event.goal;
+        if (event.goal?.status === "active" && agent.lifecycle !== "error") {
+          agent.attention = { requiresAttention: false };
+        }
+        flags.shouldDispatchEvent = false;
+        flags.shouldNotifyWaiters = false;
+        this.emitState(agent);
+        return true;
+      default:
+        return false;
     }
   }
 
@@ -3684,10 +3813,13 @@ export class AgentManager {
 
   private checkAndSetAttention(agent: ManagedAgent): void {
     const previousStatus = this.previousStatuses.get(agent.id);
+    const previousGoalStatus = this.previousGoalStatuses.get(agent.id);
     const currentStatus = agent.lifecycle;
+    const currentGoalStatus = agent.goal?.status ?? null;
 
     // Track the new status
     this.previousStatuses.set(agent.id, currentStatus);
+    this.previousGoalStatuses.set(agent.id, currentGoalStatus);
 
     // Skip attention tracking for internal agents
     if (agent.internal) {
@@ -3699,18 +3831,7 @@ export class AgentManager {
       return;
     }
 
-    // Check if agent transitioned from running to idle (finished)
-    if (previousStatus === "running" && currentStatus === "idle") {
-      agent.attention = {
-        requiresAttention: true,
-        attentionReason: "finished",
-        attentionTimestamp: new Date(),
-      };
-      this.broadcastAgentAttention(agent, "finished");
-      return;
-    }
-
-    // Check if agent entered error state
+    // Lifecycle errors outrank goal state.
     if (previousStatus !== "error" && currentStatus === "error") {
       agent.attention = {
         requiresAttention: true,
@@ -3718,6 +3839,40 @@ export class AgentManager {
         attentionTimestamp: new Date(),
       };
       this.broadcastAgentAttention(agent, "error");
+      return;
+    }
+
+    const goalAttentionReason = getGoalAttentionReason(currentGoalStatus);
+    const reachedGoalTerminalState =
+      currentStatus !== "running" &&
+      goalAttentionReason !== null &&
+      previousGoalStatus !== currentGoalStatus;
+
+    if (reachedGoalTerminalState) {
+      agent.attention = {
+        requiresAttention: true,
+        attentionReason: goalAttentionReason,
+        attentionTimestamp: new Date(),
+      };
+      this.broadcastAgentAttention(agent, goalAttentionReason, agent.goal ?? undefined);
+      return;
+    }
+
+    // Check if a non-goal turn transitioned from running to idle (finished).
+    if (previousStatus === "running" && currentStatus === "idle") {
+      if (currentGoalStatus === "active" || currentGoalStatus === "paused") {
+        return;
+      }
+      agent.attention = {
+        requiresAttention: true,
+        attentionReason: goalAttentionReason ?? "finished",
+        attentionTimestamp: new Date(),
+      };
+      this.broadcastAgentAttention(
+        agent,
+        goalAttentionReason ?? "finished",
+        goalAttentionReason ? (agent.goal ?? undefined) : undefined,
+      );
       return;
     }
   }
@@ -3814,6 +3969,7 @@ export class AgentManager {
   private broadcastAgentAttention(
     agent: ManagedAgent,
     reason: "finished" | "error" | "permission",
+    goal?: AgentGoal,
   ): void {
     if (isDelegatedAgent(agent)) {
       return;
@@ -3823,6 +3979,7 @@ export class AgentManager {
       agentId: agent.id,
       provider: agent.provider,
       reason,
+      ...(goal ? { goal } : {}),
     });
   }
 

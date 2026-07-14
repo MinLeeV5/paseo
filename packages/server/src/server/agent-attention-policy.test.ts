@@ -231,4 +231,10 @@ describe("isPushEligibleAttentionReason", () => {
     expect(isPushEligibleAttentionReason("permission")).toBe(true);
     expect(isPushEligibleAttentionReason("error")).toBe(false);
   });
+
+  it("allows push for goal terminal errors", () => {
+    expect(isPushEligibleAttentionReason("error", "blocked")).toBe(true);
+    expect(isPushEligibleAttentionReason("error", "usageLimited")).toBe(true);
+    expect(isPushEligibleAttentionReason("error", "budgetLimited")).toBe(true);
+  });
 });

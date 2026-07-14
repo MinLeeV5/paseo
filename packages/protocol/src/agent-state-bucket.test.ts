@@ -3,6 +3,7 @@ import {
   deriveAgentStateBucket,
   getAgentStatusPriority,
   getWorkspaceStateBucketPriority,
+  isAgentOngoing,
 } from "./agent-state-bucket.js";
 
 describe("deriveAgentStateBucket", () => {
@@ -60,6 +61,35 @@ describe("deriveAgentStateBucket", () => {
       }),
     ).toBe("done");
   });
+
+  it("treats an active goal between turns as running", () => {
+    expect(
+      deriveAgentStateBucket({
+        status: "idle",
+        goalStatus: "active",
+      }),
+    ).toBe("running");
+  });
+
+  it("does not treat a stored active goal on a closed agent as running", () => {
+    expect(
+      deriveAgentStateBucket({
+        status: "closed",
+        goalStatus: "active",
+      }),
+    ).toBe("done");
+  });
+});
+
+describe("isAgentOngoing", () => {
+  it("stays ongoing during an active-goal idle gap", () => {
+    expect(isAgentOngoing({ status: "idle", goalStatus: "active" })).toBe(true);
+  });
+
+  it("stops when the goal is terminal or the agent is closed", () => {
+    expect(isAgentOngoing({ status: "idle", goalStatus: "complete" })).toBe(false);
+    expect(isAgentOngoing({ status: "closed", goalStatus: "active" })).toBe(false);
+  });
 });
 
 describe("getWorkspaceStateBucketPriority", () => {
@@ -87,6 +117,12 @@ describe("getAgentStatusPriority", () => {
     );
     expect(permission).toBeLessThan(
       getAgentStatusPriority({ status: "running", pendingPermissionCount: 0 }),
+    );
+  });
+
+  it("sorts active goals with running agents", () => {
+    expect(getAgentStatusPriority({ status: "idle", goalStatus: "active" })).toBe(
+      getAgentStatusPriority({ status: "running" }),
     );
   });
 });

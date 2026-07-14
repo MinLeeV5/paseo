@@ -204,6 +204,17 @@ export const zhCN: TranslationResources = {
       callout: "此 Agent 已归档",
       unarchive: "取消归档",
     },
+    goal: {
+      status: {
+        active: "执行中",
+        paused: "已暂停",
+        complete: "已完成",
+        blocked: "已阻塞",
+        usageLimited: "用量受限",
+        budgetLimited: "预算受限",
+        needsAttention: "需要处理",
+      },
+    },
   },
   sessions: {
     title: "历史",

@@ -234,6 +234,7 @@ class WorkspaceStatus {
 interface AgentState {
   id: string;
   status: AgentSnapshotPayload["status"];
+  goal?: AgentSnapshotPayload["goal"];
   pendingPermissionCount?: number;
   requiresAttention?: boolean;
   attentionReason?: AgentSnapshotPayload["attentionReason"];
@@ -255,6 +256,7 @@ function createAgent(
     updatedAt: NOW,
     lastUserMessageAt: null,
     status: input.status,
+    goal: input.goal ?? null,
     capabilities: {
       supportsStreaming: true,
       supportsSessionPersistence: true,
@@ -383,6 +385,29 @@ describe("WorkspaceDirectory", () => {
     workspace.hasDelegatedAgentInWorktree({ id: "child-agent", status: "running" });
 
     await expect(workspace.workspaceStatuses()).resolves.toEqual({
+      "workspace-1": "running",
+      "workspace-worktree": "done",
+    });
+  });
+
+  test("active Goal between turns contributes running for root and delegated agents", async () => {
+    const rootWorkspace = new WorkspaceStatus();
+    rootWorkspace.hasRootAgent({
+      id: "root-agent",
+      status: "idle",
+      goal: { objective: "Ship it", status: "active" },
+    });
+    await expect(rootWorkspace.workspaceStatus()).resolves.toBe("running");
+
+    const delegatedWorkspace = new WorkspaceStatus();
+    delegatedWorkspace.hasWorktreeWorkspace();
+    delegatedWorkspace.hasRootAgent({ id: "parent-agent", status: "idle" });
+    delegatedWorkspace.hasDelegatedAgentInWorktree({
+      id: "child-agent",
+      status: "idle",
+      goal: { objective: "Ship it", status: "active" },
+    });
+    await expect(delegatedWorkspace.workspaceStatuses()).resolves.toEqual({
       "workspace-1": "running",
       "workspace-worktree": "done",
     });

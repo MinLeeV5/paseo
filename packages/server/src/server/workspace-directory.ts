@@ -9,6 +9,7 @@ import type {
 import {
   deriveAgentStateBucket,
   getWorkspaceStateBucketPriority,
+  isAgentOngoing,
   type WorkspaceStateBucket,
 } from "@getpaseo/protocol/agent-state-bucket";
 import { getParentAgentIdFromLabels, isDelegatedAgent } from "@getpaseo/protocol/agent-labels";
@@ -286,7 +287,7 @@ export class WorkspaceDirectory {
       let workspaceAgent = agent;
       let bucket: WorkspaceDescriptorPayload["status"];
       if (isDelegatedAgent(agent)) {
-        if (agent.status !== "running") {
+        if (!isAgentOngoing({ status: agent.status, goalStatus: agent.goal?.status })) {
           continue;
         }
         const parentAgent = resolveDelegationRootAgent(agent, activeAgentsById);
@@ -298,6 +299,7 @@ export class WorkspaceDirectory {
       } else {
         bucket = deriveAgentStateBucket({
           status: agent.status,
+          goalStatus: agent.goal?.status,
           pendingPermissionCount: agent.pendingPermissions?.length ?? 0,
           requiresAttention: agent.requiresAttention,
           attentionReason: agent.attentionReason ?? null,
@@ -450,6 +452,7 @@ export class WorkspaceDirectory {
       .filter((agent) => {
         const derived = deriveAgentStateBucket({
           status: agent.status,
+          goalStatus: agent.goal?.status,
           pendingPermissionCount: agent.pendingPermissions?.length ?? 0,
           requiresAttention: agent.requiresAttention,
           attentionReason: agent.attentionReason ?? null,

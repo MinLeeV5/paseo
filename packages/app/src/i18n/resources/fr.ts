@@ -207,6 +207,17 @@ export const fr: TranslationResources = {
       callout: "Cet agent est archivé",
       unarchive: "Désarchiver",
     },
+    goal: {
+      status: {
+        active: "Actif",
+        paused: "En pause",
+        complete: "Terminé",
+        blocked: "Bloqué",
+        usageLimited: "Limite d’utilisation",
+        budgetLimited: "Limite de budget",
+        needsAttention: "Attention requise",
+      },
+    },
   },
   sessions: {
     title: "Historique",

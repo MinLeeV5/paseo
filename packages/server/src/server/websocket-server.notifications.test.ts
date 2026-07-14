@@ -48,9 +48,8 @@ interface WebSocketServerInternals {
   broadcastAgentAttention(params: {
     agentId: string;
     reason: string;
-    preview?: string;
-    providerId?: string;
-    timestamp?: string;
+    provider: string;
+    goal?: { objective: string; status: string };
   }): Promise<void>;
 }
 
@@ -322,5 +321,31 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
 
     expect(readAttentionRequiredMessage(ws).shouldNotify).toBe(false);
     expect(pushNotifications.sent).toEqual([]);
+  });
+
+  it("pushes blocked Goal errors with Goal-specific context", async () => {
+    const { server, pushNotifications } = createServer();
+    const ws = connectClient(server, null);
+
+    await asInternals<WebSocketServerInternals>(server).broadcastAgentAttention({
+      agentId: "agent-goal-blocked",
+      provider: "codex",
+      reason: "error",
+      goal: { objective: "Ship Goal state support", status: "blocked" },
+    });
+
+    expect(pushNotifications.sent).toEqual([
+      {
+        title: "Goal needs attention",
+        body: "Ship Goal state support",
+        data: {
+          serverId: "srv-test",
+          agentId: "agent-goal-blocked",
+          reason: "error",
+          goalStatus: "blocked",
+        },
+      },
+    ]);
+    expect(readAttentionRequiredMessage(ws).notification).toEqual(pushNotifications.sent[0]);
   });
 });

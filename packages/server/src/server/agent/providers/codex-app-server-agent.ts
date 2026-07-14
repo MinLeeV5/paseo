@@ -5,6 +5,8 @@ import {
   type AgentClient,
   type AgentCreateSessionOptions,
   type AgentFeature,
+  type AgentGoal,
+  type AgentGoalStatus,
   type AgentLaunchContext,
   type AgentMode,
   type AgentModelDefinition,
@@ -145,6 +147,14 @@ const CODEX_PLAN_IMPLEMENTATION_PROMPT_PREFIX =
 // (and the /goal slash command) when the binary is too old.
 const CODEX_GOALS_MIN_VERSION: readonly [number, number, number] = [0, 128, 0];
 const CODEX_AUTO_REVIEW_MIN_VERSION: readonly [number, number, number] = [0, 115, 0];
+const CODEX_GOAL_STATUSES = new Set<AgentGoalStatus>([
+  "active",
+  "paused",
+  "blocked",
+  "usageLimited",
+  "budgetLimited",
+  "complete",
+]);
 
 function parseCodexVersion(versionOutput: string): [number, number, number] | null {
   const match = versionOutput.match(/(\d+)\.(\d+)\.(\d+)/);
@@ -180,6 +190,20 @@ function parseGoalSubcommand(args: string | undefined): GoalSubcommand {
   if (lower === "resume") return { kind: "resume" };
   if (lower === "clear") return { kind: "clear" };
   return { kind: "set", objective: trimmed };
+}
+
+function normalizeCodexGoal(value: unknown, logger: Logger): AgentGoal | null {
+  const record = toObjectRecord(value);
+  if (!record || typeof record.objective !== "string" || typeof record.status !== "string") {
+    return null;
+  }
+  const status = CODEX_GOAL_STATUSES.has(record.status as AgentGoalStatus)
+    ? (record.status as AgentGoalStatus)
+    : "unknown";
+  if (status === "unknown") {
+    logger.warn({ status: record.status }, "Unknown Codex goal status");
+  }
+  return { objective: record.objective, status };
 }
 
 function formatOutOfBandStatusMessage(text: string): string {
@@ -3334,6 +3358,8 @@ export class CodexAppServerAgentSession implements AgentSession {
     name: string;
   } | null = null;
   private cachedSkills: Array<{ name: string; description: string; path: string }> = [];
+  private cachedGoal: AgentGoal | null = null;
+  private hasCachedGoal = false;
 
   constructor(
     config: AgentSessionConfig,
@@ -4492,6 +4518,65 @@ export class CodexAppServerAgentSession implements AgentSession {
     return Array.from(commandsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  async getGoal(): Promise<AgentGoal | null> {
+    if (!this.goalsEnabled) {
+      return null;
+    }
+    return await this.refreshGoal(false);
+  }
+
+  async pauseGoal(): Promise<AgentGoal | null> {
+    if (!this.goalsEnabled) {
+      return null;
+    }
+    await this.connect();
+    if (!this.currentThreadId) {
+      return null;
+    }
+    await this.ensureThreadLoaded();
+    if (!this.client) {
+      throw new Error("Codex client is not initialized");
+    }
+    await this.client.request("thread/goal/set", {
+      threadId: this.currentThreadId,
+      status: "paused",
+    });
+    return await this.refreshGoal(true);
+  }
+
+  private async refreshGoal(emit: boolean): Promise<AgentGoal | null> {
+    await this.connect();
+    if (!this.currentThreadId) {
+      this.applyGoal(null, emit);
+      return null;
+    }
+    await this.ensureThreadLoaded();
+    if (!this.client) {
+      throw new Error("Codex client is not initialized");
+    }
+    const response = toObjectRecord(
+      await this.client.request("thread/goal/get", { threadId: this.currentThreadId }),
+    );
+    const goal = normalizeCodexGoal(response?.goal, this.logger);
+    this.applyGoal(goal, emit);
+    return goal;
+  }
+
+  private applyGoal(goal: AgentGoal | null, emit: boolean): void {
+    if (
+      this.hasCachedGoal &&
+      this.cachedGoal?.objective === goal?.objective &&
+      this.cachedGoal?.status === goal?.status
+    ) {
+      return;
+    }
+    this.cachedGoal = goal;
+    this.hasCachedGoal = true;
+    if (emit) {
+      this.emitEvent({ type: "goal_changed", provider: CODEX_PROVIDER, goal });
+    }
+  }
+
   tryHandleOutOfBand(
     prompt: AgentPromptInput,
   ): { run(ctx: { emit: (event: AgentStreamEvent) => void }): Promise<void> } | null {
@@ -4577,6 +4662,7 @@ export class CodexAppServerAgentSession implements AgentSession {
             objective: subcommand.objective,
             status: "active",
           });
+          await this.refreshGoal(true);
           return `Goal set: ${subcommand.objective}`;
         }
         case "pause": {
@@ -4584,6 +4670,7 @@ export class CodexAppServerAgentSession implements AgentSession {
             threadId: this.currentThreadId,
             status: "paused",
           });
+          await this.refreshGoal(true);
           return "Goal paused.";
         }
         case "resume": {
@@ -4591,12 +4678,14 @@ export class CodexAppServerAgentSession implements AgentSession {
             threadId: this.currentThreadId,
             status: "active",
           });
+          await this.refreshGoal(true);
           return "Goal resumed.";
         }
         case "clear": {
           await this.client.request("thread/goal/clear", {
             threadId: this.currentThreadId,
           });
+          await this.refreshGoal(true);
           return "Goal cleared.";
         }
       }
@@ -4791,6 +4880,9 @@ export class CodexAppServerAgentSession implements AgentSession {
       }
       return;
     }
+    if (this.handleGoalNotification(method, notificationParams ?? null)) {
+      return;
+    }
     const parsed = CodexNotificationSchema.parse({ method, params });
     this.traceParsedNotification(method, params, parsed);
     const route = this.resolveCodexThreadRoute(getCodexNotificationThreadId(parsed));
@@ -4803,6 +4895,27 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     this.dispatchParsedNotification(parsed);
+  }
+
+  private handleGoalNotification(method: string, params: Record<string, unknown> | null): boolean {
+    if (method !== "thread/goal/updated" && method !== "thread/goal/cleared") {
+      return false;
+    }
+    const threadId = typeof params?.threadId === "string" ? params.threadId : null;
+    if (!threadId || threadId !== this.currentThreadId) {
+      return true;
+    }
+    if (method === "thread/goal/cleared") {
+      this.applyGoal(null, true);
+      return true;
+    }
+    const goal = normalizeCodexGoal(params?.goal, this.logger);
+    if (!goal) {
+      this.warnInvalidNotificationPayload(method, params);
+      return true;
+    }
+    this.applyGoal(goal, true);
+    return true;
   }
 
   private dispatchSubAgentNotification(parsed: ParsedCodexNotification, callId: string): void {

@@ -17,6 +17,7 @@ function createSnapshot(
     updatedAt: input.updatedAt ?? "2026-04-20T00:01:00.000Z",
     lastUserMessageAt: input.lastUserMessageAt ?? null,
     status: input.status ?? "idle",
+    goal: input.goal ?? null,
     capabilities: input.capabilities ?? {
       supportsStreaming: true,
       supportsSessionPersistence: true,
@@ -70,5 +71,13 @@ describe("normalizeAgentSnapshot", () => {
     expect(missing.parentAgentId).toBeNull();
     expect(empty.parentAgentId).toBeNull();
     expect(nonString.parentAgentId).toBeNull();
+  });
+
+  it("preserves optional goal state", () => {
+    const goal = { objective: "Ship Goal state support", status: "active" };
+
+    const agent = normalizeAgentSnapshot(createSnapshot({ goal }), "server-1");
+
+    expect(agent.goal).toEqual(goal);
   });
 });

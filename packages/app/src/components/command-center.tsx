@@ -220,6 +220,7 @@ function CommandCenterAgentRowContent({ agent, showHost }: CommandCenterAgentRow
         <View style={styles.iconSlot}>
           <AgentStatusDot
             status={agent.status}
+            goalStatus={agent.goal?.status}
             requiresAttention={agent.requiresAttention}
             showInactive
           />

@@ -20,6 +20,7 @@ import { getIsElectronRuntime } from "@/constants/layout";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { focusWithRetries } from "@/utils/web-focus";
 import { isWeb } from "@/constants/platform";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 
 const EMPTY_AGENTS: AggregatedAgent[] = [];
 const EMPTY_ACTION_ITEMS: CommandCenterActionItem[] = [];
@@ -42,8 +43,18 @@ function sortAgents(left: AggregatedAgent, right: AggregatedAgent): number {
   const rightAttention = right.requiresAttention ? 1 : 0;
   if (leftAttention !== rightAttention) return rightAttention - leftAttention;
 
-  const leftRunning = left.status === "running" ? 1 : 0;
-  const rightRunning = right.status === "running" ? 1 : 0;
+  const leftRunning = isAgentOngoing({
+    status: left.status,
+    goalStatus: left.goal?.status,
+  })
+    ? 1
+    : 0;
+  const rightRunning = isAgentOngoing({
+    status: right.status,
+    goalStatus: right.goal?.status,
+  })
+    ? 1
+    : 0;
   if (leftRunning !== rightRunning) return rightRunning - leftRunning;
 
   return right.lastActivityAt.getTime() - left.lastActivityAt.getTime();

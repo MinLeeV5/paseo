@@ -12,6 +12,31 @@ initializing → idle → running → idle (or error → closed)
 
 Each agent in `AgentManager` carries a `lastStatus` of `initializing`, `idle`, `running`, `error`, or `closed`. State transitions persist to disk and stream to subscribed clients via WebSocket.
 
+## Goal state is orthogonal to turn state
+
+A **turn** is one prompt execution. The agent `status`/`lifecycle` always describes that current turn, so a Goal-driven session can legitimately move `running → idle → running` while the Goal continues.
+
+A **Goal** is a provider-owned objective that can span multiple turns. Paseo projects the provider's current Goal as optional `goal: { objective, status }` data on the agent snapshot; it does not rewrite the turn lifecycle. Codex is the first provider with this integration. A missing `goal` field means the daemon does not advertise Goal state, while `goal: null` means the capable daemon has no current Goal.
+
+The shared **ongoing** predicate is:
+
+```text
+status !== closed AND (status === running OR goal.status === active)
+```
+
+Permission and lifecycle-error presentation still outrank an active Goal. Otherwise this predicate owns wait behavior, Stop availability, queued-message draining, status sorting, and workspace/sidebar activity. In particular, an idle turn with an active Goal remains ongoing: `wait` continues and queued messages stay queued until the Goal leaves `active`.
+
+| Goal status                      | Ongoing presentation | Attention behavior                      |
+| -------------------------------- | -------------------- | --------------------------------------- |
+| `active`                         | Running              | None                                    |
+| `paused`                         | Done/idle            | Silent                                  |
+| `complete`                       | Attention            | Finished notification                   |
+| `blocked`                        | Failed               | Goal error notification                 |
+| `usageLimited` / `budgetLimited` | Failed               | Goal error notification                 |
+| Unknown future status            | Failed               | Needs-attention Goal error notification |
+
+Stop is Goal-aware: it pauses an active Goal first, then interrupts a current turn if one exists. `cancelAgentRun` remains a lower-level, turn-only operation for internal flows that explicitly want that behavior. A pause failure does not prevent Paseo from attempting the turn interrupt, but the Stop request still reports the failure so callers do not mistake the Goal for stopped.
+
 ## Relationships
 
 Agents can launch other agents via the agent-scoped `create_agent` MCP tool. Agent-scoped creation is always asynchronous. `relationship` and `workspace` are separate decisions:
@@ -40,11 +65,12 @@ Archive is a **soft delete**: the agent record stays on disk with `archivedAt` s
 
 Archiving runs through `AgentManager.archiveAgent` (`packages/server/src/server/agent/agent-manager.ts`):
 
-1. Snapshot the current session into the registry
-2. Set `archivedAt` and normalize `lastStatus` away from `running`/`initializing`
-3. Notify subscribers
-4. Close the runtime (kills the process if still running)
-5. **Cascade-archive children** — any agent whose `paseo.parent-agent-id` label matches the archived agent gets archived too, recursively
+1. Stop ongoing work (pause an active Goal, then interrupt a current turn)
+2. Snapshot the current session into the registry
+3. Set `archivedAt` and normalize `lastStatus` away from `running`/`initializing`
+4. Notify subscribers
+5. Close the runtime
+6. **Cascade-archive children** — any agent whose `paseo.parent-agent-id` label matches the archived agent gets archived too, recursively
 
 Cascade is what keeps subagent fleets from outliving their orchestrator.
 
@@ -67,7 +93,7 @@ The asymmetry is intentional: a subagent's home is the parent's track, not the t
 
 Agent lifecycle status stays literal: a parent agent is `idle` when its own turn is idle, even if a child is running.
 
-Workspace status is an aggregate activity signal computed **per `workspaceId`**: a workspace's status reflects only records whose `workspaceId === workspace.id`. Ownership is never derived from `cwd` — many workspaces may share one directory, and same-`cwd` siblings do not clump under one status. A root agent contributes its normal state bucket to its owning workspace only. Running subagents contribute `running` to their root parent's owning workspace (by the parent agent's `workspaceId`), not to the subagent's current `cwd` or worktree. Non-running subagent attention, permission, and error states stay in the parent's subagents track and do not escalate the workspace bucket.
+Workspace status is an aggregate activity signal computed **per `workspaceId`**: a workspace's status reflects only records whose `workspaceId === workspace.id`. Ownership is never derived from `cwd` — many workspaces may share one directory, and same-`cwd` siblings do not clump under one status. A root agent contributes its normal state bucket to its owning workspace only. Ongoing subagents — a running turn or an active Goal — contribute `running` to their root parent's owning workspace (by the parent agent's `workspaceId`), not to the subagent's current `cwd` or worktree. Non-ongoing subagent attention, permission, and error states stay in the parent's subagents track and do not escalate the workspace bucket.
 
 ## The subagents track
 
@@ -127,5 +153,6 @@ Each agent is a single JSON file. Fields relevant to this doc:
 | `archivedAt`                      | `string?`     | Soft-delete timestamp (ISO 8601)                                                             |
 | `labels["paseo.parent-agent-id"]` | `string?`     | Parent agent ID, set automatically by `create_agent` when `relationship.kind === "subagent"` |
 | `lastStatus`                      | `AgentStatus` | `initializing` / `idle` / `running` / `error` / `closed`                                     |
+| `goal`                            | `object?`     | Provider-owned `{ objective, status }`; optional and nullable, independent of `lastStatus`   |
 
 See [`docs/data-model.md`](./data-model.md) for the full agent record.

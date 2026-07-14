@@ -10,6 +10,7 @@ function makeAgent(overrides: Partial<AggregatedAgent> = {}): AggregatedAgent {
     serverLabel: (overrides as { serverLabel?: string }).serverLabel ?? "server",
     title: overrides.title ?? null,
     status: overrides.status ?? ("running" as AggregatedAgent["status"]),
+    goal: overrides.goal ?? null,
     lastActivityAt: overrides.lastActivityAt ?? now,
     cwd: overrides.cwd ?? "/tmp/repo",
     provider: overrides.provider ?? ("openai" as AggregatedAgent["provider"]),
@@ -63,6 +64,19 @@ describe("deriveProjectDisplayName", () => {
 });
 
 describe("groupAgents", () => {
+  it("keeps active goals in active groups between turns", () => {
+    const { activeGroups } = groupAgents([
+      makeAgent({
+        status: "idle",
+        goal: { objective: "Ship it", status: "active" },
+        lastActivityAt: new Date("2020-01-01T00:00:00.000Z"),
+      }),
+    ]);
+
+    expect(activeGroups).toHaveLength(1);
+    expect(activeGroups[0]?.agents[0]?.id).toBe("a1");
+  });
+
   it("groups active agents by remote URL when available", () => {
     const agents = [
       makeAgent({ id: "a1", cwd: "/Users/me/dev/paseo" }),

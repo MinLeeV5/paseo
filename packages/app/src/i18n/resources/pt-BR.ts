@@ -207,6 +207,17 @@ export const ptBR: TranslationResources = {
       callout: "Este agente está arquivado",
       unarchive: "Desarquivar",
     },
+    goal: {
+      status: {
+        active: "Ativa",
+        paused: "Pausada",
+        complete: "Concluída",
+        blocked: "Bloqueada",
+        usageLimited: "Limite de uso",
+        budgetLimited: "Limite de orçamento",
+        needsAttention: "Requer atenção",
+      },
+    },
   },
   sessions: {
     title: "Histórico de agentes",

@@ -15,6 +15,7 @@ function row(
     provider: overrides.provider ?? "codex",
     title: overrides.title ?? `Agent ${overrides.id}`,
     status: overrides.status ?? "idle",
+    goalStatus: overrides.goalStatus ?? null,
     requiresAttention: overrides.requiresAttention ?? false,
     createdAt: overrides.createdAt ?? new Date("2026-04-20T00:00:00.000Z"),
   };
@@ -33,6 +34,13 @@ describe("formatHeaderLabel", () => {
     expect(
       formatHeaderLabel([row({ id: "a", status: "running" }), row({ id: "b" }), row({ id: "c" })]),
     ).toBe("3 subagents · 1 running");
+  });
+
+  it("counts and presents an active Goal as running between turns", () => {
+    const goalRow = row({ id: "goal", status: "idle", goalStatus: "active" });
+
+    expect(formatHeaderLabel([goalRow])).toBe("1 subagent · 1 running");
+    expect(buildSubagentRowPresentationData(goalRow).statusBucket).toBe("running");
   });
 
   it("counts every running row in the suffix", () => {

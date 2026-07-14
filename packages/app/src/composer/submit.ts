@@ -2,6 +2,10 @@ import { i18n } from "@/i18n/i18next";
 
 export type AgentInputSubmitResult = "noop" | "queued" | "submitted" | "failed";
 
+export function isGoalControlCommand(message: string): boolean {
+  return /^\s*\/goal(?:\s|$)/iu.test(message);
+}
+
 export interface AgentInputSubmitActionInput<TAttachment> {
   message: string;
   attachments: TAttachment[];

@@ -90,7 +90,8 @@ import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
-import { submitAgentInput } from "@/composer/submit";
+import { isGoalControlCommand, submitAgentInput } from "@/composer/submit";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
@@ -199,13 +200,25 @@ function buildRealtimeVoiceButtonStyle(
 function buildAgentStateSelector(serverId: string, agentId: string) {
   return (state: ReturnType<typeof useSessionStore.getState>) => {
     const agent = state.sessions[serverId]?.agents?.get(agentId) ?? null;
+    if (!agent) {
+      return {
+        status: null,
+        goal: null,
+        contextWindowMaxTokens: null,
+        contextWindowUsedTokens: null,
+        totalCostUsd: null,
+        model: null,
+        provider: null,
+      };
+    }
     return {
-      status: agent?.status ?? null,
-      contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
-      contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
-      totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
-      model: agent?.model ?? null,
-      provider: agent?.provider ?? null,
+      status: agent.status,
+      goal: agent.goal ?? null,
+      contextWindowMaxTokens: agent.lastUsage?.contextWindowMaxTokens ?? null,
+      contextWindowUsedTokens: agent.lastUsage?.contextWindowUsedTokens ?? null,
+      totalCostUsd: agent.lastUsage?.totalCostUsd ?? null,
+      model: agent.model ?? null,
+      provider: agent.provider,
     };
   };
 }
@@ -1223,7 +1236,9 @@ export function Composer({
     onSubmitMessageRef.current = onSubmitMessage;
   }, [onSubmitMessage]);
 
-  const isAgentRunning = agentState.status === "running";
+  const isAgentRunning =
+    agentState.status !== null &&
+    isAgentOngoing({ status: agentState.status, goalStatus: agentState.goal?.status });
   const hasAgent = agentState.status !== null;
 
   const queueWriter = useMemo<QueueWriter>(
@@ -1328,7 +1343,11 @@ export function Composer({
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
+      void sendMessageWithContent(
+        payload.text,
+        outgoingAttachments,
+        payload.forceSend || isGoalControlCommand(payload.text),
+      );
     },
     [
       attachments,
@@ -1577,9 +1596,19 @@ export function Composer({
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
       }
+      if (isGoalControlCommand(payload.text)) {
+        void sendMessageWithContent(payload.text, outgoingAttachments, true);
+        return;
+      }
       queueMessage(payload.text, outgoingAttachments);
     },
-    [attachments, buildOutgoingAttachments, queueMessage, runClientSlashCommand],
+    [
+      attachments,
+      buildOutgoingAttachments,
+      queueMessage,
+      runClientSlashCommand,
+      sendMessageWithContent,
+    ],
   );
 
   const hasSendableContent = userInput.trim().length > 0 || selectedAttachments.length > 0;

@@ -21,6 +21,7 @@ import type {
   AgentPersistenceHandle,
 } from "@getpaseo/protocol/agent-types";
 import type {
+  AgentGoalPayload,
   ServerInfoStatusPayload,
   ProjectPlacementPayload,
   ServerCapabilities,
@@ -96,6 +97,7 @@ export interface Agent {
   id: string;
   provider: AgentProvider;
   status: AgentLifecycleStatus;
+  goal?: AgentGoalPayload | null;
   createdAt: Date;
   updatedAt: Date;
   lastUserMessageAt: Date | null;

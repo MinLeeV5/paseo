@@ -6,9 +6,19 @@ export type AgentAttentionReason = "finished" | "error" | "permission" | null | 
 
 export interface AgentStateBucketInput {
   status: AgentLifecycleStatus;
+  goalStatus?: string | null;
   pendingPermissionCount?: number;
   requiresAttention?: boolean;
   attentionReason?: AgentAttentionReason;
+}
+
+export function isAgentOngoing(
+  input: Pick<AgentStateBucketInput, "status" | "goalStatus">,
+): boolean {
+  if (input.status === "closed") {
+    return false;
+  }
+  return input.status === "running" || input.goalStatus === "active";
 }
 
 const WORKSPACE_STATE_BUCKET_PRIORITY = {
@@ -26,7 +36,7 @@ export function deriveAgentStateBucket(input: AgentStateBucketInput): WorkspaceS
   if (input.status === "error" || input.attentionReason === "error") {
     return "failed";
   }
-  if (input.status === "running") {
+  if (isAgentOngoing(input)) {
     return "running";
   }
   if (input.requiresAttention) {
@@ -46,7 +56,7 @@ export function getAgentStatusPriority(input: AgentStateBucketInput): number {
   if (input.status === "error" || input.attentionReason === "error") {
     return 1;
   }
-  if (input.status === "running") {
+  if (isAgentOngoing(input)) {
     return 2;
   }
   if (input.status === "initializing") {

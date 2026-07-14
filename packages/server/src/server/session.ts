@@ -3588,6 +3588,7 @@ export class Session {
         case "status_priority":
           return getAgentStatusPriority({
             status: agent.status,
+            goalStatus: agent.goal?.status,
             pendingPermissionCount: agent.pendingPermissions?.length ?? 0,
             requiresAttention: agent.requiresAttention,
             attentionReason: agent.attentionReason ?? null,

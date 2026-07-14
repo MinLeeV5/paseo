@@ -204,6 +204,17 @@ export const ar: TranslationResources = {
       callout: "تمت أرشفة هذا الوكيل",
       unarchive: "إلغاء الأرشفة",
     },
+    goal: {
+      status: {
+        active: "نشط",
+        paused: "متوقف مؤقتًا",
+        complete: "مكتمل",
+        blocked: "محظور",
+        usageLimited: "حد الاستخدام",
+        budgetLimited: "حد الميزانية",
+        needsAttention: "يحتاج إلى انتباه",
+      },
+    },
   },
   sessions: {
     title: "السجل",

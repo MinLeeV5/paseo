@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
+import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
+import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
 import { isSameOrDescendantPath } from "../../utils/paths.js";
 import type {
   CommandOptions,
@@ -36,6 +38,13 @@ export interface AgentStopOptions extends CommandOptions {
 }
 
 export type AgentStopResult = SingleResult<StopResult>;
+
+export function isAgentStopCandidate(agent: {
+  status: AgentLifecycleStatus;
+  goal?: { objective: string; status: string } | null;
+}): boolean {
+  return isAgentOngoing({ status: agent.status, goalStatus: agent.goal?.status });
+}
 
 export async function runStopCommand(
   id: string | undefined,
@@ -95,10 +104,12 @@ export async function runStopCommand(
       agents = [fetchResult.agent];
     }
 
-    // Interrupt each running agent. Idle agents are a no-op.
+    // Stop each active turn or Goal. Truly idle agents are a no-op.
     const stopResults = await Promise.all(
       agents.map(async (agent) => {
-        if (agent.status !== "running") return { ok: true as const, id: agent.id, stopped: false };
+        if (!isAgentStopCandidate(agent)) {
+          return { ok: true as const, id: agent.id, stopped: false };
+        }
         try {
           await client.cancelAgent(agent.id);
           return { ok: true as const, id: agent.id, stopped: true };

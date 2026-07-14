@@ -134,6 +134,52 @@ describe("workspace message schemas", () => {
     expect(result.success).toBe(true);
   });
 
+  test("parses optional goal state and preserves unknown future statuses", () => {
+    const result = SessionOutboundMessageSchema.safeParse({
+      type: "agent_update",
+      payload: {
+        kind: "upsert",
+        agent: {
+          id: "agent-1",
+          provider: "codex",
+          cwd: "/tmp/repo",
+          model: null,
+          createdAt: "2026-07-14T00:00:00.000Z",
+          updatedAt: "2026-07-14T00:00:00.000Z",
+          lastUserMessageAt: null,
+          status: "idle",
+          goal: {
+            objective: "Ship Goal state support",
+            status: "futureStatus",
+          },
+          capabilities: {
+            supportsStreaming: true,
+            supportsSessionPersistence: true,
+            supportsDynamicModes: true,
+            supportsMcpServers: true,
+            supportsReasoningStream: true,
+            supportsToolInvocations: true,
+          },
+          currentModeId: null,
+          availableModes: [],
+          pendingPermissions: [],
+          persistence: null,
+          title: null,
+          labels: {},
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success || result.data.type !== "agent_update") {
+      throw new Error("Expected goal-aware agent update to parse");
+    }
+    expect(result.data.payload.agent?.goal).toEqual({
+      objective: "Ship Goal state support",
+      status: "futureStatus",
+    });
+  });
+
   test("parses paginated fetch_agent_history_request and response", () => {
     const request = SessionInboundMessageSchema.parse({
       type: "fetch_agent_history_request",

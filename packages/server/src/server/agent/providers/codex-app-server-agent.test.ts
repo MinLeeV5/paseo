@@ -3491,6 +3491,112 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
+  test("reads and normalizes the current Codex goal", async () => {
+    const session = createSession({}, { goalsEnabled: true });
+    session.client = {
+      request: vi.fn(async (method: string) => {
+        if (method === "thread/goal/get") {
+          return {
+            goal: {
+              objective: "Ship Goal state support",
+              status: "active",
+            },
+          };
+        }
+        return {};
+      }),
+    };
+
+    await expect(session.getGoal?.()).resolves.toEqual({
+      objective: "Ship Goal state support",
+      status: "active",
+    });
+  });
+
+  test("emits deduplicated goal updates and clears from Codex notifications", () => {
+    const session = createSession({}, { goalsEnabled: true });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    const goal = {
+      objective: "Ship Goal state support",
+      status: "active",
+    };
+
+    asInternals(session).handleNotification("thread/goal/updated", {
+      threadId: "test-thread",
+      goal,
+    });
+    asInternals(session).handleNotification("thread/goal/updated", {
+      threadId: "test-thread",
+      goal: { ...goal, tokensUsed: 42 },
+    });
+    asInternals(session).handleNotification("thread/goal/cleared", {
+      threadId: "test-thread",
+    });
+
+    expect(events).toEqual([
+      {
+        type: "goal_changed",
+        provider: "codex",
+        turnId: "test-turn",
+        goal,
+      },
+      {
+        type: "goal_changed",
+        provider: "codex",
+        turnId: "test-turn",
+        goal: null,
+      },
+    ]);
+  });
+
+  test("maps unknown future Codex goal statuses to needs-attention state", () => {
+    const session = createSession({}, { goalsEnabled: true });
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("thread/goal/updated", {
+      threadId: "test-thread",
+      goal: {
+        objective: "Ship Goal state support",
+        status: "waitingForFutureThing",
+      },
+    });
+
+    expect(events).toContainEqual({
+      type: "goal_changed",
+      provider: "codex",
+      turnId: "test-turn",
+      goal: {
+        objective: "Ship Goal state support",
+        status: "unknown",
+      },
+    });
+  });
+
+  test("pauses an active goal without interrupting the current turn", async () => {
+    const requests: Array<{ method: string; params: unknown }> = [];
+    const session = createSession({}, { goalsEnabled: true });
+    session.client = {
+      request: vi.fn(async (method: string, params: unknown) => {
+        requests.push({ method, params });
+        if (method === "thread/goal/get") {
+          return { goal: { objective: "Ship Goal state support", status: "paused" } };
+        }
+        return {};
+      }),
+    };
+
+    await expect(session.pauseGoal?.()).resolves.toEqual({
+      objective: "Ship Goal state support",
+      status: "paused",
+    });
+    expect(requests).toContainEqual({
+      method: "thread/goal/set",
+      params: { threadId: "test-thread", status: "paused" },
+    });
+  });
+
   test("lists /compact and sends Codex compaction out of band", async () => {
     const requests: Array<{ method: string; params: unknown }> = [];
     const session = createSession();

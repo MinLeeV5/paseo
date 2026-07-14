@@ -375,6 +375,23 @@ export type AgentTimelineItem =
   | { type: "error"; message: string }
   | CompactionTimelineItem;
 
+export const AGENT_GOAL_STATUSES = [
+  "active",
+  "paused",
+  "blocked",
+  "usageLimited",
+  "budgetLimited",
+  "complete",
+  "unknown",
+] as const;
+
+export type AgentGoalStatus = (typeof AGENT_GOAL_STATUSES)[number];
+
+export interface AgentGoal {
+  objective: string;
+  status: AgentGoalStatus;
+}
+
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }
   | { type: "turn_started"; provider: AgentProvider; turnId?: string }
@@ -431,6 +448,12 @@ export type AgentStreamEvent =
       type: "provider_subagent";
       provider: AgentProvider;
       event: import("./provider-subagents/store.js").ProviderSubagentInputEvent;
+    }
+  | {
+      type: "goal_changed";
+      provider: AgentProvider;
+      goal: AgentGoal | null;
+      turnId?: string;
     };
 
 export function getAgentStreamEventTurnId(event: AgentStreamEvent): string | undefined {
@@ -630,6 +653,8 @@ export interface AgentSession {
   describePersistence(): AgentPersistenceHandle | null;
   interrupt(): Promise<void>;
   close(): Promise<void>;
+  getGoal?(): Promise<AgentGoal | null>;
+  pauseGoal?(): Promise<AgentGoal | null>;
   listCommands?(): Promise<AgentSlashCommand[]>;
   setModel?(modelId: string | null): Promise<void>;
   setThinkingOption?(thinkingOptionId: string | null): Promise<void | AgentProviderNotice>;

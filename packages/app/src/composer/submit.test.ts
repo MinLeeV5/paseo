@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { submitAgentInput } from "./submit";
+import { isGoalControlCommand, submitAgentInput } from "./submit";
 
 function createDeferredPromise<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -216,5 +216,14 @@ describe("submitAgentInput", () => {
       attachments: [],
     });
     expect(clearDraft).toHaveBeenCalledWith("sent");
+  });
+});
+
+describe("isGoalControlCommand", () => {
+  it("recognizes goal controls that must bypass an active-goal queue", () => {
+    expect(isGoalControlCommand("/goal pause")).toBe(true);
+    expect(isGoalControlCommand("  /GOAL clear  ")).toBe(true);
+    expect(isGoalControlCommand("/goals pause")).toBe(false);
+    expect(isGoalControlCommand("continue working")).toBe(false);
   });
 });

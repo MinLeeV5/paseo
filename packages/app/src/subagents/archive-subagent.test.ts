@@ -74,6 +74,16 @@ describe("resolveArchiveSubagentDialog", () => {
     });
   });
 
+  it("uses running copy for an active Goal between turns", () => {
+    expect(
+      resolveArchiveSubagentDialog({
+        title: "Review branch",
+        status: "idle",
+        goalStatus: "active",
+      }).title,
+    ).toBe("Archive running subagent?");
+  });
+
   it("does not use running copy for initializing subagents", () => {
     expect(
       resolveArchiveSubagentDialog({

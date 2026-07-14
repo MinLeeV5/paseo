@@ -12,6 +12,7 @@ export interface PaseoSubagentRow {
   provider: Agent["provider"];
   title: Agent["title"];
   status: Agent["status"];
+  goalStatus: string | null;
   requiresAttention: Agent["requiresAttention"];
   createdAt: Agent["createdAt"];
 }
@@ -47,6 +48,7 @@ function toSubagentRow(agent: Agent): SubagentRow {
     provider: agent.provider,
     title: agent.title,
     status: agent.status,
+    goalStatus: agent.goal?.status ?? null,
     requiresAttention: agent.requiresAttention,
     createdAt: agent.createdAt,
   };

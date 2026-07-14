@@ -135,6 +135,16 @@ describe("daemon E2E (real codex) - /goal command", () => {
         30_000,
         "/goal set acknowledgement",
       );
+      const goalSnapshot = await client.waitForAgentUpsert(
+        agent.id,
+        (snapshot) =>
+          snapshot.goal?.status === "active" && snapshot.goal.objective.includes(sentinel),
+        30_000,
+      );
+      expect(goalSnapshot.goal).toEqual({
+        objective: `ship feature ${sentinel}`,
+        status: "active",
+      });
 
       // Model awareness check: ask what the goal is. Per the user-visible
       // behavior the codex experiment promises, the model should reference
@@ -205,6 +215,12 @@ describe("daemon E2E (real codex) - /goal command", () => {
       await client.sendAgentMessage(agent.id, "/goal pause", {
         messageId: generateClientMessageId(),
       });
+      const pausedSnapshot = await client.waitForAgentUpsert(
+        agent.id,
+        (snapshot) => snapshot.goal?.status === "paused",
+        30_000,
+      );
+      expect(pausedSnapshot.goal?.objective).toBe("pilot the long-turn flow");
 
       // The running turn must still finish naturally with the sleep output.
       const finishResult = await client.waitForFinish(agent.id, 180_000);
@@ -272,6 +288,12 @@ describe("daemon E2E (real codex) - /goal command", () => {
         30_000,
         "/goal clear acknowledgement",
       );
+      const clearedSnapshot = await client.waitForAgentUpsert(
+        agent.id,
+        (snapshot) => snapshot.goal === null,
+        30_000,
+      );
+      expect(clearedSnapshot.goal).toBeNull();
     } finally {
       await client.close();
       await daemon.close();

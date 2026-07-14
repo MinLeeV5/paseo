@@ -45,4 +45,13 @@ describe("deriveSidebarStateBucket", () => {
       }),
     ).toBe("done");
   });
+
+  it("keeps active goals running between turns", () => {
+    expect(
+      deriveSidebarStateBucket({
+        status: "idle",
+        goalStatus: "active",
+      }),
+    ).toBe("running");
+  });
 });
