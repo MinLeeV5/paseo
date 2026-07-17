@@ -908,6 +908,80 @@ describe("checkout git utilities", () => {
     expect(duplicates).toEqual([]);
   });
 
+  it("keeps the nearest gitlink fallback when recursive patch data is unavailable", async () => {
+    const { midCheckout } = setupNestedIgnoredSubmoduleFixture({
+      tempDir,
+      repoDir,
+    });
+    writeFileSync(join(midCheckout, "mid.txt"), "mid-one\nmid-baseline\n");
+    execFileSync("git", ["add", "mid.txt"], { cwd: midCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "baseline mid"], {
+      cwd: midCheckout,
+    });
+    execFileSync("git", ["add", "-f", "modules/mid"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "record mid baseline"], {
+      cwd: repoDir,
+    });
+    execFileSync("git", ["checkout", "-b", "feature/missing-submodule-blob"], { cwd: repoDir });
+
+    writeFileSync(join(midCheckout, "mid.txt"), "mid-one\nmid-baseline\nmid-feature\n");
+    execFileSync("git", ["add", "mid.txt"], { cwd: midCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance mid"], {
+      cwd: midCheckout,
+    });
+    execFileSync("git", ["add", "-f", "modules/mid"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "record advanced mid"], {
+      cwd: repoDir,
+    });
+
+    const historicalBlob = execFileSync("git", ["rev-parse", "HEAD^:mid.txt"], {
+      cwd: midCheckout,
+      encoding: "utf8",
+    }).trim();
+    const midGitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], {
+      cwd: midCheckout,
+      encoding: "utf8",
+    }).trim();
+    const historicalBlobPath = join(
+      midGitDir,
+      "objects",
+      historicalBlob.slice(0, 2),
+      historicalBlob.slice(2),
+    );
+    expect(existsSync(historicalBlobPath)).toBe(true);
+    rmSync(historicalBlobPath);
+
+    expect(
+      execFileSync("git", ["diff", "--name-status", "HEAD^", "HEAD", "--", "mid.txt"], {
+        cwd: midCheckout,
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("M\tmid.txt");
+    expect(
+      spawnSync("git", ["diff", "HEAD^", "HEAD", "--", "mid.txt"], {
+        cwd: midCheckout,
+        encoding: "utf8",
+      }).status,
+    ).toBe(128);
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+      includeStructured: true,
+    });
+
+    expect(
+      diff.structured?.map((file) => ({
+        path: file.path,
+        submodulePath: file.submodulePath,
+      })),
+    ).toEqual([{ path: "modules/mid", submodulePath: undefined }]);
+    expect(diff.diff).toContain("diff --git a/modules/mid b/modules/mid");
+    expect(diff.diff).toContain("-Subproject commit");
+    expect(diff.diff).toContain("+Subproject commit");
+    expect(diff.diff).not.toContain("modules/mid/mid.txt");
+  });
+
   it("includes untracked files inside submodules in an uncommitted diff", async () => {
     const submoduleSource = join(tempDir, "submodule-source");
     mkdirSync(submoduleSource, { recursive: true });

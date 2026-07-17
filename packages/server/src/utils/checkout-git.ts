@@ -190,12 +190,15 @@ interface SubmoduleTrackedFileChange {
   displayPrefix: string;
   refsForDiff: CheckoutDiffRefs;
   change: CheckoutFileChange;
+  fallback?: SubmoduleTrackedFileChange;
+  isGitlinkFallback?: boolean;
 }
 
 interface SubmoduleFileChanges {
   tracked: SubmoduleTrackedFileChange[];
   untracked: CheckoutFileChange[];
   expandedSubmodulePaths: Set<string>;
+  immediateFallbacks: Map<string, SubmoduleTrackedFileChange>;
 }
 
 type RecursiveDiffEndpoint =
@@ -892,6 +895,28 @@ function getSubmoduleComparisonDiffRefs(
   };
 }
 
+function createSubmoduleFallbackChange(
+  path: string,
+  comparison: SubmoduleDiffComparison | null,
+): CheckoutFileChange {
+  const isNew =
+    comparison?.oldEndpoint.kind === "absent" && comparison.newEndpoint.kind !== "absent";
+  const isDeleted =
+    comparison?.oldEndpoint.kind !== "absent" && comparison?.newEndpoint.kind === "absent";
+  let status = "M";
+  if (isNew) {
+    status = "A";
+  } else if (isDeleted) {
+    status = "D";
+  }
+  return {
+    path,
+    status,
+    isNew,
+    isDeleted,
+  };
+}
+
 async function resolveChildEndpoint(input: {
   parentCwd: string;
   childCwd: string;
@@ -973,6 +998,7 @@ async function listSubmoduleFileChanges(input: {
   ignoreWhitespace: boolean;
   comparison: SubmoduleDiffComparison;
   cache: SubmoduleScanCache;
+  parentFallback?: SubmoduleTrackedFileChange;
   visited?: Set<string>;
 }): Promise<SubmoduleFileChanges> {
   const {
@@ -981,22 +1007,38 @@ async function listSubmoduleFileChanges(input: {
     ignoreWhitespace,
     comparison,
     cache,
+    parentFallback,
     visited = new Set<string>(),
   } = input;
   let canonicalCwd: string;
   try {
     canonicalCwd = realpathSync.native(cwd);
   } catch {
-    return { tracked: [], untracked: [], expandedSubmodulePaths: new Set() };
+    return {
+      tracked: [],
+      untracked: [],
+      expandedSubmodulePaths: new Set(),
+      immediateFallbacks: new Map(),
+    };
   }
   if (visited.has(canonicalCwd)) {
-    return { tracked: [], untracked: [], expandedSubmodulePaths: new Set() };
+    return {
+      tracked: [],
+      untracked: [],
+      expandedSubmodulePaths: new Set(),
+      immediateFallbacks: new Map(),
+    };
   }
   visited.add(canonicalCwd);
 
   const tracked: SubmoduleTrackedFileChange[] = [];
   const untracked: CheckoutFileChange[] = [];
   const expandedSubmodulePaths = new Set<string>();
+  const immediateFallbacks = new Map<string, SubmoduleTrackedFileChange>();
+  const parentRefsForDiff = getSubmoduleComparisonDiffRefs(comparison);
+  if (!parentRefsForDiff) {
+    return { tracked, untracked, expandedSubmodulePaths, immediateFallbacks };
+  }
   const submodulePaths = await listInitializedSubmodulePathsCached(cwd, cache);
   for (const submodulePath of submodulePaths) {
     const submoduleCwd = resolve(cwd, submodulePath);
@@ -1008,6 +1050,15 @@ async function listSubmoduleFileChanges(input: {
       parentComparison: comparison,
       cache,
     });
+    const childFallback: SubmoduleTrackedFileChange = {
+      cwd,
+      displayPrefix,
+      refsForDiff: parentRefsForDiff,
+      change: createSubmoduleFallbackChange(submodulePath, submoduleComparison),
+      ...(parentFallback ? { fallback: parentFallback } : null),
+      isGitlinkFallback: true,
+    };
+    immediateFallbacks.set(displaySubmodulePath, childFallback);
     if (!submoduleComparison) continue;
     const refsForDiff = getSubmoduleComparisonDiffRefs(submoduleComparison);
     if (!refsForDiff) continue;
@@ -1040,6 +1091,8 @@ async function listSubmoduleFileChanges(input: {
             displayPrefix: displaySubmodulePath,
             refsForDiff,
             change,
+            fallback: childFallback,
+            isGitlinkFallback: true,
           });
         } else {
           tracked.push({
@@ -1047,6 +1100,7 @@ async function listSubmoduleFileChanges(input: {
             displayPrefix: displaySubmodulePath,
             refsForDiff,
             change,
+            fallback: childFallback,
           });
         }
       }
@@ -1060,6 +1114,7 @@ async function listSubmoduleFileChanges(input: {
       ignoreWhitespace,
       comparison: submoduleComparison,
       cache,
+      parentFallback: childFallback,
       visited,
     });
     for (const [fallbackPath, fallback] of nestedFallbacks) {
@@ -1086,28 +1141,34 @@ async function listSubmoduleFileChanges(input: {
     ),
     untracked: [...untrackedByPath.values()].sort((a, b) => a.path.localeCompare(b.path)),
     expandedSubmodulePaths,
+    immediateFallbacks,
   };
+}
+
+interface RenderedSubmoduleTrackedDiff {
+  path: string;
+  submodulePath?: string;
+  text: string;
+  truncated: boolean;
+  trackedChange: SubmoduleTrackedFileChange;
 }
 
 async function getSubmoduleTrackedDiffTextForPath(input: {
   trackedChange: SubmoduleTrackedFileChange;
   ignoreWhitespace: boolean;
-}): Promise<{
-  path: string;
-  submodulePath: string;
-  text: string;
-  truncated: boolean;
-  change: CheckoutFileChange;
-}> {
+}): Promise<RenderedSubmoduleTrackedDiff> {
   const { trackedChange } = input;
   const path = joinGitPath(trackedChange.displayPrefix, trackedChange.change.path);
+  const submoduleFormat = trackedChange.isGitlinkFallback ? "short" : "diff";
+  const srcPrefix = trackedChange.displayPrefix ? `a/${trackedChange.displayPrefix}/` : "a/";
+  const dstPrefix = trackedChange.displayPrefix ? `b/${trackedChange.displayPrefix}/` : "b/";
   const result = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace: input.ignoreWhitespace,
       extra: [
-        "--submodule=diff",
-        `--src-prefix=a/${trackedChange.displayPrefix}/`,
-        `--dst-prefix=b/${trackedChange.displayPrefix}/`,
+        `--submodule=${submoduleFormat}`,
+        `--src-prefix=${srcPrefix}`,
+        `--dst-prefix=${dstPrefix}`,
         ...getCheckoutDiffRenderingArgs(trackedChange.refsForDiff),
         "--",
         trackedChange.change.path,
@@ -1122,11 +1183,53 @@ async function getSubmoduleTrackedDiffTextForPath(input: {
 
   return {
     path,
-    submodulePath: trackedChange.displayPrefix,
+    ...(trackedChange.displayPrefix ? { submodulePath: trackedChange.displayPrefix } : null),
     text: result.stdout,
     truncated: result.truncated,
-    change: trackedChange.change,
+    trackedChange,
   };
+}
+
+async function renderSubmoduleTrackedChangeWithFallback(input: {
+  trackedChange: SubmoduleTrackedFileChange;
+  ignoreWhitespace: boolean;
+  cache: Map<SubmoduleTrackedFileChange, Promise<RenderedSubmoduleTrackedDiff | null>>;
+}): Promise<RenderedSubmoduleTrackedDiff | null> {
+  let candidate: SubmoduleTrackedFileChange | undefined = input.trackedChange;
+  while (candidate) {
+    const current: SubmoduleTrackedFileChange = candidate;
+    let load = input.cache.get(current);
+    if (!load) {
+      load = getSubmoduleTrackedDiffTextForPath({
+        trackedChange: current,
+        ignoreWhitespace: input.ignoreWhitespace,
+      })
+        .then((rendered) => (rendered.text || rendered.truncated ? rendered : null))
+        .catch((error: unknown) => {
+          if (!current.fallback) throw error;
+          return null;
+        });
+      input.cache.set(current, load);
+    }
+    const rendered = await load;
+    if (rendered) {
+      return rendered;
+    }
+    candidate = current.fallback;
+  }
+  return null;
+}
+
+function isCoveredByRenderedFallback(
+  path: string,
+  renderedFallbackPaths: ReadonlySet<string>,
+): boolean {
+  for (const fallbackPath of renderedFallbackPaths) {
+    if (path !== fallbackPath && path.startsWith(`${fallbackPath}/`)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function processSubmoduleTrackedChanges(input: {
@@ -1143,26 +1246,47 @@ async function processSubmoduleTrackedChanges(input: {
     return;
   }
 
-  const trackedDiffs = await Promise.all(
+  const renderCache = new Map<
+    SubmoduleTrackedFileChange,
+    Promise<RenderedSubmoduleTrackedDiff | null>
+  >();
+  const rendered = await Promise.all(
     trackedChanges.map((trackedChange) =>
-      getSubmoduleTrackedDiffTextForPath({
+      renderSubmoduleTrackedChangeWithFallback({
         trackedChange,
         ignoreWhitespace,
+        cache: renderCache,
       }),
     ),
   );
+  const renderedByPath = new Map(
+    rendered
+      .filter((fileDiff): fileDiff is RenderedSubmoduleTrackedDiff => fileDiff !== null)
+      .map((fileDiff) => [fileDiff.path, fileDiff]),
+  );
+  const renderedFallbackPaths = new Set(
+    [...renderedByPath.values()]
+      .filter((fileDiff) => fileDiff.trackedChange.isGitlinkFallback)
+      .map((fileDiff) => fileDiff.path),
+  );
+  const trackedDiffs = [...renderedByPath.values()]
+    .filter((fileDiff) => !isCoveredByRenderedFallback(fileDiff.path, renderedFallbackPaths))
+    .sort((a, b) => a.path.localeCompare(b.path));
 
   for (const fileDiff of trackedDiffs) {
+    const { change } = fileDiff.trackedChange;
     if (fileDiff.truncated) {
       if (includeStructured) {
         structured.push(
           buildPlaceholderParsedDiffFile(
             {
               path: fileDiff.path,
-              submodulePath: fileDiff.submodulePath,
-              status: fileDiff.change.status,
-              isNew: fileDiff.change.isNew,
-              isDeleted: fileDiff.change.isDeleted,
+              ...(fileDiff.submodulePath !== undefined
+                ? { submodulePath: fileDiff.submodulePath }
+                : null),
+              status: change.status,
+              isNew: change.isNew,
+              isDeleted: change.isDeleted,
             },
             { status: "too_large", stat: null },
           ),
@@ -1189,8 +1313,8 @@ async function processSubmoduleTrackedChanges(input: {
       parsed[0] ??
       ({
         path: fileDiff.path,
-        isNew: fileDiff.change.isNew,
-        isDeleted: fileDiff.change.isDeleted,
+        isNew: change.isNew,
+        isDeleted: change.isDeleted,
         additions: 0,
         deletions: 0,
         hunks: [],
@@ -1198,9 +1322,9 @@ async function processSubmoduleTrackedChanges(input: {
     structured.push({
       ...parsedFile,
       path: fileDiff.path,
-      submodulePath: fileDiff.submodulePath,
-      isNew: fileDiff.change.isNew,
-      isDeleted: fileDiff.change.isDeleted,
+      ...(fileDiff.submodulePath !== undefined ? { submodulePath: fileDiff.submodulePath } : null),
+      isNew: change.isNew,
+      isDeleted: change.isDeleted,
       status: "ok",
     });
   }
@@ -3024,10 +3148,16 @@ export async function getCheckoutDiff(
     comparison: rootComparison,
     cache: submoduleScanCache,
   });
-  const trackedChanges = changes.filter(
-    (change) =>
-      !change.isUntracked && !submoduleFileChanges.expandedSubmodulePaths.has(change.path),
-  );
+  const rootSubmoduleFallbackChanges: SubmoduleTrackedFileChange[] = [];
+  const trackedChanges = changes.filter((change) => {
+    if (change.isUntracked) return false;
+    const fallback = submoduleFileChanges.immediateFallbacks.get(change.path);
+    if (!fallback) return true;
+    if (!submoduleFileChanges.expandedSubmodulePaths.has(change.path)) {
+      rootSubmoduleFallbackChanges.push({ ...fallback, change });
+    }
+    return false;
+  });
   const untrackedChanges = changes.filter((change) => change.isUntracked === true);
   if (effectiveRefsForDiff.includeUntracked) {
     untrackedChanges.push(...submoduleFileChanges.untracked);
@@ -3077,7 +3207,7 @@ export async function getCheckoutDiff(
 
   await processSubmoduleTrackedChanges({
     cwd,
-    trackedChanges: submoduleFileChanges.tracked,
+    trackedChanges: [...submoduleFileChanges.tracked, ...rootSubmoduleFallbackChanges],
     ignoreWhitespace,
     includeStructured: compare.includeStructured === true,
     structured,
