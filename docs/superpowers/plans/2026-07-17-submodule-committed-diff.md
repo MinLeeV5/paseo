@@ -298,6 +298,8 @@ function readGitlinkObjectIdAtRefCached(
   path: string,
   cache: SubmoduleScanCache,
 ): Promise<GitlinkLookup> {
+  // Root callers replace literal HEAD with the rootHead captured for this request
+  // before the ref reaches this structural cache key and its ls-tree query.
   const key = `${getCanonicalPathOrResolved(cwd)}\0${ref}\0${path}`;
   const cached = cache.gitlinks.get(key);
   if (cached) return cached;
@@ -314,7 +316,15 @@ function readHeadObjectIdCached(cwd: string, cache: SubmoduleScanCache): Promise
   cache.headObjectIds.set(key, load);
   return load;
 }
+
+function canonicalizeRootCommitRef(ref: string, rootHead: string | null): string {
+  return ref === "HEAD" && rootHead ? rootHead : ref;
+}
 ```
+
+Use the same request-local `rootHead` value for both root endpoint construction and this
+normalization. Descendant commit refs already come from `ls-tree` as full object IDs, so they do not
+need another `rev-parse`; the cache and query continue to preserve `absent` versus `unavailable`.
 
 - [ ] **Step 9: Convert endpoints to Git refs and resolve each child without `HEAD` fallback**
 
@@ -431,6 +441,7 @@ async function listSubmoduleFileChanges(input: {
   ignoreWhitespace: boolean;
   comparison: SubmoduleDiffComparison;
   cache: SubmoduleScanCache;
+  parentFallback?: SubmoduleTrackedFileChange;
   visited?: Set<string>;
 }): Promise<SubmoduleFileChanges> {
   const {
@@ -439,6 +450,7 @@ async function listSubmoduleFileChanges(input: {
     ignoreWhitespace,
     comparison,
     cache,
+    parentFallback,
     visited = new Set<string>(),
   } = input;
   let canonicalCwd: string;
@@ -455,6 +467,10 @@ async function listSubmoduleFileChanges(input: {
   const tracked: SubmoduleTrackedFileChange[] = [];
   const untracked: CheckoutFileChange[] = [];
   const expandedSubmodulePaths = new Set<string>();
+  const parentRefsForDiff = getSubmoduleComparisonDiffRefs(comparison);
+  if (!parentRefsForDiff) {
+    return { tracked, untracked, expandedSubmodulePaths };
+  }
   const submodulePaths = await listInitializedSubmodulePathsCached(cwd, cache);
   for (const submodulePath of submodulePaths) {
     const submoduleCwd = resolve(cwd, submodulePath);
@@ -466,6 +482,14 @@ async function listSubmoduleFileChanges(input: {
       parentComparison: comparison,
       cache,
     });
+    const childFallback: SubmoduleTrackedFileChange = {
+      cwd,
+      displayPrefix,
+      refsForDiff: parentRefsForDiff,
+      change: createSubmoduleFallbackChange(submodulePath, submoduleComparison),
+      ...(parentFallback ? { fallback: parentFallback } : null),
+      isGitlinkFallback: true,
+    };
     if (!submoduleComparison) continue;
     const refsForDiff = getSubmoduleComparisonDiffRefs(submoduleComparison);
     if (!refsForDiff) continue;
@@ -497,6 +521,8 @@ async function listSubmoduleFileChanges(input: {
             displayPrefix: displaySubmodulePath,
             refsForDiff,
             change,
+            fallback: childFallback,
+            isGitlinkFallback: true,
           });
         } else {
           tracked.push({
@@ -504,11 +530,14 @@ async function listSubmoduleFileChanges(input: {
             displayPrefix: displaySubmodulePath,
             refsForDiff,
             change,
+            fallback: childFallback,
           });
         }
       }
     } catch {
-      // The nearest parent gitlink remains when this child comparison is unavailable.
+      tracked.push(childFallback);
+      expandedSubmodulePaths.add(displaySubmodulePath);
+      continue;
     }
 
     const nestedChanges = await listSubmoduleFileChanges({
@@ -517,6 +546,7 @@ async function listSubmoduleFileChanges(input: {
       ignoreWhitespace,
       comparison: submoduleComparison,
       cache,
+      parentFallback: childFallback,
       visited,
     });
     for (const [fallbackPath, fallback] of nestedFallbacks) {
@@ -559,9 +589,15 @@ const rootComparison: SubmoduleDiffComparison = {
   oldEndpoint:
     effectiveRefsForDiff.baseRef === EMPTY_TREE_OBJECT_ID
       ? { kind: "absent" }
-      : { kind: "commit", ref: effectiveRefsForDiff.baseRef },
+      : {
+          kind: "commit",
+          ref: canonicalizeRootCommitRef(effectiveRefsForDiff.baseRef, rootHead),
+        },
   newEndpoint: effectiveRefsForDiff.targetRef
-    ? { kind: "commit", ref: effectiveRefsForDiff.targetRef }
+    ? {
+        kind: "commit",
+        ref: canonicalizeRootCommitRef(effectiveRefsForDiff.targetRef, rootHead),
+      }
     : {
         kind: "worktree",
         recordedCommit: rootHead,
