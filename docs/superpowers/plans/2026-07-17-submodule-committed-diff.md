@@ -4,7 +4,10 @@
 
 **Goal:** Keep committed child changes visible through the existing Uncommitted/Committed switch when a submodule is configured with `ignore = all`.
 
-**Architecture:** Preserve the parent gitlink as the source of truth and make every tracked checkout-diff read explicitly override Git's submodule ignore setting. A real-repository regression test proves the same child file appears in Uncommitted before the parent gitlink commit and in Committed afterward.
+**Architecture:** Preserve the parent gitlink as the source of truth. Discover paths and collect
+statistics with `--ignore-submodules=dirty`, then render already-discovered tracked paths with
+`--ignore-submodules=none`. Real-repository regressions cover mode ownership, mixed child
+commit/worktree dirt, and nested ignored gitlinks.
 
 **Tech Stack:** TypeScript, Node.js child processes, Git, Vitest.
 
@@ -34,7 +37,10 @@
 **Interfaces:**
 
 - Consumes: `getCheckoutDiff(cwd, { mode, baseRef?, includeStructured })` and the existing `CheckoutDiffRefs` shape `{ baseRef, targetRef?, includeUntracked }`.
-- Produces: internal `getCheckoutDiffComparisonArgs(refs: CheckoutDiffRefs): string[]`, returning `--ignore-submodules=dirty` followed by the base and optional target refs.
+- Produces: internal `getCheckoutDiffDiscoveryArgs(refs: CheckoutDiffRefs): string[]`, returning
+  `--ignore-submodules=dirty` followed by the base and optional target refs, and
+  `getCheckoutDiffRenderingArgs(refs: CheckoutDiffRefs): string[]`, returning
+  `--ignore-submodules=none` followed by the same refs.
 
 - [ ] **Step 1: Write the failing real-repository regression test**
 
@@ -129,34 +135,40 @@ npx vitest run packages/server/src/utils/checkout-git.test.ts --bail=1 -t "moves
 
 Expected: FAIL at the first structured-file assertion because the current parent diff honors `ignore = all` and returns `[]`.
 
-- [ ] **Step 3: Apply the minimal shared argument fix**
+- [ ] **Step 3: Apply the discovery/rendering argument split**
 
-Rename the helper and prepend the explicit override in `packages/server/src/utils/checkout-git.ts`:
+Use separate argument helpers in `packages/server/src/utils/checkout-git.ts`:
 
 ```typescript
-function getCheckoutDiffComparisonArgs(refs: CheckoutDiffRefs): string[] {
+function getCheckoutDiffDiscoveryArgs(refs: CheckoutDiffRefs): string[] {
   return ["--ignore-submodules=dirty", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
+}
+
+function getCheckoutDiffRenderingArgs(refs: CheckoutDiffRefs): string[] {
+  return ["--ignore-submodules=none", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
 }
 ```
 
-`dirty` deliberately includes gitlink/new-commit changes while leaving child-only worktree dirt to
-the existing recursive scanner. `none` must not be used because it also emits a duplicate
-submodule-root entry for child-only tracked or untracked changes.
+`dirty` deliberately includes gitlink/new-commit changes during discovery while leaving child-only
+worktree dirt to the existing recursive scanner. `none` is reserved for rendering a path that was
+already discovered; using it for discovery would emit a duplicate submodule-root entry.
 
-Use it in each tracked checkout-diff command:
+Use the discovery helper for `--name-status` and `--numstat`:
 
 ```typescript
-extra: ["--name-status", ...getCheckoutDiffComparisonArgs(refs)],
+extra: ["--name-status", ...getCheckoutDiffDiscoveryArgs(refs)],
 ```
 
 ```typescript
-extra: ["--numstat", ...getCheckoutDiffComparisonArgs(refs)],
+extra: ["--numstat", ...getCheckoutDiffDiscoveryArgs(refs)],
 ```
+
+Use the rendering helper for top-level per-path patches:
 
 ```typescript
 extra: [
   "--submodule=diff",
-  ...getCheckoutDiffComparisonArgs(input.refsForDiff),
+  ...getCheckoutDiffRenderingArgs(input.refsForDiff),
   "--",
   input.path,
 ],
@@ -172,8 +184,8 @@ Update the exact command assertions in `packages/server/src/utils/checkout-git.t
 
 ```typescript
 expect(commands).toContain("diff --numstat --ignore-submodules=dirty HEAD");
-expect(commands).toContain("diff --submodule=diff --ignore-submodules=dirty HEAD -- generated.js");
-expect(commands).toContain("diff --submodule=diff --ignore-submodules=dirty HEAD -- small.ts");
+expect(commands).toContain("diff --submodule=diff --ignore-submodules=none HEAD -- generated.js");
+expect(commands).toContain("diff --submodule=diff --ignore-submodules=none HEAD -- small.ts");
 ```
 
 - [ ] **Step 4: Run the regression test and verify GREEN**
@@ -205,9 +217,10 @@ npm run format
 npm run typecheck
 npm run lint
 npm run format:check
+git diff --check
 ```
 
-Expected: all four commands exit 0; lint reports no warnings or errors and format verification reports no mismatches.
+Expected: all five commands exit 0; lint reports no warnings or errors and format verification reports no mismatches.
 
 - [ ] **Step 7: Commit the implementation**
 
@@ -215,3 +228,47 @@ Expected: all four commands exit 0; lint reports no warnings or errors and forma
 git add packages/server/src/utils/checkout-git.ts packages/server/src/utils/checkout-git.test.ts
 git commit -m "fix: show ignored submodule changes in committed diffs"
 ```
+
+---
+
+### Task 2: Fix final-review rendering regressions
+
+**Files:**
+
+- Modify: `packages/server/src/utils/checkout-git.test.ts`
+- Modify: `packages/server/src/utils/checkout-git.ts`
+- Modify: `docs/superpowers/specs/2026-07-17-submodule-committed-diff-design.md`
+- Modify: `docs/superpowers/plans/2026-07-17-submodule-committed-diff.md`
+
+- [ ] **Step 1: Add both real-Git regressions and verify RED**
+
+Add one test for ignored child commit B plus a tracked edit after B. Assert one child-file row and
+patch content from both the commit and worktree. Add another test for an ignored nested submodule
+commit inside an outer submodule. Assert the underlying file's full parent-relative path, full
+nested `submodulePath`, and visible patch content. Run each test by name before editing production
+code and confirm a behavioral failure.
+
+- [ ] **Step 2: Render discovered paths with `none`**
+
+Keep `--name-status` and `--numstat` on the discovery helper (`dirty`). Use the rendering helper
+(`none`) in `getTrackedDiffTextForPath()`, and add `--ignore-submodules=none` to
+`getSubmoduleTrackedDiffTextForPath()`.
+
+- [ ] **Step 3: Preserve nested file ownership and duplicate prevention**
+
+When recursive submodule rendering parses files below a discovered gitlink, emit those files rather
+than a gitlink-root fallback. Preserve their full prefixed paths and use the full discovered gitlink
+path as `submodulePath`. Pass discovered nested gitlink paths into recursive tracked-scan suppression
+so the expanded patch and child scan cannot emit the same tracked file twice.
+
+- [ ] **Step 4: Verify focused and complete behavior**
+
+Run both new tests, the unborn-HEAD and child-only untracked tests, the existing ignored-submodule
+tests, and the exact-command metrics test by name. Then run
+`packages/server/src/utils/checkout-git.test.ts` once in full using clean Git if local trace tooling
+causes teardown-only fixture failures.
+
+- [ ] **Step 5: Format, statically verify, document, and commit**
+
+Run the repository formatting, typecheck, lint, formatting verification, and `git diff --check`.
+Commit the scoped code, tests, design, and plan updates with a final-review fix subject.

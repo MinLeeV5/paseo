@@ -196,8 +196,12 @@ interface SubmoduleFileChanges {
   untracked: CheckoutFileChange[];
 }
 
-function getCheckoutDiffComparisonArgs(refs: CheckoutDiffRefs): string[] {
+function getCheckoutDiffDiscoveryArgs(refs: CheckoutDiffRefs): string[] {
   return ["--ignore-submodules=dirty", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
+}
+
+function getCheckoutDiffRenderingArgs(refs: CheckoutDiffRefs): string[] {
+  return ["--ignore-submodules=none", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
 }
 
 function normalizeBranchSuggestionName(raw: string): string | null {
@@ -463,7 +467,7 @@ async function listCheckoutFileChanges(
   const { stdout: nameStatusOut } = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace,
-      extra: ["--name-status", ...getCheckoutDiffComparisonArgs(refs)],
+      extra: ["--name-status", ...getCheckoutDiffDiscoveryArgs(refs)],
     }),
     { cwd, envOverlay: READ_ONLY_GIT_ENV },
   );
@@ -589,11 +593,11 @@ function buildGitDiffArgs(args: { ignoreWhitespace?: boolean; extra: string[] })
   return ["diff", ...(args.ignoreWhitespace ? ["-w"] : []), ...args.extra];
 }
 
-function getNestedParsedFilesForChange(
+function getNestedParsedFilesForPath(
   parsedTrackedFiles: ParsedDiffFile[],
-  change: CheckoutFileChange,
+  path: string,
 ): ParsedDiffFile[] {
-  const nestedPathPrefix = `${change.path}/`;
+  const nestedPathPrefix = `${path}/`;
   return parsedTrackedFiles.filter((file) => file.path.startsWith(nestedPathPrefix));
 }
 
@@ -623,7 +627,7 @@ async function getTrackedNumstatByPath(
   const result = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace,
-      extra: ["--numstat", ...getCheckoutDiffComparisonArgs(refs)],
+      extra: ["--numstat", ...getCheckoutDiffDiscoveryArgs(refs)],
     }),
     {
       cwd,
@@ -683,7 +687,7 @@ async function getTrackedDiffTextForPath(input: {
       ignoreWhitespace: input.ignoreWhitespace,
       extra: [
         "--submodule=diff",
-        ...getCheckoutDiffComparisonArgs(input.refsForDiff),
+        ...getCheckoutDiffRenderingArgs(input.refsForDiff),
         "--",
         input.path,
       ],
@@ -785,6 +789,7 @@ async function listSubmoduleFileChanges(input: {
   for (const submodulePath of submodulePaths) {
     const submoduleCwd = resolve(cwd, submodulePath);
     const displaySubmodulePath = joinGitPath(displayPrefix, submodulePath);
+    const nestedSkipTrackedSubmodulePaths = new Set(skipTrackedSubmodulePaths);
 
     try {
       const submoduleChanges = await listCheckoutFileChanges(
@@ -815,6 +820,7 @@ async function listSubmoduleFileChanges(input: {
             change,
           });
         }
+        nestedSkipTrackedSubmodulePaths.add(joinGitPath(displaySubmodulePath, change.path));
       }
     } catch {
       // Ignore uninitialized or temporarily unavailable submodules; the parent
@@ -825,7 +831,7 @@ async function listSubmoduleFileChanges(input: {
       cwd: submoduleCwd,
       displayPrefix: displaySubmodulePath,
       ignoreWhitespace,
-      skipTrackedSubmodulePaths,
+      skipTrackedSubmodulePaths: nestedSkipTrackedSubmodulePaths,
       visited,
     });
     tracked.push(...nestedChanges.tracked);
@@ -852,6 +858,7 @@ async function getSubmoduleTrackedDiffTextForPath(input: {
       ignoreWhitespace: input.ignoreWhitespace,
       extra: [
         "--submodule=diff",
+        "--ignore-submodules=none",
         `--src-prefix=a/${trackedChange.displayPrefix}/`,
         `--dst-prefix=b/${trackedChange.displayPrefix}/`,
         "HEAD",
@@ -924,6 +931,13 @@ async function processSubmoduleTrackedChanges(input: {
     }
 
     const parsed = await parseAndHighlightDiff(fileDiff.text, cwd);
+    const nestedParsedFiles = getNestedParsedFilesForPath(parsed, fileDiff.path);
+    if (nestedParsedFiles.length > 0) {
+      for (const nestedFile of nestedParsedFiles) {
+        structured.push({ ...nestedFile, submodulePath: fileDiff.path, status: "ok" });
+      }
+      continue;
+    }
     const parsedFile =
       parsed[0] ??
       ({
@@ -2493,7 +2507,7 @@ async function appendStructuredTrackedDiffs(
       continue;
     }
 
-    const nestedParsedFiles = getNestedParsedFilesForChange(parsedTrackedFiles, change);
+    const nestedParsedFiles = getNestedParsedFilesForPath(parsedTrackedFiles, change.path);
     if (nestedParsedFiles.length > 0) {
       for (const nestedFile of nestedParsedFiles) {
         structured.push({ ...nestedFile, submodulePath: change.path, status: "ok" });
