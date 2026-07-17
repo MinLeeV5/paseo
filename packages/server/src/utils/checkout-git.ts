@@ -1222,109 +1222,240 @@ function isCoveredByRenderedFallback(
   renderedFallbackPaths: ReadonlySet<string>,
 ): boolean {
   for (const fallbackPath of renderedFallbackPaths) {
-    if (path !== fallbackPath && path.startsWith(`${fallbackPath}/`)) {
+    if (isNestedGitPath(path, fallbackPath)) {
       return true;
     }
   }
   return false;
 }
 
-async function processSubmoduleTrackedChanges(input: {
+function isNestedGitPath(path: string, parentPath: string): boolean {
+  return path !== parentPath && path.startsWith(`${parentPath}/`);
+}
+
+interface DisplayedSubmoduleTrackedChange {
+  path: string;
+  submodulePath?: string;
+  trackedChange: SubmoduleTrackedFileChange;
+}
+
+function getDisplayedSubmoduleTrackedChange(
+  trackedChange: SubmoduleTrackedFileChange,
+): DisplayedSubmoduleTrackedChange {
+  return {
+    path: joinGitPath(trackedChange.displayPrefix, trackedChange.change.path),
+    ...(trackedChange.displayPrefix ? { submodulePath: trackedChange.displayPrefix } : null),
+    trackedChange,
+  };
+}
+
+function groupSubmoduleTrackedChanges(
+  trackedChanges: SubmoduleTrackedFileChange[],
+): SubmoduleTrackedFileChange[][] {
+  const groups = new Map<SubmoduleTrackedFileChange, SubmoduleTrackedFileChange[]>();
+  for (const trackedChange of trackedChanges) {
+    let outermostFallback = trackedChange;
+    while (outermostFallback.fallback) {
+      outermostFallback = outermostFallback.fallback;
+    }
+    const group = groups.get(outermostFallback);
+    if (group) {
+      group.push(trackedChange);
+    } else {
+      groups.set(outermostFallback, [trackedChange]);
+    }
+  }
+  return [...groups.values()];
+}
+
+interface RecordRenderedSubmoduleDiffInput {
+  fileDiff: RenderedSubmoduleTrackedDiff;
+  renderedByPath: Map<string, RenderedSubmoduleTrackedDiff>;
+  renderedFallbackPaths: Set<string>;
+}
+
+function recordRenderedSubmoduleDiff(input: RecordRenderedSubmoduleDiffInput): void {
+  const { fileDiff, renderedByPath, renderedFallbackPaths } = input;
+  if (fileDiff.trackedChange.isGitlinkFallback) {
+    for (const renderedPath of renderedByPath.keys()) {
+      if (isNestedGitPath(renderedPath, fileDiff.path)) {
+        renderedByPath.delete(renderedPath);
+      }
+    }
+    for (const fallbackPath of renderedFallbackPaths) {
+      if (isNestedGitPath(fallbackPath, fileDiff.path)) {
+        renderedFallbackPaths.delete(fallbackPath);
+      }
+    }
+    renderedFallbackPaths.add(fileDiff.path);
+  }
+  renderedByPath.set(fileDiff.path, fileDiff);
+}
+
+interface ResolveSubmoduleTrackedDiffGroupInput {
+  trackedChanges: SubmoduleTrackedFileChange[];
+  ignoreWhitespace: boolean;
+}
+
+async function resolveSubmoduleTrackedDiffGroup(
+  input: ResolveSubmoduleTrackedDiffGroupInput,
+): Promise<RenderedSubmoduleTrackedDiff[]> {
+  const renderCache = new Map<
+    SubmoduleTrackedFileChange,
+    Promise<RenderedSubmoduleTrackedDiff | null>
+  >();
+  const renderedByPath = new Map<string, RenderedSubmoduleTrackedDiff>();
+  const renderedFallbackPaths = new Set<string>();
+  for (const trackedChange of input.trackedChanges) {
+    const trackedPath = getDisplayedSubmoduleTrackedChange(trackedChange).path;
+    if (isCoveredByRenderedFallback(trackedPath, renderedFallbackPaths)) {
+      continue;
+    }
+
+    const fileDiff = await renderSubmoduleTrackedChangeWithFallback({
+      trackedChange,
+      ignoreWhitespace: input.ignoreWhitespace,
+      cache: renderCache,
+    });
+    if (!fileDiff || (!fileDiff.text && !fileDiff.truncated)) {
+      continue;
+    }
+    if (isCoveredByRenderedFallback(fileDiff.path, renderedFallbackPaths)) {
+      continue;
+    }
+    recordRenderedSubmoduleDiff({ fileDiff, renderedByPath, renderedFallbackPaths });
+  }
+
+  return [...renderedByPath.values()].sort((a, b) => a.path.localeCompare(b.path));
+}
+
+interface AppendSubmoduleTooLargeInput {
+  displayedChange: DisplayedSubmoduleTrackedChange;
+  includeStructured: boolean;
+  structured: ParsedDiffFile[];
+  output: DiffOutputAccumulator;
+}
+
+function appendSubmoduleTooLarge(input: AppendSubmoduleTooLargeInput): void {
+  const { displayedChange, includeStructured, structured, output } = input;
+  const { change } = displayedChange.trackedChange;
+  if (includeStructured) {
+    structured.push(
+      buildPlaceholderParsedDiffFile(
+        {
+          path: displayedChange.path,
+          ...(displayedChange.submodulePath !== undefined
+            ? { submodulePath: displayedChange.submodulePath }
+            : null),
+          status: change.status,
+          isNew: change.isNew,
+          isDeleted: change.isDeleted,
+        },
+        { status: "too_large", stat: null },
+      ),
+    );
+  }
+  output.tryAppend(`# ${displayedChange.path}: diff too large omitted\n`);
+}
+
+interface AppendRenderedSubmoduleTrackedDiffInput {
+  cwd: string;
+  fileDiff: RenderedSubmoduleTrackedDiff;
+  includeStructured: boolean;
+  structured: ParsedDiffFile[];
+  output: DiffOutputAccumulator;
+}
+
+async function appendRenderedSubmoduleTrackedDiff(
+  input: AppendRenderedSubmoduleTrackedDiffInput,
+): Promise<void> {
+  const { cwd, fileDiff, includeStructured, structured, output } = input;
+  if (output.remainingBytes() === 0 || fileDiff.truncated || !output.tryAppend(fileDiff.text)) {
+    appendSubmoduleTooLarge({
+      displayedChange: fileDiff,
+      includeStructured,
+      structured,
+      output,
+    });
+    return;
+  }
+  if (!includeStructured) {
+    return;
+  }
+
+  const { change } = fileDiff.trackedChange;
+  const parsed = await parseAndHighlightDiff(fileDiff.text, cwd);
+  const nestedParsedFiles = getNestedParsedFilesForPath(parsed, fileDiff.path);
+  if (nestedParsedFiles.length > 0) {
+    for (const nestedFile of nestedParsedFiles) {
+      structured.push({ ...nestedFile, submodulePath: fileDiff.path, status: "ok" });
+    }
+    return;
+  }
+  const parsedFile =
+    parsed[0] ??
+    ({
+      path: fileDiff.path,
+      isNew: change.isNew,
+      isDeleted: change.isDeleted,
+      additions: 0,
+      deletions: 0,
+      hunks: [],
+    } satisfies ParsedDiffFile);
+  structured.push({
+    ...parsedFile,
+    path: fileDiff.path,
+    ...(fileDiff.submodulePath !== undefined ? { submodulePath: fileDiff.submodulePath } : null),
+    isNew: change.isNew,
+    isDeleted: change.isDeleted,
+    status: "ok",
+  });
+}
+
+interface ProcessSubmoduleTrackedChangesInput {
   cwd: string;
   trackedChanges: SubmoduleTrackedFileChange[];
   ignoreWhitespace: boolean;
   includeStructured: boolean;
   structured: ParsedDiffFile[];
-  appendDiff: (text: string) => void;
-}): Promise<void> {
-  const { cwd, trackedChanges, ignoreWhitespace, includeStructured, structured, appendDiff } =
-    input;
+  output: DiffOutputAccumulator;
+}
+
+async function processSubmoduleTrackedChanges(
+  input: ProcessSubmoduleTrackedChangesInput,
+): Promise<void> {
+  const { cwd, trackedChanges, ignoreWhitespace, includeStructured, structured, output } = input;
   if (trackedChanges.length === 0) {
     return;
   }
 
-  const renderCache = new Map<
-    SubmoduleTrackedFileChange,
-    Promise<RenderedSubmoduleTrackedDiff | null>
-  >();
-  const rendered = await Promise.all(
-    trackedChanges.map((trackedChange) =>
-      renderSubmoduleTrackedChangeWithFallback({
-        trackedChange,
-        ignoreWhitespace,
-        cache: renderCache,
-      }),
-    ),
-  );
-  const renderedByPath = new Map(
-    rendered
-      .filter((fileDiff): fileDiff is RenderedSubmoduleTrackedDiff => fileDiff !== null)
-      .filter((fileDiff) => fileDiff.text || fileDiff.truncated)
-      .map((fileDiff) => [fileDiff.path, fileDiff]),
-  );
-  const renderedFallbackPaths = new Set(
-    [...renderedByPath.values()]
-      .filter((fileDiff) => fileDiff.trackedChange.isGitlinkFallback)
-      .map((fileDiff) => fileDiff.path),
-  );
-  const trackedDiffs = [...renderedByPath.values()]
-    .filter((fileDiff) => !isCoveredByRenderedFallback(fileDiff.path, renderedFallbackPaths))
-    .sort((a, b) => a.path.localeCompare(b.path));
-
-  for (const fileDiff of trackedDiffs) {
-    const { change } = fileDiff.trackedChange;
-    if (fileDiff.truncated) {
-      if (includeStructured) {
-        structured.push(
-          buildPlaceholderParsedDiffFile(
-            {
-              path: fileDiff.path,
-              ...(fileDiff.submodulePath !== undefined
-                ? { submodulePath: fileDiff.submodulePath }
-                : null),
-              status: change.status,
-              isNew: change.isNew,
-              isDeleted: change.isDeleted,
-            },
-            { status: "too_large", stat: null },
-          ),
-        );
-      }
-      appendDiff(`# ${fileDiff.path}: diff too large omitted\n`);
-      continue;
-    }
-
-    appendDiff(fileDiff.text);
-    if (!includeStructured) {
-      continue;
-    }
-
-    const parsed = await parseAndHighlightDiff(fileDiff.text, cwd);
-    const nestedParsedFiles = getNestedParsedFilesForPath(parsed, fileDiff.path);
-    if (nestedParsedFiles.length > 0) {
-      for (const nestedFile of nestedParsedFiles) {
-        structured.push({ ...nestedFile, submodulePath: fileDiff.path, status: "ok" });
+  const trackedChangeGroups = groupSubmoduleTrackedChanges(trackedChanges);
+  for (const group of trackedChangeGroups) {
+    if (output.remainingBytes() === 0) {
+      for (const trackedChange of group) {
+        appendSubmoduleTooLarge({
+          displayedChange: getDisplayedSubmoduleTrackedChange(trackedChange),
+          includeStructured,
+          structured,
+          output,
+        });
       }
       continue;
     }
-    const parsedFile =
-      parsed[0] ??
-      ({
-        path: fileDiff.path,
-        isNew: change.isNew,
-        isDeleted: change.isDeleted,
-        additions: 0,
-        deletions: 0,
-        hunks: [],
-      } satisfies ParsedDiffFile);
-    structured.push({
-      ...parsedFile,
-      path: fileDiff.path,
-      ...(fileDiff.submodulePath !== undefined ? { submodulePath: fileDiff.submodulePath } : null),
-      isNew: change.isNew,
-      isDeleted: change.isDeleted,
-      status: "ok",
+
+    const trackedDiffs = await resolveSubmoduleTrackedDiffGroup({
+      trackedChanges: group,
+      ignoreWhitespace,
     });
+    for (const fileDiff of trackedDiffs) {
+      await appendRenderedSubmoduleTrackedDiff({
+        cwd,
+        fileDiff,
+        includeStructured,
+        structured,
+        output,
+      });
+    }
   }
 }
 
@@ -2411,6 +2542,29 @@ const PER_FILE_DIFF_MAX_BYTES = 1024 * 1024; // 1MB
 const TOTAL_DIFF_MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const UNTRACKED_BINARY_SNIFF_BYTES = 16 * 1024;
 
+interface DiffOutputAccumulator {
+  tryAppend: (text: string) => boolean;
+  remainingBytes: () => number;
+  getText: () => string;
+}
+
+function createDiffOutputAccumulator(): DiffOutputAccumulator {
+  let text = "";
+  let bytes = 0;
+  return {
+    tryAppend(candidate) {
+      if (!candidate) return true;
+      const candidateBytes = Buffer.byteLength(candidate, "utf8");
+      if (bytes + candidateBytes > TOTAL_DIFF_MAX_BYTES) return false;
+      text += candidate;
+      bytes += candidateBytes;
+      return true;
+    },
+    remainingBytes: () => TOTAL_DIFF_MAX_BYTES - bytes,
+    getText: () => text,
+  };
+}
+
 async function isLikelyBinaryFile(absolutePath: string): Promise<boolean> {
   const handle = await openFile(absolutePath, "r");
   try {
@@ -2913,37 +3067,35 @@ interface ProcessUntrackedChangeInput {
   ignoreWhitespace: boolean;
   includeStructured: boolean;
   structured: ParsedDiffFile[];
-  appendDiff: (text: string) => void;
+  output: DiffOutputAccumulator;
 }
 
 async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promise<void> {
-  const { cwd, change, ignoreWhitespace, includeStructured, structured, appendDiff } = input;
-  const { text, truncated, stat } = await getUntrackedDiffText(cwd, change, ignoreWhitespace);
-
-  if (!includeStructured) {
-    if (stat?.isBinary) {
-      appendDiff(`# ${change.path}: binary diff omitted\n`);
-    } else if (truncated) {
-      appendDiff(`# ${change.path}: diff too large omitted\n`);
-    } else {
-      appendDiff(text);
+  const { cwd, change, ignoreWhitespace, includeStructured, structured, output } = input;
+  if (output.remainingBytes() === 0) {
+    if (includeStructured) {
+      structured.push(buildPlaceholderParsedDiffFile(change, { status: "too_large", stat: null }));
     }
     return;
   }
 
+  const { text, truncated, stat } = await getUntrackedDiffText(cwd, change, ignoreWhitespace);
   if (stat?.isBinary) {
-    structured.push(buildPlaceholderParsedDiffFile(change, { status: "binary", stat }));
-    appendDiff(`# ${change.path}: binary diff omitted\n`);
+    if (includeStructured) {
+      structured.push(buildPlaceholderParsedDiffFile(change, { status: "binary", stat }));
+    }
+    output.tryAppend(`# ${change.path}: binary diff omitted\n`);
     return;
   }
-
-  if (truncated) {
-    structured.push(buildPlaceholderParsedDiffFile(change, { status: "too_large", stat }));
-    appendDiff(`# ${change.path}: diff too large omitted\n`);
+  if (truncated || !output.tryAppend(text)) {
+    if (includeStructured) {
+      structured.push(buildPlaceholderParsedDiffFile(change, { status: "too_large", stat }));
+    }
+    output.tryAppend(`# ${change.path}: diff too large omitted\n`);
     return;
   }
+  if (!includeStructured) return;
 
-  appendDiff(text);
   const parsed = await parseAndHighlightDiff(text, cwd);
   const parsedFile =
     parsed[0] ??
@@ -3106,22 +3258,9 @@ export async function getCheckoutDiff(
   });
 
   const structured: ParsedDiffFile[] = [];
-  let diffText = "";
-  let diffBytes = 0;
-  const appendDiff = (text: string) => {
-    if (!text) return;
-    if (diffBytes >= TOTAL_DIFF_MAX_BYTES) return;
-    const buf = Buffer.from(text, "utf8");
-    if (diffBytes + buf.length <= TOTAL_DIFF_MAX_BYTES) {
-      diffText += text;
-      diffBytes += buf.length;
-      return;
-    }
-    const remaining = TOTAL_DIFF_MAX_BYTES - diffBytes;
-    if (remaining > 0) {
-      diffText += buf.subarray(0, remaining).toString("utf8");
-      diffBytes = TOTAL_DIFF_MAX_BYTES;
-    }
+  const output = createDiffOutputAccumulator();
+  const appendDiff = (text: string): void => {
+    output.tryAppend(text);
   };
 
   const submoduleScanCache = createSubmoduleScanCache();
@@ -3203,12 +3342,17 @@ export async function getCheckoutDiff(
     ignoreWhitespace,
     includeStructured: compare.includeStructured === true,
     structured,
-    appendDiff,
+    output,
   });
 
   for (const change of untrackedChanges) {
-    if (diffBytes >= TOTAL_DIFF_MAX_BYTES) {
-      break;
+    if (output.remainingBytes() === 0) {
+      if (compare.includeStructured) {
+        structured.push(
+          buildPlaceholderParsedDiffFile(change, { status: "too_large", stat: null }),
+        );
+      }
+      continue;
     }
     await processUntrackedChange({
       cwd,
@@ -3216,14 +3360,14 @@ export async function getCheckoutDiff(
       ignoreWhitespace,
       includeStructured: compare.includeStructured === true,
       structured,
-      appendDiff,
+      output,
     });
   }
 
   if (compare.includeStructured) {
-    return { diff: diffText, structured };
+    return { diff: output.getText(), structured };
   }
-  return { diff: diffText };
+  return { diff: output.getText() };
 }
 
 export async function commitChanges(

@@ -1959,6 +1959,65 @@ const x = 1;
     expect(diff.diff).toContain("# budget-4.txt: diff too large omitted");
   });
 
+  it("shares the total diff budget with recursively rendered submodule files", async () => {
+    const submoduleSource = join(tempDir, "budget-submodule-source");
+    mkdirSync(submoduleSource, { recursive: true });
+    execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: submoduleSource });
+    for (let index = 1; index <= 4; index += 1) {
+      writeFileSync(join(submoduleSource, `budget-${index}.txt`), "old\n");
+    }
+    execFileSync("git", ["add", "."], { cwd: submoduleSource });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add budget files"], {
+      cwd: submoduleSource,
+    });
+    execFileSync(
+      "git",
+      ["-c", "protocol.file.allow=always", "submodule", "add", submoduleSource, "modules/budget"],
+      { cwd: repoDir },
+    );
+    execFileSync(
+      "git",
+      ["config", "--file", ".gitmodules", "submodule.modules/budget.ignore", "all"],
+      { cwd: repoDir },
+    );
+    execFileSync("git", ["add", ".gitmodules", "modules/budget"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add budget submodule"], {
+      cwd: repoDir,
+    });
+
+    const submoduleCheckout = join(repoDir, "modules/budget");
+    const largeLine = "x".repeat(700_000);
+    for (let index = 1; index <= 4; index += 1) {
+      writeFileSync(join(submoduleCheckout, `budget-${index}.txt`), `${largeLine}-${index}\n`);
+    }
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+    const recursiveFiles = diff.structured?.filter((file) =>
+      file.path.startsWith("modules/budget/budget-"),
+    );
+
+    expect(
+      recursiveFiles?.map((file) => ({
+        path: file.path,
+        status: file.status,
+        hunks: file.hunks.length,
+      })),
+    ).toEqual([
+      { path: "modules/budget/budget-1.txt", status: "ok", hunks: 1 },
+      { path: "modules/budget/budget-2.txt", status: "ok", hunks: 1 },
+      { path: "modules/budget/budget-3.txt", status: "too_large", hunks: 0 },
+      { path: "modules/budget/budget-4.txt", status: "too_large", hunks: 0 },
+    ]);
+    expect(Buffer.byteLength(diff.diff, "utf8")).toBeLessThanOrEqual(2 * 1024 * 1024);
+    expect(diff.diff).toContain("# modules/budget/budget-3.txt: diff too large omitted");
+    expect(diff.diff).toContain("# modules/budget/budget-4.txt: diff too large omitted");
+  });
+
   it("short-circuits tracked binary files", async () => {
     const trackedBinaryPath = join(repoDir, "tracked-blob.bin");
     writeFileSync(trackedBinaryPath, Buffer.from([0x00, 0xff, 0x10, 0x80, 0x00]));
