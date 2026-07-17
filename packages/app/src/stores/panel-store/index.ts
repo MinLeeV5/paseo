@@ -80,6 +80,7 @@ export interface PanelState {
   // by full uncompressed dir path, so folders default to expanded and new
   // folders stay expanded as the diff changes.
   diffCollapsedFoldersByWorkspace: Record<string, string[]>;
+  diffCollapsedGroupsByWorkspace: Record<string, string[]>;
   sidebarWidth: number;
   explorerWidth: number;
   explorerSortOption: SortOption;
@@ -107,6 +108,7 @@ export interface PanelState {
   setExpandedPathsForWorkspace: (workspaceKey: string, paths: string[]) => void;
   setDiffExpandedPathsForWorkspace: (workspaceKey: string, paths: string[]) => void;
   setDiffCollapsedFoldersForWorkspace: (workspaceKey: string, dirPaths: string[]) => void;
+  setDiffCollapsedGroupsForWorkspace: (workspaceKey: string, groupKeys: string[]) => void;
   activateExplorerTabForCheckout: (checkout: ExplorerCheckoutContext) => void;
   setSidebarWidth: (width: number) => void;
   setExplorerWidth: (width: number) => void;
@@ -144,6 +146,7 @@ export const usePanelStore = create<PanelState>()(
       expandedPathsByWorkspace: {},
       diffExpandedPathsByWorkspace: {},
       diffCollapsedFoldersByWorkspace: {},
+      diffCollapsedGroupsByWorkspace: {},
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
       explorerWidth: DEFAULT_EXPLORER_SIDEBAR_WIDTH,
       explorerSortOption: "name",
@@ -270,6 +273,13 @@ export const usePanelStore = create<PanelState>()(
             [workspaceKey]: dirPaths,
           },
         })),
+      setDiffCollapsedGroupsForWorkspace: (workspaceKey, groupKeys) =>
+        set((state) => ({
+          diffCollapsedGroupsByWorkspace: {
+            ...state.diffCollapsedGroupsByWorkspace,
+            [workspaceKey]: groupKeys,
+          },
+        })),
       activateExplorerTabForCheckout: (checkout) =>
         set((state) => ({
           explorerTab: resolveExplorerTabForCheckout({
@@ -293,7 +303,7 @@ export const usePanelStore = create<PanelState>()(
     }),
     {
       name: "panel-state",
-      version: 12,
+      version: 13,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persistedState, version) =>
         migratePanelState(persistedState, version, { isWeb }) as unknown as PanelState,
@@ -304,6 +314,7 @@ export const usePanelStore = create<PanelState>()(
         expandedPathsByWorkspace: state.expandedPathsByWorkspace,
         diffExpandedPathsByWorkspace: state.diffExpandedPathsByWorkspace,
         diffCollapsedFoldersByWorkspace: state.diffCollapsedFoldersByWorkspace,
+        diffCollapsedGroupsByWorkspace: state.diffCollapsedGroupsByWorkspace,
         sidebarWidth: state.sidebarWidth,
         explorerWidth: state.explorerWidth,
         explorerSortOption: state.explorerSortOption,

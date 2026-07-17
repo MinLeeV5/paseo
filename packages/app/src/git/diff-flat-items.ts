@@ -5,11 +5,24 @@ import {
   flattenDiffTree,
   type DiffTreeDirNode,
 } from "@/git/diff-tree";
+import {
+  buildCheckoutDiffFileEntries,
+  filterCheckoutDiffFileEntriesForCollapsedGroups,
+  type CheckoutDiffFileGrouping,
+} from "@/git/diff-order";
 
 // The row model for the Changes FlatList. `fileIndex` is the file's index within
 // the (path-sorted) `files` array — a stable identity for testIDs/keys that is
 // independent of folder rows and collapse state. `depth` drives indentation.
 export type DiffFlatItem =
+  | {
+      type: "group";
+      key: string;
+      label: string;
+      collapsed: boolean;
+      additions: number;
+      deletions: number;
+    }
   | {
       type: "folder";
       dirPath: string;
@@ -30,9 +43,11 @@ export interface DiffFlatItemsResult {
 
 export interface BuildDiffFlatItemsInput {
   files: ParsedDiffFile[];
-  viewMode: "flat" | "tree";
+  fileGrouping: CheckoutDiffFileGrouping;
   /** Full uncompressed directory paths that are collapsed (empty = all expanded). */
   collapsedFolders: ReadonlySet<string>;
+  /** Stable group keys whose file rows are hidden. */
+  collapsedGroupKeys: ReadonlySet<string>;
   /** File paths whose diff body is expanded. */
   expandedPaths: ReadonlySet<string>;
   /**
@@ -53,8 +68,9 @@ export interface BuildDiffFlatItemsInput {
  */
 export function buildDiffFlatItems({
   files,
-  viewMode,
+  fileGrouping,
   collapsedFolders,
+  collapsedGroupKeys,
   expandedPaths,
   tree,
 }: BuildDiffFlatItemsInput): DiffFlatItemsResult {
@@ -70,7 +86,7 @@ export function buildDiffFlatItems({
     }
   };
 
-  if (viewMode === "flat") {
+  if (fileGrouping === "flat") {
     for (const [fileIndex, file] of files.entries()) {
       pushFile(file, fileIndex, 0);
     }
@@ -78,6 +94,40 @@ export function buildDiffFlatItems({
   }
 
   const indexByPath = new Map(files.map((file, index) => [file.path, index]));
+  if (fileGrouping === "submodule") {
+    const allEntries = buildCheckoutDiffFileEntries(files, "submodule");
+    const statsByGroupKey = new Map<string, { additions: number; deletions: number }>();
+    for (const entry of allEntries) {
+      if (entry.type === "group") {
+        statsByGroupKey.set(entry.key, { additions: 0, deletions: 0 });
+        continue;
+      }
+      if (!entry.groupKey) continue;
+      const stats = statsByGroupKey.get(entry.groupKey);
+      if (stats) {
+        stats.additions += entry.file.additions;
+        stats.deletions += entry.file.deletions;
+      }
+    }
+    const entries = filterCheckoutDiffFileEntriesForCollapsedGroups(allEntries, collapsedGroupKeys);
+    for (const entry of entries) {
+      if (entry.type === "group") {
+        const stats = statsByGroupKey.get(entry.key) ?? { additions: 0, deletions: 0 };
+        items.push({
+          type: "group",
+          key: entry.key,
+          label: entry.label,
+          collapsed: collapsedGroupKeys.has(entry.key),
+          additions: stats.additions,
+          deletions: stats.deletions,
+        });
+        continue;
+      }
+      pushFile(entry.file, indexByPath.get(entry.file.path) ?? entry.fileIndex, 0);
+    }
+    return { items, stickyHeaderIndices };
+  }
+
   const compressedTree = tree ?? compressSingleChildChains(buildDiffTree(files));
   const rows = flattenDiffTree(compressedTree, collapsedFolders);
 

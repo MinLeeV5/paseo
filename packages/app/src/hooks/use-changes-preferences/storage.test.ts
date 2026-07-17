@@ -10,7 +10,7 @@ import {
 } from "./storage";
 
 describe("loadChangesPreferencesFromStorage", () => {
-  it("defaults to unified layout, flat view mode, and visible whitespace", async () => {
+  it("defaults to unified layout, ungrouped files, and visible whitespace", async () => {
     const storage = createInMemoryKeyValueStorage();
 
     const result = await loadChangesPreferencesFromStorage(storage);
@@ -28,17 +28,17 @@ describe("loadChangesPreferencesFromStorage", () => {
 
     expect(result).toEqual({
       layout: "unified",
-      viewMode: "flat",
+      fileGrouping: "flat",
       wrapLines: true,
       hideWhitespace: false,
     });
     expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(JSON.stringify(result));
   });
 
-  it("loads persisted layout, view mode, and whitespace preferences without rewriting storage", async () => {
+  it("loads persisted grouping and whitespace preferences without rewriting storage", async () => {
     const persisted = JSON.stringify({
       layout: "split",
-      viewMode: "tree",
+      fileGrouping: "submodule",
       hideWhitespace: true,
       wrapLines: false,
     });
@@ -50,12 +50,33 @@ describe("loadChangesPreferencesFromStorage", () => {
 
     expect(result).toEqual({
       layout: "split",
-      viewMode: "tree",
+      fileGrouping: "submodule",
       hideWhitespace: true,
       wrapLines: false,
     });
     expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(persisted);
     expect(storage.entries.size).toBe(1);
+  });
+
+  it("migrates the current tree view preference to directory grouping", async () => {
+    const storage = createInMemoryKeyValueStorage({
+      [CHANGES_PREFERENCES_STORAGE_KEY]: JSON.stringify({
+        layout: "unified",
+        viewMode: "tree",
+        hideWhitespace: false,
+        wrapLines: true,
+      }),
+    });
+
+    const result = await loadChangesPreferencesFromStorage(storage);
+
+    expect(result).toEqual({
+      layout: "unified",
+      fileGrouping: "directory",
+      hideWhitespace: false,
+      wrapLines: true,
+    });
+    expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(JSON.stringify(result));
   });
 });
 
@@ -67,14 +88,14 @@ describe("saveChangesPreferences", () => {
 
     await saveChangesPreferences({
       queryClient,
-      updates: { layout: "split", viewMode: "tree", hideWhitespace: true },
+      updates: { layout: "split", fileGrouping: "directory", hideWhitespace: true },
       storage,
     });
 
     const expected = {
       ...DEFAULT_CHANGES_PREFERENCES,
       layout: "split",
-      viewMode: "tree",
+      fileGrouping: "directory",
       hideWhitespace: true,
     };
     expect(queryClient.getQueryData(CHANGES_PREFERENCES_QUERY_KEY)).toEqual(expected);

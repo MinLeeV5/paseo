@@ -7,6 +7,8 @@ export const CHANGES_PREFERENCES_QUERY_KEY = ["changes-preferences"];
 
 const changesPreferencesSchema = z.object({
   layout: z.enum(["unified", "split"]).optional(),
+  fileGrouping: z.enum(["flat", "directory", "submodule"]).optional(),
+  // COMPAT(changesViewMode): added in v1.1.111, remove after 2027-01-17.
   viewMode: z.enum(["flat", "tree"]).optional(),
   wrapLines: z.boolean().optional(),
   hideWhitespace: z.boolean().optional(),
@@ -14,14 +16,14 @@ const changesPreferencesSchema = z.object({
 
 export interface ChangesPreferences {
   layout: "unified" | "split";
-  viewMode: "flat" | "tree";
+  fileGrouping: "flat" | "directory" | "submodule";
   wrapLines: boolean;
   hideWhitespace: boolean;
 }
 
 export const DEFAULT_CHANGES_PREFERENCES: ChangesPreferences = {
   layout: "unified",
-  viewMode: "flat",
+  fileGrouping: "flat",
   wrapLines: false,
   hideWhitespace: false,
 };
@@ -49,7 +51,17 @@ export async function loadChangesPreferencesFromStorage(
   if (stored) {
     const parsed = changesPreferencesSchema.safeParse(JSON.parse(stored));
     if (parsed.success) {
-      return { ...DEFAULT_CHANGES_PREFERENCES, ...parsed.data };
+      const { viewMode, ...storedPreferences } = parsed.data;
+      const next = {
+        ...DEFAULT_CHANGES_PREFERENCES,
+        ...storedPreferences,
+        fileGrouping:
+          storedPreferences.fileGrouping ?? (viewMode === "tree" ? "directory" : "flat"),
+      } satisfies ChangesPreferences;
+      if (viewMode !== undefined || storedPreferences.fileGrouping === undefined) {
+        await storage.setItem(CHANGES_PREFERENCES_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
     }
   }
 

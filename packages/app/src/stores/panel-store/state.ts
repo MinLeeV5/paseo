@@ -222,6 +222,22 @@ function migratePanelDesktopFocusMode(state: MigratablePanelState): void {
   }
 }
 
+function migratePanelDiffCollapseState(state: MigratablePanelState, version: number): void {
+  if (
+    version < 12 ||
+    typeof state.diffCollapsedFoldersByWorkspace !== "object" ||
+    !state.diffCollapsedFoldersByWorkspace
+  ) {
+    state.diffCollapsedFoldersByWorkspace = {};
+  }
+  if (
+    typeof state.diffCollapsedGroupsByWorkspace !== "object" ||
+    !state.diffCollapsedGroupsByWorkspace
+  ) {
+    state.diffCollapsedGroupsByWorkspace = {};
+  }
+}
+
 export function migratePanelState(
   persistedState: unknown,
   version: number,
@@ -260,13 +276,7 @@ export function migratePanelState(
   ) {
     state.diffExpandedPathsByWorkspace = {};
   }
-  if (
-    version < 12 ||
-    typeof state.diffCollapsedFoldersByWorkspace !== "object" ||
-    !state.diffCollapsedFoldersByWorkspace
-  ) {
-    state.diffCollapsedFoldersByWorkspace = {};
-  }
+  migratePanelDiffCollapseState(state, version);
   if (typeof state.explorerShowHiddenFiles !== "boolean") {
     state.explorerShowHiddenFiles = true;
   }

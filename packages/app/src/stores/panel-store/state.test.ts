@@ -119,6 +119,24 @@ describe("panel-store migration", () => {
     expect(state.diffCollapsedFoldersByWorkspace).toEqual({ ws: ["src/app"] });
   });
 
+  it("initializes collapsed change groups when the persisted state predates them", () => {
+    const state = migratePanelState({}, 12, { isWeb: false });
+
+    expect(state.diffCollapsedGroupsByWorkspace).toEqual({});
+  });
+
+  it("preserves collapsed change groups from the original grouping feature", () => {
+    const state = migratePanelState(
+      { diffCollapsedGroupsByWorkspace: { ws: ["submodule:modules/sub"] } },
+      12,
+      { isWeb: false },
+    );
+
+    expect(state.diffCollapsedGroupsByWorkspace).toEqual({
+      ws: ["submodule:modules/sub"],
+    });
+  });
+
   it("drops persisted compact panel state so cold starts return to content", () => {
     const state = migratePanelState(
       { mobileView: "agent-list", mobilePanel: { target: "file-explorer", revision: 42 } },
