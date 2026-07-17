@@ -41,7 +41,11 @@ import {
   isDescendantPath,
   warmCheckoutShortstatInBackground,
 } from "./checkout-git.js";
-import { startGitCommandMetrics, stopGitCommandMetrics } from "./run-git-command.js";
+import {
+  startGitCommandMetrics,
+  stopGitCommandMetrics,
+  type GitCommandMetric,
+} from "./run-git-command.js";
 import {
   GitHubCommandError,
   GitHubCliMissingError,
@@ -272,6 +276,12 @@ function setupNestedIgnoredSubmoduleFixture(input: { tempDir: string; repoDir: s
     execFileSync("git", ["config", "user.name", "Test"], { cwd: checkout });
   }
   return { midCheckout, leafCheckout };
+}
+
+function getSemanticGitlinkLookupKeys(commands: GitCommandMetric[]): string[] {
+  return commands
+    .filter(({ args }) => args[0] === "ls-tree" && args[2] === "--" && args[3])
+    .map(({ cwd, args }) => `${realpathSync.native(cwd)}\0${args[3]}`);
 }
 
 describe("checkout git utilities", () => {
@@ -906,6 +916,124 @@ describe("checkout git utilities", () => {
     expect(diff.diff).toContain("+mid-two");
     expect(diff.diff).toContain("+leaf-two");
     expect(duplicates).toEqual([]);
+  });
+
+  it("coalesces equivalent root commit refs in clean recursive diffs", async () => {
+    setupNestedIgnoredSubmoduleFixture({ tempDir, repoDir });
+    const rootGitlinkKey = `${realpathSync.native(repoDir)}\0modules/mid`;
+
+    startGitCommandMetrics();
+    const uncommittedDiff = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+    const uncommittedMetrics = stopGitCommandMetrics();
+
+    startGitCommandMetrics();
+    const committedDiff = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+      includeStructured: true,
+    });
+    const committedMetrics = stopGitCommandMetrics();
+
+    expect(uncommittedDiff).toEqual({ diff: "", structured: [] });
+    expect(committedDiff).toEqual({ diff: "", structured: [] });
+    const rootGitlinkLookupCounts = {
+      uncommitted: getSemanticGitlinkLookupKeys(uncommittedMetrics.commands).filter(
+        (key) => key === rootGitlinkKey,
+      ).length,
+      committed: getSemanticGitlinkLookupKeys(committedMetrics.commands).filter(
+        (key) => key === rootGitlinkKey,
+      ).length,
+    };
+    expect(rootGitlinkLookupCounts).toEqual({ uncommitted: 1, committed: 1 });
+  });
+
+  it("keeps the nearest gitlink when immediate child discovery is unavailable", async () => {
+    const { midCheckout, leafCheckout } = setupNestedIgnoredSubmoduleFixture({
+      tempDir,
+      repoDir,
+    });
+    mkdirSync(join(midCheckout, "history"));
+    writeFileSync(join(midCheckout, "history/record.txt"), "baseline\n");
+    execFileSync("git", ["add", "history/record.txt"], { cwd: midCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add history"], {
+      cwd: midCheckout,
+    });
+    execFileSync("git", ["add", "-f", "modules/mid"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "record history"], {
+      cwd: repoDir,
+    });
+    execFileSync("git", ["checkout", "-b", "feature/unavailable-mid-tree"], { cwd: repoDir });
+
+    writeFileSync(join(leafCheckout, "leaf.txt"), "leaf-one\nleaf-two\n");
+    execFileSync("git", ["add", "leaf.txt"], { cwd: leafCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance leaf"], {
+      cwd: leafCheckout,
+    });
+    writeFileSync(join(midCheckout, "history/record.txt"), "feature\n");
+    execFileSync("git", ["add", "history/record.txt", "deps/leaf"], { cwd: midCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance history"], {
+      cwd: midCheckout,
+    });
+    execFileSync("git", ["add", "-f", "modules/mid"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance mid"], {
+      cwd: repoDir,
+    });
+
+    const historicalTree = execFileSync("git", ["rev-parse", "HEAD^:history"], {
+      cwd: midCheckout,
+      encoding: "utf8",
+    }).trim();
+    const midGitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], {
+      cwd: midCheckout,
+      encoding: "utf8",
+    }).trim();
+    const historicalTreePath = join(
+      midGitDir,
+      "objects",
+      historicalTree.slice(0, 2),
+      historicalTree.slice(2),
+    );
+    expect(existsSync(historicalTreePath)).toBe(true);
+    rmSync(historicalTreePath);
+
+    expect(
+      spawnSync("git", ["diff", "--name-status", "HEAD^", "HEAD"], {
+        cwd: midCheckout,
+        encoding: "utf8",
+      }).status,
+    ).toBe(128);
+    expect(
+      execFileSync("git", ["ls-tree", "HEAD^", "--", "deps/leaf"], {
+        cwd: midCheckout,
+        encoding: "utf8",
+      }),
+    ).toContain("deps/leaf");
+    expect(
+      execFileSync("git", ["diff", "--name-status", "HEAD^", "HEAD", "--", "leaf.txt"], {
+        cwd: leafCheckout,
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("M\tleaf.txt");
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+      includeStructured: true,
+    });
+
+    expect(
+      diff.structured?.map((file) => ({
+        path: file.path,
+        submodulePath: file.submodulePath,
+      })),
+    ).toEqual([{ path: "modules/mid", submodulePath: undefined }]);
+    expect(diff.diff).toContain("diff --git a/modules/mid b/modules/mid");
+    expect(diff.diff).toContain("-Subproject commit");
+    expect(diff.diff).toContain("+Subproject commit");
+    expect(diff.diff).not.toContain("modules/mid/deps/leaf/leaf.txt");
   });
 
   it("keeps the nearest gitlink fallback when recursive patch data is unavailable", async () => {

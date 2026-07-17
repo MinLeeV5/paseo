@@ -894,6 +894,10 @@ function getSubmoduleComparisonDiffRefs(
   };
 }
 
+function canonicalizeRootCommitRef(ref: string, rootHead: string | null): string {
+  return ref === "HEAD" && rootHead ? rootHead : ref;
+}
+
 function createSubmoduleFallbackChange(
   path: string,
   comparison: SubmoduleDiffComparison | null,
@@ -1100,7 +1104,9 @@ async function listSubmoduleFileChanges(input: {
         }
       }
     } catch {
-      // The nearest parent gitlink remains when this child comparison is unavailable.
+      tracked.push(childFallback);
+      expandedSubmodulePaths.add(displaySubmodulePath);
+      continue;
     }
 
     const nestedChanges = await listSubmoduleFileChanges({
@@ -3257,9 +3263,15 @@ export async function getCheckoutDiff(
     oldEndpoint:
       effectiveRefsForDiff.baseRef === EMPTY_TREE_OBJECT_ID
         ? { kind: "absent" }
-        : { kind: "commit", ref: effectiveRefsForDiff.baseRef },
+        : {
+            kind: "commit",
+            ref: canonicalizeRootCommitRef(effectiveRefsForDiff.baseRef, rootHead),
+          },
     newEndpoint: effectiveRefsForDiff.targetRef
-      ? { kind: "commit", ref: effectiveRefsForDiff.targetRef }
+      ? {
+          kind: "commit",
+          ref: canonicalizeRootCommitRef(effectiveRefsForDiff.targetRef, rootHead),
+        }
       : {
           kind: "worktree",
           recordedCommit: rootHead,
