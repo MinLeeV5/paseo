@@ -62,7 +62,10 @@ import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agen
 import { resolveProjectPlacement } from "@/utils/project-placement";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
 import type { AttachmentMetadata } from "@/attachments/types";
-import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
+import {
+  resolveComposerAttachmentSubmitFormat,
+  splitComposerAttachmentsForSubmit,
+} from "@/composer/attachments/submit";
 import { reconcilePreviousAgentOngoing } from "@/contexts/session-status-tracking";
 import { shouldShowAgentAttentionNotification } from "@/contexts/session-attention-notifications";
 import { patchWorkspaceScripts } from "@/contexts/session-workspace-scripts";
@@ -477,6 +480,15 @@ function applyToolErrorToMessages(
     );
 }
 
+function notifyVoiceAbortFailure(
+  data: Extract<SessionOutboundMessage, { type: "activity_log" }>["payload"],
+  notifyError: (message: string) => void,
+): void {
+  if (data.type === "error" && data.metadata?.voiceAbortFailed === true) {
+    notifyError(data.content);
+  }
+}
+
 interface SessionProviderSharedProps {
   children: ReactNode;
   serverId: string;
@@ -724,7 +736,14 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         if (queue && queue.length > 0) {
           const [next, ...rest] = queue;
           if (sendAgentMessageRef.current) {
-            const wirePayload = splitComposerAttachmentsForSubmit(next.attachments);
+            const supportsForgeSearch =
+              useSessionStore.getState().sessions[serverId]?.serverInfo?.features?.forgeSearch ===
+              true;
+            const wirePayload = splitComposerAttachmentsForSubmit(next.attachments, {
+              format: resolveComposerAttachmentSubmitFormat({
+                supportsForgeAttachments: supportsForgeSearch,
+              }),
+            });
             void sendAgentMessageRef.current(
               agent.id,
               next.text,
@@ -947,6 +966,9 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       serverId: serverInfo.serverId,
       hostname: serverInfo.hostname,
       version: serverInfo.version,
+      ...(serverInfo.desktopManaged !== undefined
+        ? { desktopManaged: serverInfo.desktopManaged }
+        : {}),
       ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
       ...(serverInfo.features ? { features: serverInfo.features } : {}),
     });
@@ -1418,6 +1440,9 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
           serverId: serverInfo.serverId,
           hostname: serverInfo.hostname,
           version: serverInfo.version,
+          ...(serverInfo.desktopManaged !== undefined
+            ? { desktopManaged: serverInfo.desktopManaged }
+            : {}),
           ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
           ...(serverInfo.features ? { features: serverInfo.features } : {}),
         });
@@ -1574,6 +1599,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         const applyToolError = applyToolErrorToMessages(toolCallId, error);
         setMessages(serverId, applyToolError);
       }
+
+      notifyVoiceAbortFailure(data, toast.error);
 
       let activityType: "system" | "info" | "success" | "error" = "info";
       if (data.type === "error") activityType = "error";
@@ -1810,6 +1837,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     applyWorkspaceSetupProgress,
     applyTimelineResponse,
     updateSessionServerInfo,
+    toast,
     voiceRuntime,
     voiceAudioEngine,
   ]);

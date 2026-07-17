@@ -29,6 +29,8 @@ import type {
   AgentForkContextResponseMessage,
   GitSetupOptions,
   CheckoutStatusResponse,
+  CheckoutCommit,
+  ParsedDiffFile,
   CheckoutCommitResponse,
   CheckoutMergeResponse,
   CheckoutMergeFromBaseResponse,
@@ -38,7 +40,9 @@ import type {
   CheckoutPrCreateResponse,
   CheckoutPrMergeResponse,
   CheckoutPrMergeMethod,
+  CheckoutForgeSetAutoMergeResponse,
   CheckoutGithubSetAutoMergeResponse,
+  CheckoutForgeGetCheckDetailsResponse,
   CheckoutGithubGetCheckDetailsResponse,
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
@@ -48,6 +52,8 @@ import type {
   StashListResponse,
   ValidateBranchResponse,
   BranchSuggestionsResponse,
+  ForgeSearchResponse,
+  ForgeSearchRequest,
   GitHubSearchResponse,
   GitHubSearchRequest,
   DirectorySuggestionsResponse,
@@ -55,9 +61,11 @@ import type {
   PaseoWorktreeArchiveResponse,
   ProjectIconResponse,
   ProjectAddResponse,
+  ProjectCreateDirectoryResponse,
   OpenProjectResponseMessage,
-  WorkspaceGithubCloneProtocol,
-  WorkspaceGithubCloneResponse,
+  WorkspaceGithubSearchRepositoriesResponse,
+  ProjectGithubCloneProtocol,
+  ProjectGithubCloneResponse,
   ArchiveWorkspaceResponseMessage,
   WorkspaceSetupStatusResponseMessage,
   ListCommandsResponse,
@@ -87,6 +95,7 @@ import type {
   PaseoConfigRaw,
   PaseoConfigRevision,
   WorkspaceCreateRequest,
+  WorkspaceRecoveryState,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -150,10 +159,11 @@ const perfNow: () => number =
     ? () => performance.now()
     : () => Date.now();
 
-const WORKSPACE_GITHUB_CLONE_TIMEOUT_MS = 5 * 60 * 1000;
+const PROJECT_GITHUB_CLONE_TIMEOUT_MS = 5 * 60 * 1000;
 
 interface ImportAgentInputBase {
   cwd?: string;
+  workspaceId?: string;
   labels?: Record<string, string>;
 }
 
@@ -172,6 +182,43 @@ function normalizePassword(value: string | undefined): string | null {
     return null;
   }
   return value.length > 0 ? value : null;
+}
+
+function extractCorrelatedResponseIdentity(input: unknown): CorrelatedResponseIdentity | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+
+  const envelope = input as { type?: unknown; message?: unknown };
+  if (envelope.type !== "session" || !envelope.message || typeof envelope.message !== "object") {
+    return null;
+  }
+
+  const message = envelope.message as { type?: unknown; payload?: unknown };
+  if (
+    typeof message.type !== "string" ||
+    !(
+      message.type === "rpc_error" ||
+      message.type.endsWith("_response") ||
+      message.type.endsWith(".response") ||
+      message.type.endsWith("/response")
+    )
+  ) {
+    return null;
+  }
+  if (!message.payload || typeof message.payload !== "object") {
+    return null;
+  }
+
+  const payload = message.payload as { requestId?: unknown };
+  if (typeof payload.requestId !== "string") {
+    return null;
+  }
+
+  return {
+    requestId: payload.requestId,
+    responseType: message.type,
+  };
 }
 
 export type {
@@ -299,6 +346,7 @@ export interface CreatePaseoWorktreeInput extends Pick<
   | "firstAgentContext"
   | "refName"
   | "action"
+  | "checkoutSource"
   | "githubPrNumber"
   | "runSetup"
 > {}
@@ -317,7 +365,9 @@ type CheckoutPushPayload = CheckoutPushResponse["payload"];
 type CheckoutRefreshPayload = CheckoutRefreshResponse["payload"];
 type CheckoutPrCreatePayload = CheckoutPrCreateResponse["payload"];
 type CheckoutPrMergePayload = CheckoutPrMergeResponse["payload"];
+type CheckoutForgeSetAutoMergePayload = CheckoutForgeSetAutoMergeResponse["payload"];
 type CheckoutGithubSetAutoMergePayload = CheckoutGithubSetAutoMergeResponse["payload"];
+type CheckoutForgeGetCheckDetailsPayload = CheckoutForgeGetCheckDetailsResponse["payload"];
 type CheckoutGithubGetCheckDetailsPayload = CheckoutGithubGetCheckDetailsResponse["payload"];
 type CheckoutPrStatusPayload = CheckoutPrStatusResponse["payload"];
 type PullRequestTimelinePayload = PullRequestTimelineResponse["payload"];
@@ -328,6 +378,7 @@ type StashPopPayload = StashPopResponse["payload"];
 type StashListPayload = StashListResponse["payload"];
 type ValidateBranchPayload = ValidateBranchResponse["payload"];
 type BranchSuggestionsPayload = BranchSuggestionsResponse["payload"];
+type ForgeSearchPayload = ForgeSearchResponse["payload"];
 type GitHubSearchPayload = GitHubSearchResponse["payload"];
 type DirectorySuggestionsPayload = DirectorySuggestionsResponse["payload"];
 type PaseoWorktreeListPayload = PaseoWorktreeListResponse["payload"];
@@ -539,6 +590,7 @@ function normalizeListCommandsOptions(
   return { agentId: input, ...legacyOptions };
 }
 export interface AgentForkContextOptions {
+  boundaryCursor?: FetchAgentTimelineCursor;
   boundaryMessageId?: string;
   requestId?: string;
 }
@@ -763,7 +815,10 @@ export interface RenameTerminalInput {
 }
 type OpenProjectPayload = OpenProjectResponseMessage["payload"];
 type ProjectAddPayload = ProjectAddResponse["payload"];
-type WorkspaceGithubClonePayload = WorkspaceGithubCloneResponse["payload"];
+export type ProjectCreateDirectoryPayload = ProjectCreateDirectoryResponse["payload"];
+export type WorkspaceGithubSearchRepositoriesPayload =
+  WorkspaceGithubSearchRepositoriesResponse["payload"];
+type ProjectGithubClonePayload = ProjectGithubCloneResponse["payload"];
 type ArchiveWorkspacePayload = ArchiveWorkspaceResponseMessage["payload"];
 type WorkspaceSetupStatusPayload = WorkspaceSetupStatusResponseMessage["payload"];
 
@@ -784,11 +839,22 @@ interface Waiter<T> {
   resolve(value: T): void;
   reject(error: Error): void;
   timeoutHandle: ReturnType<typeof setTimeout> | null;
+  requestId?: string;
 }
 
 interface WaitHandle<T> {
   promise: Promise<T>;
   cancel: (error: Error) => void;
+}
+
+interface WaitOptions {
+  skipQueue?: boolean;
+  requestId?: string;
+}
+
+interface CorrelatedResponseIdentity {
+  requestId: string;
+  responseType?: string;
 }
 
 interface PendingBinaryFileRead {
@@ -840,6 +906,20 @@ class DaemonRpcError extends Error {
     this.requestId = params.requestId;
     this.requestType = params.requestType;
     this.code = params.code;
+  }
+}
+
+class DaemonProtocolError extends Error {
+  readonly requestId: string;
+  readonly responseType?: string;
+  readonly code = "invalid_response";
+
+  constructor(identity: CorrelatedResponseIdentity) {
+    const responseLabel = identity.responseType ?? "unknown response";
+    super(`Response validation failed for ${responseLabel}`);
+    this.name = "DaemonProtocolError";
+    this.requestId = identity.requestId;
+    this.responseType = identity.responseType;
   }
 }
 
@@ -1543,7 +1623,7 @@ export class DaemonClient {
         return { kind: "ok", value };
       },
       timeout,
-      params.options,
+      { ...params.options, requestId: params.requestId },
     );
 
     try {
@@ -1994,20 +2074,50 @@ export class DaemonClient {
     });
   }
 
-  async cloneGithubWorkspace(
-    input: { repo: string; targetDirectory: string; cloneProtocol?: WorkspaceGithubCloneProtocol },
+  async createProjectDirectory(
+    input: { parentPath: string; name: string },
     requestId?: string,
-  ): Promise<WorkspaceGithubClonePayload> {
+  ): Promise<ProjectCreateDirectoryPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"project.create_directory.response">({
+      requestId,
+      message: {
+        type: "project.create_directory.request",
+        parentPath: input.parentPath,
+        name: input.name,
+      },
+    });
+  }
+
+  async searchGithubRepositories(
+    input: { query: string; limit?: number },
+    requestId?: string,
+  ): Promise<WorkspaceGithubSearchRepositoriesPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"workspace.github.search_repositories.response">(
+      {
+        requestId,
+        message: {
+          type: "workspace.github.search_repositories.request",
+          query: input.query,
+          limit: input.limit,
+        },
+      },
+    );
+  }
+
+  async cloneGithubProject(
+    input: { repo: string; targetDirectory: string; cloneProtocol?: ProjectGithubCloneProtocol },
+    requestId?: string,
+  ): Promise<ProjectGithubClonePayload> {
     const message = {
-      type: "workspace.github.clone.request",
+      type: "project.github.clone.request",
       repo: input.repo,
       targetDirectory: input.targetDirectory,
       ...(input.cloneProtocol ? { cloneProtocol: input.cloneProtocol } : {}),
     } as const;
-    return this.sendNamespacedCorrelatedSessionRequest<"workspace.github.clone.response">({
+    return this.sendNamespacedCorrelatedSessionRequest<"project.github.clone.response">({
       requestId,
       message,
-      timeout: WORKSPACE_GITHUB_CLONE_TIMEOUT_MS,
+      timeout: PROJECT_GITHUB_CLONE_TIMEOUT_MS,
     });
   }
 
@@ -2354,6 +2464,36 @@ export class DaemonClient {
     return { pinnedAt: payload.pinnedAt };
   }
 
+  async inspectWorkspaceRecovery(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<WorkspaceRecoveryState> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.recovery.inspect.response">({
+        requestId,
+        message: {
+          type: "workspace.recovery.inspect.request",
+          workspaceId,
+        },
+      });
+    return payload.state;
+  }
+
+  async restoreWorkspace(workspaceId: string, requestId?: string): Promise<void> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.recovery.restore.response">({
+        requestId,
+        message: {
+          type: "workspace.recovery.restore.request",
+          workspaceId,
+        },
+        timeout: 150_000,
+      });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "Workspace recovery was rejected by the host");
+    }
+  }
+
   async resumeAgent(
     handle: AgentPersistenceHandle,
     overrides?: Partial<AgentSessionConfig>,
@@ -2394,6 +2534,7 @@ export class DaemonClient {
         ? { providerId: input.providerId, providerHandleId: input.providerHandleId }
         : { provider: input.provider, sessionId: input.sessionId }),
       ...(input.cwd ? { cwd: input.cwd } : {}),
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
       ...(input.labels && Object.keys(input.labels).length > 0 ? { labels: input.labels } : {}),
     });
 
@@ -2556,6 +2697,7 @@ export class DaemonClient {
       type: "agent.fork_context.request",
       agentId,
       requestId: resolvedRequestId,
+      ...(options.boundaryCursor ? { boundaryCursor: options.boundaryCursor } : {}),
       ...(options.boundaryMessageId ? { boundaryMessageId: options.boundaryMessageId } : {}),
     });
 
@@ -2665,7 +2807,7 @@ export class DaemonClient {
       agentId,
       requestId,
     });
-    await this.sendRequest({
+    const payload = await this.sendRequest({
       requestId,
       message,
       options: { skipQueue: true },
@@ -2679,6 +2821,9 @@ export class DaemonClient {
         return msg.payload;
       },
     });
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
   }
 
   async setAgentMode(agentId: string, modeId: string): Promise<AgentProviderNotice | null> {
@@ -3367,6 +3512,48 @@ export class DaemonClient {
     });
   }
 
+  async listCheckoutCommits(
+    cwd: string,
+    requestId?: string,
+  ): Promise<{ baseRef: string | null; commits: CheckoutCommit[] }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.commits.list.response">({
+        requestId,
+        message: {
+          type: "checkout.commits.list.request",
+          cwd,
+        },
+        timeout: 60000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return { baseRef: payload.baseRef, commits: payload.commits };
+  }
+
+  async getCommitFileDiff(
+    cwd: string,
+    sha: string,
+    path: string,
+    requestId?: string,
+  ): Promise<{ file: ParsedDiffFile | null }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.commits.file_diff.response">({
+        requestId,
+        message: {
+          type: "checkout.commits.file_diff.request",
+          cwd,
+          sha,
+          path,
+        },
+        timeout: 60000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return { file: payload.file };
+  }
+
   async checkoutPrCreate(
     cwd: string,
     input: { title?: string; body?: string; baseRef?: string },
@@ -3401,6 +3588,23 @@ export class DaemonClient {
     });
   }
 
+  async checkoutForgeSetAutoMerge(
+    cwd: string,
+    input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
+    requestId?: string,
+  ): Promise<CheckoutForgeSetAutoMergePayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.forge.set_auto_merge.response">({
+      requestId,
+      message: {
+        type: "checkout.forge.set_auto_merge.request",
+        cwd,
+        enabled: input.enabled,
+        ...(input.enabled ? { mergeMethod: input.method } : {}),
+      },
+      timeout: 60000,
+    });
+  }
+
   async checkoutGithubSetAutoMerge(
     cwd: string,
     input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
@@ -3417,12 +3621,40 @@ export class DaemonClient {
     });
   }
 
+  async checkoutForgeGetCheckDetails(
+    input: {
+      cwd: string;
+      repoOwner?: string;
+      repoName?: string;
+      checkRunId?: number;
+      workflowRunId?: number;
+      changeRequestNumber?: number;
+    },
+    requestId?: string,
+  ): Promise<CheckoutForgeGetCheckDetailsPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.forge.get_check_details.response">(
+      {
+        requestId,
+        message: {
+          type: "checkout.forge.get_check_details.request",
+          cwd: input.cwd,
+          repoOwner: input.repoOwner,
+          repoName: input.repoName,
+          checkRunId: input.checkRunId,
+          workflowRunId: input.workflowRunId,
+          changeRequestNumber: input.changeRequestNumber,
+        },
+        timeout: 60000,
+      },
+    );
+  }
+
   async checkoutGithubGetCheckDetails(
     input: {
       cwd: string;
-      repoOwner: string;
-      repoName: string;
-      checkRunId: number;
+      repoOwner?: string;
+      repoName?: string;
+      checkRunId?: number;
       workflowRunId?: number;
     },
     requestId?: string,
@@ -3597,6 +3829,7 @@ export class DaemonClient {
           : {}),
         ...(input.refName !== undefined ? { refName: input.refName } : {}),
         ...(input.action !== undefined ? { action: input.action } : {}),
+        ...(input.checkoutSource !== undefined ? { checkoutSource: input.checkoutSource } : {}),
         ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
         ...(input.runSetup !== undefined ? { runSetup: input.runSetup } : {}),
       },
@@ -3656,6 +3889,24 @@ export class DaemonClient {
         limit: options.limit,
       },
       responseType: "branch_suggestions_response",
+    });
+  }
+
+  async searchForge(
+    options: { cwd: string; query: string; limit?: number; kinds?: ForgeSearchRequest["kinds"] },
+    requestId?: string,
+  ): Promise<ForgeSearchPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "forge.search.request",
+        cwd: options.cwd,
+        query: options.query,
+        limit: options.limit,
+        kinds: options.kinds,
+      },
+      responseType: "forge.search.response",
+      timeout: 15000,
     });
   }
 
@@ -4898,14 +5149,22 @@ export class DaemonClient {
 
     const parsed = validateWSOutboundMessage(parsedJson);
     if (!parsed.success) {
-      const msgType =
+      const responseIdentity = extractCorrelatedResponseIdentity(parsedJson);
+      const envelopeType =
         parsedJson != null &&
         typeof parsedJson === "object" &&
         "type" in parsedJson &&
         typeof parsedJson.type === "string"
           ? parsedJson.type
           : "unknown";
+      const msgType = responseIdentity?.responseType ?? envelopeType;
       this.logger.warn({ msgType, error: parsed.error.message }, "Message validation failed");
+      if (responseIdentity) {
+        this.rejectWaitersForRequestId(
+          responseIdentity.requestId,
+          new DaemonProtocolError(responseIdentity),
+        );
+      }
       return;
     }
 
@@ -5226,6 +5485,19 @@ export class DaemonClient {
     }
   }
 
+  private rejectWaitersForRequestId(requestId: string, error: Error): void {
+    for (const waiter of Array.from(this.waiters)) {
+      if (waiter.requestId !== requestId) {
+        continue;
+      }
+      this.waiters.delete(waiter);
+      if (waiter.timeoutHandle) {
+        clearTimeout(waiter.timeoutHandle);
+      }
+      waiter.reject(error);
+    }
+  }
+
   private clearWaiters(error: Error): void {
     for (const waiter of Array.from(this.waiters)) {
       if (waiter.timeoutHandle) {
@@ -5295,7 +5567,7 @@ export class DaemonClient {
   private waitForWithCancel<T>(
     predicate: (msg: SessionOutboundMessage) => T | null,
     timeout = 30000,
-    _options?: { skipQueue?: boolean },
+    options?: WaitOptions,
   ): WaitHandle<T> {
     // Capture stack trace at call site, not inside setTimeout
     const timeoutError = new Error(`Timeout waiting for message (${timeout}ms)`);
@@ -5332,6 +5604,7 @@ export class DaemonClient {
         resolve: wrappedResolve,
         reject: wrappedReject,
         timeoutHandle,
+        requestId: options?.requestId,
       };
       this.waiters.add(waiter);
     });
