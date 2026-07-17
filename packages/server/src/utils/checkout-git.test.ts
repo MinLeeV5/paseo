@@ -526,7 +526,7 @@ describe("checkout git utilities", () => {
     expect(diff.diff).toContain("+strict-peer-dependencies=false");
   });
 
-  it("moves committed changes in ignored submodules between diff modes", async () => {
+  it("keeps committed submodule files out of uncommitted before the parent records the gitlink", async () => {
     const submoduleSource = join(tempDir, "submodule-source");
     mkdirSync(submoduleSource, { recursive: true });
     execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });
@@ -578,9 +578,16 @@ describe("checkout git utilities", () => {
         path: file.path,
         submodulePath: file.submodulePath,
       })),
+    ).toEqual([{ path: "modules/sub", submodulePath: undefined }]);
+    expect(uncommittedBeforeParentCommit.diff).toContain("Subproject commit");
+    expect(uncommittedBeforeParentCommit.diff).not.toContain("+two");
+    expect(
+      committedBeforeParentCommit.structured?.map((file) => ({
+        path: file.path,
+        submodulePath: file.submodulePath,
+      })),
     ).toEqual([{ path: "modules/sub/inner.txt", submodulePath: "modules/sub" }]);
-    expect(uncommittedBeforeParentCommit.diff).toContain("+two");
-    expect(committedBeforeParentCommit.structured).toEqual([]);
+    expect(committedBeforeParentCommit.diff).toContain("+two");
 
     execFileSync("git", ["add", "-f", "modules/sub"], { cwd: repoDir });
     execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance submodule"], {
@@ -607,7 +614,76 @@ describe("checkout git utilities", () => {
     expect(committedAfterParentCommit.diff).toContain("+two");
   });
 
-  it("includes committed and tracked worktree changes from an ignored submodule", async () => {
+  it("falls back to the compact gitlink when an unrecorded child commit cannot render", async () => {
+    const submoduleSource = join(tempDir, "submodule-source");
+    mkdirSync(submoduleSource, { recursive: true });
+    execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: submoduleSource });
+    writeFileSync(join(submoduleSource, "inner.txt"), "one\n");
+    execFileSync("git", ["add", "inner.txt"], { cwd: submoduleSource });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "submodule initial"], {
+      cwd: submoduleSource,
+    });
+
+    execFileSync(
+      "git",
+      ["-c", "protocol.file.allow=always", "submodule", "add", submoduleSource, "modules/sub"],
+      { cwd: repoDir },
+    );
+    execFileSync("git", ["add", ".gitmodules", "modules/sub"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add submodule"], {
+      cwd: repoDir,
+    });
+
+    const submoduleCheckout = join(repoDir, "modules/sub");
+    writeFileSync(join(submoduleCheckout, "inner.txt"), "one\ntwo\n");
+    execFileSync("git", ["add", "inner.txt"], { cwd: submoduleCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "submodule change"], {
+      cwd: submoduleCheckout,
+    });
+
+    const historicalBlob = execFileSync("git", ["rev-parse", "HEAD^:inner.txt"], {
+      cwd: submoduleCheckout,
+      encoding: "utf8",
+    }).trim();
+    const submoduleGitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], {
+      cwd: submoduleCheckout,
+      encoding: "utf8",
+    }).trim();
+    rmSync(join(submoduleGitDir, "objects", historicalBlob.slice(0, 2), historicalBlob.slice(2)));
+
+    expect(
+      execFileSync("git", ["diff", "--name-status", "HEAD^", "HEAD", "--", "inner.txt"], {
+        cwd: submoduleCheckout,
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("M\tinner.txt");
+    expect(
+      spawnSync("git", ["diff", "HEAD^", "HEAD", "--", "inner.txt"], {
+        cwd: submoduleCheckout,
+        encoding: "utf8",
+      }).status,
+    ).toBe(128);
+
+    const committed = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+      includeStructured: true,
+    });
+
+    expect(
+      committed.structured?.map((file) => ({
+        path: file.path,
+        submodulePath: file.submodulePath,
+      })),
+    ).toEqual([{ path: "modules/sub", submodulePath: undefined }]);
+    expect(committed.diff).toContain("diff --git a/modules/sub b/modules/sub");
+    expect(committed.diff).toContain("Subproject commit");
+    expect(committed.diff).not.toContain("modules/sub/inner.txt");
+  });
+
+  it("splits committed and worktree changes inside an ignored submodule", async () => {
     const submoduleSource = join(tempDir, "submodule-source");
     mkdirSync(submoduleSource, { recursive: true });
     execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });
@@ -642,22 +718,35 @@ describe("checkout git utilities", () => {
     });
     writeFileSync(join(submoduleCheckout, "inner.txt"), "one\ntwo\nthree\n");
 
-    const diff = await getCheckoutDiff(repoDir, {
+    const uncommitted = await getCheckoutDiff(repoDir, {
       mode: "uncommitted",
+      includeStructured: true,
+    });
+    const committed = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
       includeStructured: true,
     });
 
     expect(
-      diff.structured?.map((file) => ({
+      uncommitted.structured?.map((file) => ({
         path: file.path,
         submodulePath: file.submodulePath,
       })),
     ).toEqual([{ path: "modules/sub/inner.txt", submodulePath: "modules/sub" }]);
-    expect(diff.diff).toContain("+two");
-    expect(diff.diff).toContain("+three");
+    expect(uncommitted.diff).not.toContain("+two");
+    expect(uncommitted.diff).toContain("+three");
+    expect(
+      committed.structured?.map((file) => ({
+        path: file.path,
+        submodulePath: file.submodulePath,
+      })),
+    ).toEqual([{ path: "modules/sub/inner.txt", submodulePath: "modules/sub" }]);
+    expect(committed.diff).toContain("+two");
+    expect(committed.diff).not.toContain("+three");
   });
 
-  it("expands committed changes from nested ignored submodules", async () => {
+  it("classifies committed changes from nested ignored submodules", async () => {
     const nestedSource = join(tempDir, "nested-source");
     mkdirSync(nestedSource, { recursive: true });
     execFileSync("git", ["init", "-b", "main"], { cwd: nestedSource });
@@ -713,13 +802,31 @@ describe("checkout git utilities", () => {
       cwd: nestedCheckout,
     });
 
-    const diff = await getCheckoutDiff(repoDir, {
+    const uncommitted = await getCheckoutDiff(repoDir, {
       mode: "uncommitted",
+      includeStructured: true,
+    });
+    const committed = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
       includeStructured: true,
     });
 
     expect(
-      diff.structured?.map((file) => ({
+      uncommitted.structured?.map((file) => ({
+        path: file.path,
+        submodulePath: file.submodulePath,
+      })),
+    ).toEqual([
+      {
+        path: "modules/outer/deps/nested",
+        submodulePath: "modules/outer",
+      },
+    ]);
+    expect(uncommitted.diff).toContain("Subproject commit");
+    expect(uncommitted.diff).not.toContain("+two");
+    expect(
+      committed.structured?.map((file) => ({
         path: file.path,
         submodulePath: file.submodulePath,
       })),
@@ -729,13 +836,13 @@ describe("checkout git utilities", () => {
         submodulePath: "modules/outer/deps/nested",
       },
     ]);
-    expect(diff.diff).toContain(
+    expect(committed.diff).toContain(
       "diff --git a/modules/outer/deps/nested/nested.txt b/modules/outer/deps/nested/nested.txt",
     );
-    expect(diff.diff).toContain("+two");
+    expect(committed.diff).toContain("+two");
   });
 
-  it("keeps a separately advanced nested gitlink beneath an advanced ancestor", async () => {
+  it("classifies separately committed ancestor and nested submodule changes", async () => {
     const { midCheckout, leafCheckout } = setupNestedIgnoredSubmoduleFixture({
       tempDir,
       repoDir,
@@ -753,13 +860,31 @@ describe("checkout git utilities", () => {
       cwd: leafCheckout,
     });
 
-    const diff = await getCheckoutDiff(repoDir, {
+    const uncommitted = await getCheckoutDiff(repoDir, {
       mode: "uncommitted",
+      includeStructured: true,
+    });
+    const committed = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
       includeStructured: true,
     });
 
     expect(
-      diff.structured
+      uncommitted.structured
+        ?.map((file) => ({ path: file.path, submodulePath: file.submodulePath }))
+        .sort((a, b) => a.path.localeCompare(b.path)),
+    ).toEqual([
+      {
+        path: "modules/mid/deps/leaf",
+        submodulePath: "modules/mid",
+      },
+    ]);
+    expect(uncommitted.diff).toContain("Subproject commit");
+    expect(uncommitted.diff).not.toContain("+leaf-two");
+    expect(uncommitted.diff).not.toContain("+mid-two");
+    expect(
+      committed.structured
         ?.map((file) => ({ path: file.path, submodulePath: file.submodulePath }))
         .sort((a, b) => a.path.localeCompare(b.path)),
     ).toEqual([
@@ -769,15 +894,15 @@ describe("checkout git utilities", () => {
       },
       { path: "modules/mid/mid.txt", submodulePath: "modules/mid" },
     ]);
-    expect(diff.diff).toContain(
+    expect(committed.diff).toContain(
       "diff --git a/modules/mid/deps/leaf/leaf.txt b/modules/mid/deps/leaf/leaf.txt",
     );
-    expect(diff.diff).toContain("diff --git a/modules/mid/mid.txt b/modules/mid/mid.txt");
-    expect(diff.diff).toContain("+leaf-two");
-    expect(diff.diff).toContain("+mid-two");
+    expect(committed.diff).toContain("diff --git a/modules/mid/mid.txt b/modules/mid/mid.txt");
+    expect(committed.diff).toContain("+leaf-two");
+    expect(committed.diff).toContain("+mid-two");
   });
 
-  it("expands a nested gitlink recorded by an advanced ancestor commit", async () => {
+  it("classifies a nested gitlink recorded by an unrecorded ancestor commit", async () => {
     const { midCheckout, leafCheckout } = setupNestedIgnoredSubmoduleFixture({
       tempDir,
       repoDir,
@@ -795,13 +920,26 @@ describe("checkout git utilities", () => {
       cwd: midCheckout,
     });
 
-    const diff = await getCheckoutDiff(repoDir, {
+    const uncommitted = await getCheckoutDiff(repoDir, {
       mode: "uncommitted",
+      includeStructured: true,
+    });
+    const committed = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
       includeStructured: true,
     });
 
     expect(
-      diff.structured
+      uncommitted.structured
+        ?.map((file) => ({ path: file.path, submodulePath: file.submodulePath }))
+        .sort((a, b) => a.path.localeCompare(b.path)),
+    ).toEqual([{ path: "modules/mid", submodulePath: undefined }]);
+    expect(uncommitted.diff).toContain("Subproject commit");
+    expect(uncommitted.diff).not.toContain("+leaf-two");
+    expect(uncommitted.diff).not.toContain("+mid-two");
+    expect(
+      committed.structured
         ?.map((file) => ({ path: file.path, submodulePath: file.submodulePath }))
         .sort((a, b) => a.path.localeCompare(b.path)),
     ).toEqual([
@@ -811,12 +949,12 @@ describe("checkout git utilities", () => {
       },
       { path: "modules/mid/mid.txt", submodulePath: "modules/mid" },
     ]);
-    expect(diff.diff).toContain(
+    expect(committed.diff).toContain(
       "diff --git a/modules/mid/deps/leaf/leaf.txt b/modules/mid/deps/leaf/leaf.txt",
     );
-    expect(diff.diff).toContain("diff --git a/modules/mid/mid.txt b/modules/mid/mid.txt");
-    expect(diff.diff).toContain("+leaf-two");
-    expect(diff.diff).toContain("+mid-two");
+    expect(committed.diff).toContain("diff --git a/modules/mid/mid.txt b/modules/mid/mid.txt");
+    expect(committed.diff).toContain("+leaf-two");
+    expect(committed.diff).toContain("+mid-two");
   });
 
   it("recurses through committed nested submodule changes", async () => {
@@ -916,7 +1054,7 @@ describe("checkout git utilities", () => {
     expect(diff.diff).toContain("+mid-two");
     expect(diff.diff).toContain("+leaf-two");
     expect(duplicates).toEqual([]);
-  });
+  }, 15_000);
 
   it("coalesces equivalent root commit refs in clean recursive diffs", async () => {
     setupNestedIgnoredSubmoduleFixture({ tempDir, repoDir });

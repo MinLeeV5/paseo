@@ -204,12 +204,18 @@ type RecursiveDiffEndpoint =
   | { kind: "absent" }
   | { kind: "commit"; ref: string }
   | {
+      kind: "checkedCommit";
+      recordedCommit: string;
+      headCommit: string;
+    }
+  | {
       kind: "worktree";
       recordedCommit: string | null;
       headCommit: string | null;
     };
 
 interface SubmoduleDiffComparison {
+  mode: "uncommitted" | "committed";
   oldEndpoint: RecursiveDiffEndpoint;
   newEndpoint: RecursiveDiffEndpoint;
   includeUntracked: boolean;
@@ -875,6 +881,8 @@ function getCommitRefForEndpoint(endpoint: RecursiveDiffEndpoint): string | null
       return EMPTY_TREE_OBJECT_ID;
     case "commit":
       return endpoint.ref;
+    case "checkedCommit":
+      return endpoint.headCommit;
     case "worktree":
       return null;
   }
@@ -903,7 +911,10 @@ function createSubmoduleFallbackChange(
   comparison: SubmoduleDiffComparison | null,
 ): CheckoutFileChange {
   const isNew =
-    comparison?.oldEndpoint.kind === "absent" && comparison.newEndpoint.kind !== "absent";
+    (comparison?.oldEndpoint.kind === "absent" && comparison.newEndpoint.kind !== "absent") ||
+    (comparison?.mode === "uncommitted" &&
+      comparison.newEndpoint.kind === "worktree" &&
+      comparison.newEndpoint.recordedCommit === null);
   const isDeleted =
     comparison?.oldEndpoint.kind !== "absent" && comparison?.newEndpoint.kind === "absent";
   let status = "M";
@@ -941,6 +952,19 @@ async function resolveChildEndpoint(input: {
       : { kind: "absent" };
   }
 
+  if (input.endpoint.kind === "checkedCommit") {
+    const lookup = await readGitlinkObjectIdAtRefCached(
+      input.parentCwd,
+      input.endpoint.headCommit,
+      input.submodulePath,
+      input.cache,
+    );
+    if (lookup.kind === "unavailable") return null;
+    return lookup.kind === "present"
+      ? { kind: "commit", ref: lookup.objectId }
+      : { kind: "absent" };
+  }
+
   const [recordedLookup, headCommit] = await Promise.all([
     input.endpoint.headCommit
       ? readGitlinkObjectIdAtRefCached(
@@ -967,7 +991,31 @@ async function resolveSubmoduleDiffComparison(input: {
   parentComparison: SubmoduleDiffComparison;
   cache: SubmoduleScanCache;
 }): Promise<SubmoduleDiffComparison | null> {
-  const [oldEndpoint, newEndpoint] = await Promise.all([
+  if (input.parentComparison.mode === "uncommitted") {
+    // File classification is repository-local: once a child commit exists, only
+    // that child's HEAD-to-worktree patch remains Uncommitted. The parent-recorded
+    // gitlink is retained on the worktree endpoint solely for compact pointer output.
+    const newEndpoint = await resolveChildEndpoint({
+      parentCwd: input.parentCwd,
+      childCwd: input.submoduleCwd,
+      submodulePath: input.submodulePath,
+      endpoint: input.parentComparison.newEndpoint,
+      cache: input.cache,
+    });
+    if (newEndpoint?.kind !== "worktree" || !newEndpoint.headCommit) return null;
+    return {
+      mode: "uncommitted",
+      oldEndpoint: { kind: "commit", ref: newEndpoint.headCommit },
+      newEndpoint,
+      includeUntracked: input.parentComparison.includeUntracked,
+    };
+  }
+
+  // Committed keeps the historical parent-derived endpoint on the left, but the
+  // initialized child's checked-out HEAD is the final committed state on the right.
+  // Keeping the target parent's recorded object ID lets rendering fall back to a
+  // bounded short gitlink diff when child objects cannot be rendered.
+  const [oldEndpoint, recordedNewEndpoint, checkedHeadCommit] = await Promise.all([
     resolveChildEndpoint({
       parentCwd: input.parentCwd,
       childCwd: input.submoduleCwd,
@@ -982,14 +1030,51 @@ async function resolveSubmoduleDiffComparison(input: {
       endpoint: input.parentComparison.newEndpoint,
       cache: input.cache,
     }),
+    readHeadObjectIdCached(input.submoduleCwd, input.cache),
   ]);
+  const newEndpoint =
+    recordedNewEndpoint?.kind === "commit" && checkedHeadCommit
+      ? ({
+          kind: "checkedCommit",
+          recordedCommit: recordedNewEndpoint.ref,
+          headCommit: checkedHeadCommit,
+        } satisfies RecursiveDiffEndpoint)
+      : recordedNewEndpoint;
   if (!oldEndpoint || !newEndpoint) return null;
 
   return {
+    mode: "committed",
     oldEndpoint,
     newEndpoint,
     includeUntracked: input.parentComparison.includeUntracked,
   };
+}
+
+function hasUncommittedGitlinkChange(comparison: SubmoduleDiffComparison): boolean {
+  return (
+    comparison.mode === "uncommitted" &&
+    comparison.newEndpoint.kind === "worktree" &&
+    comparison.newEndpoint.recordedCommit !== comparison.newEndpoint.headCommit
+  );
+}
+
+function getSubmoduleFallbackDiffRefs(input: {
+  parentComparison: SubmoduleDiffComparison;
+  childComparison: SubmoduleDiffComparison;
+  defaultRefs: CheckoutDiffRefs;
+}): CheckoutDiffRefs {
+  const { newEndpoint } = input.childComparison;
+  if (
+    input.childComparison.mode !== "committed" ||
+    newEndpoint.kind !== "checkedCommit" ||
+    newEndpoint.recordedCommit === newEndpoint.headCommit
+  ) {
+    return input.defaultRefs;
+  }
+  const parentTargetRef = getCommitRefForEndpoint(input.parentComparison.newEndpoint);
+  return parentTargetRef
+    ? { baseRef: parentTargetRef, includeUntracked: false }
+    : input.defaultRefs;
 }
 
 // Parent `git diff` may not enumerate submodule worktree changes, especially
@@ -1053,7 +1138,13 @@ async function listSubmoduleFileChanges(input: {
     const childFallback: SubmoduleTrackedFileChange = {
       cwd,
       displayPrefix,
-      refsForDiff: parentRefsForDiff,
+      refsForDiff: submoduleComparison
+        ? getSubmoduleFallbackDiffRefs({
+            parentComparison: comparison,
+            childComparison: submoduleComparison,
+            defaultRefs: parentRefsForDiff,
+          })
+        : parentRefsForDiff,
       change: createSubmoduleFallbackChange(submodulePath, submoduleComparison),
       ...(parentFallback ? { fallback: parentFallback } : null),
       isGitlinkFallback: true,
@@ -1126,6 +1217,11 @@ async function listSubmoduleFileChanges(input: {
     tracked.push(...nestedChanges.tracked);
     untracked.push(...nestedChanges.untracked);
     if (tracked.length > trackedBeforeChild) {
+      expandedSubmodulePaths.add(displaySubmodulePath);
+    } else if (hasUncommittedGitlinkChange(submoduleComparison)) {
+      // Do not let the root renderer expand recorded-to-checked child history back
+      // into Uncommitted. With no tracked child owner, retain one compact pointer.
+      tracked.push(childFallback);
       expandedSubmodulePaths.add(displaySubmodulePath);
     }
   }
@@ -3260,6 +3356,7 @@ export async function getCheckoutDiff(
   const submoduleScanCache = createSubmoduleScanCache();
   const rootHead = await readHeadObjectIdCached(cwd, submoduleScanCache);
   const rootComparison: SubmoduleDiffComparison = {
+    mode: compare.mode === "uncommitted" ? "uncommitted" : "committed",
     oldEndpoint:
       effectiveRefsForDiff.baseRef === EMPTY_TREE_OBJECT_ID
         ? { kind: "absent" }

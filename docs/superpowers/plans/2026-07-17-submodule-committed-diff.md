@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the legacy untracked-gated submodule scanner with an endpoint-aware recursive comparator that handles Committed diffs, newly added nested submodules, one shared output budget, and request-local structural caching.
+**Goal:** Replace the legacy untracked-gated submodule scanner with an endpoint-aware recursive comparator that classifies each initialized repository at its own commit boundary, handles newly added nested submodules, and shares one output budget and request-local structural cache.
 
-**Architecture:** Keep the root ordinary-file pipeline, but model every recursive child comparison as `absent`, exact `commit`, or `worktree`. Always traverse initialized children, let `includeUntracked` control only untracked discovery, remove an exact parent gitlink only after a child owns tracked output, and admit every complete patch through the same 2 MB accumulator before creating structured hunks.
+**Architecture:** Keep the root ordinary-file pipeline, but model recursive endpoints as `absent`, exact `commit`, checked-out `checkedCommit`, or `worktree`. Uncommitted compares every repository's own `HEAD -> worktree`; Committed compares the historical parent-recorded endpoint to each initialized child's checked-out `HEAD`. Always traverse initialized children, let `includeUntracked` control only untracked discovery, preserve at most one compact unrecorded gitlink when no tracked child output replaces it, and admit every complete patch through the same 2 MB accumulator before creating structured hunks.
 
 **Tech Stack:** TypeScript, Node.js child processes, Git, Vitest.
 
@@ -20,11 +20,31 @@
 - Use the clean Git environment for Vitest so the installed git-ai trace wrapper cannot recreate `.git/ai` during fixture teardown.
 - After every implementation change run `npm run typecheck` and `npm run lint`; before each commit run repository formatting and `git diff --check`.
 
+## Repository-local classification correction
+
+The original Task 1 endpoint sketches treated a child commit as Uncommitted until the parent
+recorded its gitlink. Real-worktree validation showed that this can put hundreds of already-
+committed child files under Uncommitted while Committed is empty. The following rules supersede
+conflicting endpoint and test-expectation snippets later in Task 1:
+
+- Uncommitted resolves each initialized child's checked-out `HEAD` and compares that commit to the
+  child worktree. If the parent-recorded gitlink differs and no tracked child output replaces it,
+  render only the nearest compact `--submodule=short` pointer.
+- Committed retains the historical parent gitlink as its old endpoint but promotes a readable,
+  initialized child `HEAD` to `checkedCommit` as its target. `checkedCommit` also retains the target
+  parent's recorded object ID so render failure can fall back to a compact pointer.
+- A target parent tree that does not contain the gitlink remains `absent`; an unrelated checkout
+  never invents a committed child. This does not infer a child branch or child base.
+- Mixed child state is split: parent-recorded commit to child `HEAD` is Committed, while child
+  `HEAD -> worktree` is Uncommitted.
+
+The final implementation and regression names are recorded in Task 4.
+
 ## File Structure
 
 - Modify `packages/server/src/utils/checkout-git.ts`: keep endpoint resolution, request-local recursive caches, recursive ownership, and the checkout-diff accumulator next to the private Git diff helpers they compose.
 - Modify `packages/server/src/utils/checkout-git.test.ts`: add real-repository regressions beside the existing submodule tests and total-budget tests.
-- Modify `docs/superpowers/specs/2026-07-17-submodule-committed-diff-design.md` only if implementation evidence requires a design correction; otherwise the committed design remains authoritative.
+- Modify `docs/superpowers/specs/2026-07-17-submodule-committed-diff-design.md` whenever implementation evidence changes the classification contract; the committed design remains authoritative.
 
 No new production module is created. The comparator relies on private `CheckoutDiffRefs`, `CheckoutFileChange`, Git rendering helpers, and diff-highlighter callbacks already housed in `checkout-git.ts`; exporting those primitives solely to split the file would enlarge the public surface without creating an independently reusable unit.
 
@@ -48,7 +68,7 @@ No new production module is created. The comparator relies on private `CheckoutD
 
 - [ ] **Step 1: Add the Committed deep-recursion regression**
 
-Add this test after `expands a nested gitlink recorded by an advanced ancestor commit`:
+Add this test after `classifies a nested gitlink recorded by an unrecorded ancestor commit`:
 
 ```typescript
 it("recurses through committed nested submodule changes", async () => {
@@ -205,12 +225,18 @@ type RecursiveDiffEndpoint =
   | { kind: "absent" }
   | { kind: "commit"; ref: string }
   | {
+      kind: "checkedCommit";
+      recordedCommit: string;
+      headCommit: string;
+    }
+  | {
       kind: "worktree";
       recordedCommit: string | null;
       headCommit: string | null;
     };
 
 interface SubmoduleDiffComparison {
+  mode: "uncommitted" | "committed";
   oldEndpoint: RecursiveDiffEndpoint;
   newEndpoint: RecursiveDiffEndpoint;
   includeUntracked: boolean;
@@ -326,9 +352,11 @@ Use the same request-local `rootHead` value for both root endpoint construction 
 normalization. Descendant commit refs already come from `ls-tree` as full object IDs, so they do not
 need another `rev-parse`; the cache and query continue to preserve `absent` versus `unavailable`.
 
-- [ ] **Step 9: Convert endpoints to Git refs and resolve each child without `HEAD` fallback**
+- [ ] **Step 9: Convert endpoints to Git refs and resolve each child without `HEAD` fallback (historical first pass)**
 
-Replace `getSubmoduleComparisonDiffRefs()` and `resolveSubmoduleDiffComparison()` with:
+The original endpoint-aware first pass used the following structure. Task 4 supersedes its
+mode-neutral `resolveSubmoduleDiffComparison()`; do not copy that function without applying the
+repository-local classification correction.
 
 ```typescript
 function getCommitRefForEndpoint(endpoint: RecursiveDiffEndpoint): string | null {
@@ -337,6 +365,8 @@ function getCommitRefForEndpoint(endpoint: RecursiveDiffEndpoint): string | null
       return EMPTY_TREE_OBJECT_ID;
     case "commit":
       return endpoint.ref;
+    case "checkedCommit":
+      return endpoint.headCommit;
     case "worktree":
       return null;
   }
@@ -368,6 +398,19 @@ async function resolveChildEndpoint(input: {
     const lookup = await readGitlinkObjectIdAtRefCached(
       input.parentCwd,
       input.endpoint.ref,
+      input.submodulePath,
+      input.cache,
+    );
+    if (lookup.kind === "unavailable") return null;
+    return lookup.kind === "present"
+      ? { kind: "commit", ref: lookup.objectId }
+      : { kind: "absent" };
+  }
+
+  if (input.endpoint.kind === "checkedCommit") {
+    const lookup = await readGitlinkObjectIdAtRefCached(
+      input.parentCwd,
+      input.endpoint.headCommit,
       input.submodulePath,
       input.cache,
     );
@@ -421,6 +464,7 @@ async function resolveSubmoduleDiffComparison(input: {
   ]);
   if (!oldEndpoint || !newEndpoint) return null;
   return {
+    mode: input.parentComparison.mode,
     oldEndpoint,
     newEndpoint,
     includeUntracked: input.parentComparison.includeUntracked,
@@ -586,6 +630,7 @@ the recursive comparator unconditionally:
 const submoduleScanCache = createSubmoduleScanCache();
 const rootHead = await readHeadObjectIdCached(cwd, submoduleScanCache);
 const rootComparison: SubmoduleDiffComparison = {
+  mode: compare.mode === "uncommitted" ? "uncommitted" : "committed",
   oldEndpoint:
     effectiveRefsForDiff.baseRef === EMPTY_TREE_OBJECT_ID
       ? { kind: "absent" }
@@ -630,7 +675,7 @@ Delete the `includeUntracked ? listSubmoduleFileChanges(...) : empty` gate,
 Run:
 
 ```bash
-PATH=/Users/min/.nvm/versions/node/v22.22.0/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null npx vitest run packages/server/src/utils/checkout-git.test.ts --bail=1 -t "recurses through committed nested submodule changes|expands a newly added initialized submodule from an absent endpoint|does not repeat structural submodule queries within one recursive diff|keeps a separately advanced nested gitlink beneath an advanced ancestor|expands a nested gitlink recorded by an advanced ancestor commit"
+PATH=/Users/min/.nvm/versions/node/v22.22.0/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null npx vitest run packages/server/src/utils/checkout-git.test.ts --bail=1 -t "recurses through committed nested submodule changes|expands a newly added initialized submodule from an absent endpoint|does not repeat structural submodule queries within one recursive diff|classifies separately committed ancestor and nested submodule changes|classifies a nested gitlink recorded by an unrecorded ancestor commit"
 ```
 
 Expected: PASS; both new endpoint cases expose direct and leaf files, the cache reports no exact
@@ -1077,3 +1122,103 @@ git commit -m "docs: finalize recursive submodule diff verification"
 ```
 
 If `git status --short` is already empty, do not create an empty commit.
+
+---
+
+### Task 4: Classify child commits independently of the parent gitlink commit
+
+**Files:**
+
+- Modify: `packages/server/src/utils/checkout-git.ts`
+- Modify: `packages/server/src/utils/checkout-git.test.ts`
+- Modify: `docs/superpowers/specs/2026-07-17-submodule-committed-diff-design.md`
+- Modify: `docs/superpowers/plans/2026-07-17-submodule-committed-diff.md`
+
+**Final endpoint model:**
+
+```typescript
+type RecursiveDiffEndpoint =
+  | { kind: "absent" }
+  | { kind: "commit"; ref: string }
+  | {
+      kind: "checkedCommit";
+      recordedCommit: string;
+      headCommit: string;
+    }
+  | {
+      kind: "worktree";
+      recordedCommit: string | null;
+      headCommit: string | null;
+    };
+
+interface SubmoduleDiffComparison {
+  mode: "uncommitted" | "committed";
+  oldEndpoint: RecursiveDiffEndpoint;
+  newEndpoint: RecursiveDiffEndpoint;
+  includeUntracked: boolean;
+}
+```
+
+`resolveSubmoduleDiffComparison()` applies mode-specific propagation:
+
+1. For Uncommitted, resolve the child's worktree endpoint first and use its `headCommit` as the old
+   exact commit. Never use the parent-recorded gitlink as the file-diff old endpoint.
+2. For Committed, resolve the historical old child normally. Resolve the target parent's gitlink;
+   when it is present and child `HEAD` is readable, promote the target to `checkedCommit`.
+3. Recurse through `checkedCommit.headCommit`, while retaining `recordedCommit` only for mismatch
+   detection and fallback rendering.
+4. When Uncommitted finds a recorded/checked mismatch but no tracked descendant owner, add the
+   exact child fallback and mark that root path expanded so the root renderer cannot emit a full
+   child history.
+5. When Committed rendering needs to fall back across a checked-commit mismatch, compare the
+   target parent commit to its worktree with `--submodule=short`; then continue through the existing
+   outer fallback chain if necessary.
+
+- [x] **Step 1: Add and observe the repository-local classification RED**
+
+Update the ignored-submodule fixture so a child commit exists while the parent still records the
+old gitlink. Assert that Uncommitted contains only `modules/sub` and not `+two`, while Committed
+contains `modules/sub/inner.txt` and `+two`.
+
+Run:
+
+```bash
+PATH=/Users/min/.nvm/versions/node/v22.22.0/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin GIT_CONFIG_GLOBAL=/dev/null npx vitest run packages/server/src/utils/checkout-git.test.ts --bail=1 -t "keeps committed submodule files out of uncommitted before the parent records the gitlink"
+```
+
+Expected RED before production changes: Uncommitted returns `modules/sub/inner.txt` and Committed
+is empty.
+
+- [x] **Step 2: Implement mode-aware endpoint propagation and compact pointer ownership**
+
+Add `checkedCommit` and `SubmoduleDiffComparison.mode`, split child resolution by mode, and retain
+the recorded target object for fallback. Do not add child-branch discovery, fetches, initialization,
+or process-global cache state.
+
+- [x] **Step 3: Split mixed child state and nested committed state**
+
+Cover these regressions:
+
+- `splits committed and worktree changes inside an ignored submodule`;
+- `classifies committed changes from nested ignored submodules`;
+- `classifies separately committed ancestor and nested submodule changes`;
+- `classifies a nested gitlink recorded by an unrecorded ancestor commit`.
+
+Committed assertions must contain child-commit content; Uncommitted assertions must contain only
+post-`HEAD` worktree content or the nearest compact pointer.
+
+- [x] **Step 4: Validate against the reported real worktree without mutating it**
+
+Run the current source `getCheckoutDiff()` against
+`/Users/min/.paseo/worktrees/2sw32oym/scrawny-gecko`. The reported fixture is expected to move from
+265 Uncommitted / 0 Committed files to:
+
+- 4 Uncommitted entries: one root file, one real child-worktree file, and two compact gitlinks;
+- 263 Committed child files: 66 under `maxhub-ai-monorepo` and 197 under
+  `maxhubone-gateway`.
+
+- [x] **Step 5: Run scoped verification**
+
+Run the submodule/recursive focused test set, the directly affected regression matrix, repository
+typecheck and lint, scoped formatting, formatting verification, and `git diff --check`. Do not run
+the repository-wide test suite.
