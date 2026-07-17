@@ -2018,6 +2018,179 @@ const x = 1;
     expect(diff.diff).toContain("# modules/budget/budget-4.txt: diff too large omitted");
   });
 
+  it("resolves recursive ownership after the total diff budget is exactly exhausted", async () => {
+    const submoduleSource = join(tempDir, "exhausted-ownership-source");
+    mkdirSync(submoduleSource, { recursive: true });
+    execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: submoduleSource });
+    writeFileSync(join(submoduleSource, ".gitattributes"), "empty.txt diff=empty\n");
+    writeFileSync(join(submoduleSource, "empty.txt"), "one\n");
+    writeFileSync(join(submoduleSource, "missing.txt"), "old\n");
+    execFileSync("git", ["add", "."], { cwd: submoduleSource });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add ownership files"], {
+      cwd: submoduleSource,
+    });
+
+    writeFileSync(join(repoDir, "fill-1.txt"), "old\n");
+    writeFileSync(join(repoDir, "fill-2.txt"), "old\n");
+    writeFileSync(join(repoDir, "fill.bin"), Buffer.from([0x00, 0xff, 0x10, 0x80]));
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        submoduleSource,
+        "modules/ownership",
+      ],
+      { cwd: repoDir },
+    );
+    execFileSync(
+      "git",
+      ["config", "--file", ".gitmodules", "submodule.modules/ownership.ignore", "all"],
+      { cwd: repoDir },
+    );
+    const submoduleCheckout = join(repoDir, "modules/ownership");
+    execFileSync("git", ["config", "diff.empty.command", "true"], { cwd: submoduleCheckout });
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add budget owners"], {
+      cwd: repoDir,
+    });
+    execFileSync("git", ["checkout", "-b", "feature/exhausted-recursive-ownership"], {
+      cwd: repoDir,
+    });
+
+    const totalBudgetBytes = 2 * 1024 * 1024;
+    const binaryCommentBytes = Buffer.byteLength("# fill.bin: binary diff omitted\n", "utf8");
+    const trackedPatchBytes = totalBudgetBytes - binaryCommentBytes;
+    const firstPatchBytes = Math.floor(trackedPatchBytes / 2);
+    const secondPatchBytes = trackedPatchBytes - firstPatchBytes;
+
+    function writePatchWithSize(relativePath: string, targetBytes: number): void {
+      const absolutePath = join(repoDir, relativePath);
+      writeFileSync(absolutePath, "x\n");
+      const initialPatch = execFileSync(
+        "git",
+        ["diff", "--submodule=diff", "--ignore-submodules=none", "main", "--", relativePath],
+        { cwd: repoDir, maxBuffer: 2 * 1024 * 1024 },
+      );
+      const contentLength = 1 + targetBytes - initialPatch.byteLength;
+      expect(contentLength).toBeGreaterThan(0);
+      writeFileSync(absolutePath, `${"x".repeat(contentLength)}\n`);
+      const finalPatch = execFileSync(
+        "git",
+        ["diff", "--submodule=diff", "--ignore-submodules=none", "main", "--", relativePath],
+        { cwd: repoDir, maxBuffer: 2 * 1024 * 1024 },
+      );
+      expect(finalPatch.byteLength).toBe(targetBytes);
+    }
+
+    writePatchWithSize("fill-1.txt", firstPatchBytes);
+    writePatchWithSize("fill-2.txt", secondPatchBytes);
+    writeFileSync(join(repoDir, "fill.bin"), Buffer.from([0x00, 0xfe, 0x11, 0x81]));
+    writeFileSync(join(submoduleCheckout, "empty.txt"), "one  \n");
+    writeFileSync(join(submoduleCheckout, "missing.txt"), "new\n");
+    execFileSync("git", ["add", "empty.txt", "missing.txt"], { cwd: submoduleCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "change ownership files"], {
+      cwd: submoduleCheckout,
+    });
+    execFileSync(
+      "git",
+      ["add", "-f", "fill-1.txt", "fill-2.txt", "fill.bin", "modules/ownership"],
+      { cwd: repoDir },
+    );
+    execFileSync(
+      "git",
+      ["-c", "commit.gpgsign=false", "commit", "-m", "fill diff budget and advance owner"],
+      { cwd: repoDir },
+    );
+
+    expect(
+      execFileSync("git", ["diff", "--name-status", "HEAD^", "HEAD", "--", "empty.txt"], {
+        cwd: submoduleCheckout,
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("M\tempty.txt");
+    expect(
+      execFileSync("git", ["diff", "HEAD^", "HEAD", "--", "empty.txt"], {
+        cwd: submoduleCheckout,
+        encoding: "utf8",
+      }),
+    ).toBe("");
+
+    const missingBlob = execFileSync("git", ["rev-parse", "HEAD^:missing.txt"], {
+      cwd: submoduleCheckout,
+      encoding: "utf8",
+    }).trim();
+    const submoduleGitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], {
+      cwd: submoduleCheckout,
+      encoding: "utf8",
+    }).trim();
+    const missingBlobPath = join(
+      submoduleGitDir,
+      "objects",
+      missingBlob.slice(0, 2),
+      missingBlob.slice(2),
+    );
+    expect(existsSync(missingBlobPath)).toBe(true);
+    rmSync(missingBlobPath);
+    expect(
+      execFileSync("git", ["diff", "--name-status", "HEAD^", "HEAD", "--", "missing.txt"], {
+        cwd: submoduleCheckout,
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("M\tmissing.txt");
+    expect(
+      spawnSync("git", ["diff", "HEAD^", "HEAD", "--", "missing.txt"], {
+        cwd: submoduleCheckout,
+        encoding: "utf8",
+      }).status,
+    ).toBe(128);
+    expect(
+      execFileSync(
+        "git",
+        [
+          "diff",
+          "--submodule=short",
+          "--ignore-submodules=none",
+          "main",
+          "HEAD",
+          "--",
+          "modules/ownership",
+        ],
+        { cwd: repoDir, encoding: "utf8" },
+      ),
+    ).not.toBe("");
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+      includeStructured: true,
+    });
+    const recursiveFiles = diff.structured?.filter(
+      (file) => file.path === "modules/ownership" || file.path.startsWith("modules/ownership/"),
+    );
+
+    expect(Buffer.byteLength(diff.diff, "utf8")).toBe(totalBudgetBytes);
+    expect(
+      recursiveFiles?.map((file) => ({
+        path: file.path,
+        submodulePath: file.submodulePath,
+        status: file.status,
+        hunks: file.hunks.length,
+      })),
+    ).toEqual([
+      {
+        path: "modules/ownership",
+        submodulePath: undefined,
+        status: "too_large",
+        hunks: 0,
+      },
+    ]);
+  });
+
   it("short-circuits tracked binary files", async () => {
     const trackedBinaryPath = join(repoDir, "tracked-blob.bin");
     writeFileSync(trackedBinaryPath, Buffer.from([0x00, 0xff, 0x10, 0x80, 0x00]));

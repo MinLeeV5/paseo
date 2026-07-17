@@ -1431,18 +1431,6 @@ async function processSubmoduleTrackedChanges(
 
   const trackedChangeGroups = groupSubmoduleTrackedChanges(trackedChanges);
   for (const group of trackedChangeGroups) {
-    if (output.remainingBytes() === 0) {
-      for (const trackedChange of group) {
-        appendSubmoduleTooLarge({
-          displayedChange: getDisplayedSubmoduleTrackedChange(trackedChange),
-          includeStructured,
-          structured,
-          output,
-        });
-      }
-      continue;
-    }
-
     const trackedDiffs = await resolveSubmoduleTrackedDiffGroup({
       trackedChanges: group,
       ignoreWhitespace,
