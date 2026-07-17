@@ -198,7 +198,6 @@ interface SubmoduleFileChanges {
   tracked: SubmoduleTrackedFileChange[];
   untracked: CheckoutFileChange[];
   expandedSubmodulePaths: Set<string>;
-  immediateFallbacks: Map<string, SubmoduleTrackedFileChange>;
 }
 
 type RecursiveDiffEndpoint =
@@ -1018,7 +1017,6 @@ async function listSubmoduleFileChanges(input: {
       tracked: [],
       untracked: [],
       expandedSubmodulePaths: new Set(),
-      immediateFallbacks: new Map(),
     };
   }
   if (visited.has(canonicalCwd)) {
@@ -1026,7 +1024,6 @@ async function listSubmoduleFileChanges(input: {
       tracked: [],
       untracked: [],
       expandedSubmodulePaths: new Set(),
-      immediateFallbacks: new Map(),
     };
   }
   visited.add(canonicalCwd);
@@ -1034,10 +1031,9 @@ async function listSubmoduleFileChanges(input: {
   const tracked: SubmoduleTrackedFileChange[] = [];
   const untracked: CheckoutFileChange[] = [];
   const expandedSubmodulePaths = new Set<string>();
-  const immediateFallbacks = new Map<string, SubmoduleTrackedFileChange>();
   const parentRefsForDiff = getSubmoduleComparisonDiffRefs(comparison);
   if (!parentRefsForDiff) {
-    return { tracked, untracked, expandedSubmodulePaths, immediateFallbacks };
+    return { tracked, untracked, expandedSubmodulePaths };
   }
   const submodulePaths = await listInitializedSubmodulePathsCached(cwd, cache);
   for (const submodulePath of submodulePaths) {
@@ -1058,7 +1054,6 @@ async function listSubmoduleFileChanges(input: {
       ...(parentFallback ? { fallback: parentFallback } : null),
       isGitlinkFallback: true,
     };
-    immediateFallbacks.set(displaySubmodulePath, childFallback);
     if (!submoduleComparison) continue;
     const refsForDiff = getSubmoduleComparisonDiffRefs(submoduleComparison);
     if (!refsForDiff) continue;
@@ -1141,7 +1136,6 @@ async function listSubmoduleFileChanges(input: {
     ),
     untracked: [...untrackedByPath.values()].sort((a, b) => a.path.localeCompare(b.path)),
     expandedSubmodulePaths,
-    immediateFallbacks,
   };
 }
 
@@ -1204,7 +1198,10 @@ async function renderSubmoduleTrackedChangeWithFallback(input: {
         trackedChange: current,
         ignoreWhitespace: input.ignoreWhitespace,
       })
-        .then((rendered) => (rendered.text || rendered.truncated ? rendered : null))
+        .then((rendered) => {
+          const isEmpty = !rendered.text && !rendered.truncated;
+          return isEmpty && current.isGitlinkFallback ? null : rendered;
+        })
         .catch((error: unknown) => {
           if (!current.fallback) throw error;
           return null;
@@ -1262,6 +1259,7 @@ async function processSubmoduleTrackedChanges(input: {
   const renderedByPath = new Map(
     rendered
       .filter((fileDiff): fileDiff is RenderedSubmoduleTrackedDiff => fileDiff !== null)
+      .filter((fileDiff) => fileDiff.text || fileDiff.truncated)
       .map((fileDiff) => [fileDiff.path, fileDiff]),
   );
   const renderedFallbackPaths = new Set(
@@ -3148,16 +3146,10 @@ export async function getCheckoutDiff(
     comparison: rootComparison,
     cache: submoduleScanCache,
   });
-  const rootSubmoduleFallbackChanges: SubmoduleTrackedFileChange[] = [];
-  const trackedChanges = changes.filter((change) => {
-    if (change.isUntracked) return false;
-    const fallback = submoduleFileChanges.immediateFallbacks.get(change.path);
-    if (!fallback) return true;
-    if (!submoduleFileChanges.expandedSubmodulePaths.has(change.path)) {
-      rootSubmoduleFallbackChanges.push({ ...fallback, change });
-    }
-    return false;
-  });
+  const trackedChanges = changes.filter(
+    (change) =>
+      !change.isUntracked && !submoduleFileChanges.expandedSubmodulePaths.has(change.path),
+  );
   const untrackedChanges = changes.filter((change) => change.isUntracked === true);
   if (effectiveRefsForDiff.includeUntracked) {
     untrackedChanges.push(...submoduleFileChanges.untracked);
@@ -3207,7 +3199,7 @@ export async function getCheckoutDiff(
 
   await processSubmoduleTrackedChanges({
     cwd,
-    trackedChanges: [...submoduleFileChanges.tracked, ...rootSubmoduleFallbackChanges],
+    trackedChanges: submoduleFileChanges.tracked,
     ignoreWhitespace,
     includeStructured: compare.includeStructured === true,
     structured,

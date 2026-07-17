@@ -982,6 +982,88 @@ describe("checkout git utilities", () => {
     expect(diff.diff).not.toContain("modules/mid/mid.txt");
   });
 
+  it("keeps unexpanded initialized root gitlinks in the root diff renderer", async () => {
+    const { midCheckout } = setupNestedIgnoredSubmoduleFixture({
+      tempDir,
+      repoDir,
+    });
+    execFileSync("git", ["checkout", "-b", "feature/unexpanded-root-gitlink"], { cwd: repoDir });
+    execFileSync(
+      "git",
+      ["-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "advance mid identity"],
+      { cwd: midCheckout },
+    );
+    execFileSync("git", ["add", "-f", "modules/mid"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "record mid identity"], {
+      cwd: repoDir,
+    });
+
+    const expectedRootDiff = execFileSync(
+      "git",
+      ["diff", "--submodule=diff", "--ignore-submodules=none", "main", "HEAD", "--", "modules/mid"],
+      { cwd: repoDir, encoding: "utf8" },
+    );
+    expect(expectedRootDiff).not.toContain("Subproject commit");
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+    });
+
+    expect(diff.diff).toBe(expectedRootDiff);
+  });
+
+  it("does not expose whitespace-only recursive changes when whitespace is ignored", async () => {
+    const { midCheckout } = setupNestedIgnoredSubmoduleFixture({
+      tempDir,
+      repoDir,
+    });
+    writeFileSync(join(midCheckout, ".gitattributes"), "mid.txt diff=empty\n");
+    execFileSync("git", ["config", "diff.empty.command", "true"], { cwd: midCheckout });
+    execFileSync("git", ["add", ".gitattributes"], { cwd: midCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add empty diff"], {
+      cwd: midCheckout,
+    });
+    execFileSync("git", ["add", "-f", "modules/mid"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "record empty diff"], {
+      cwd: repoDir,
+    });
+    execFileSync("git", ["checkout", "-b", "feature/whitespace-only-submodule"], {
+      cwd: repoDir,
+    });
+    writeFileSync(join(midCheckout, "mid.txt"), "mid-one  \n");
+    execFileSync("git", ["add", "mid.txt"], { cwd: midCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "space mid"], {
+      cwd: midCheckout,
+    });
+    execFileSync("git", ["add", "-f", "modules/mid"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "record spaced mid"], {
+      cwd: repoDir,
+    });
+
+    expect(
+      execFileSync("git", ["diff", "-w", "--name-status", "HEAD^", "HEAD", "--", "mid.txt"], {
+        cwd: midCheckout,
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("M\tmid.txt");
+    expect(
+      execFileSync("git", ["diff", "-w", "HEAD^", "HEAD", "--", "mid.txt"], {
+        cwd: midCheckout,
+        encoding: "utf8",
+      }),
+    ).toBe("");
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+      ignoreWhitespace: true,
+      includeStructured: true,
+    });
+
+    expect(diff).toEqual({ diff: "", structured: [] });
+  });
+
   it("includes untracked files inside submodules in an uncommitted diff", async () => {
     const submoduleSource = join(tempDir, "submodule-source");
     mkdirSync(submoduleSource, { recursive: true });
