@@ -458,6 +458,87 @@ describe("checkout git utilities", () => {
     expect(diff.diff).toContain("+strict-peer-dependencies=false");
   });
 
+  it("moves committed changes in ignored submodules between diff modes", async () => {
+    const submoduleSource = join(tempDir, "submodule-source");
+    mkdirSync(submoduleSource, { recursive: true });
+    execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: submoduleSource });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: submoduleSource });
+    writeFileSync(join(submoduleSource, "inner.txt"), "one\n");
+    execFileSync("git", ["add", "inner.txt"], { cwd: submoduleSource });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "submodule initial"], {
+      cwd: submoduleSource,
+    });
+
+    execFileSync(
+      "git",
+      ["-c", "protocol.file.allow=always", "submodule", "add", submoduleSource, "modules/sub"],
+      { cwd: repoDir },
+    );
+    execFileSync(
+      "git",
+      ["config", "--file", ".gitmodules", "submodule.modules/sub.ignore", "all"],
+      {
+        cwd: repoDir,
+      },
+    );
+    execFileSync("git", ["add", ".gitmodules", "modules/sub"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add submodule"], {
+      cwd: repoDir,
+    });
+    execFileSync("git", ["checkout", "-b", "feature/submodule"], { cwd: repoDir });
+
+    const submoduleCheckout = join(repoDir, "modules/sub");
+    writeFileSync(join(submoduleCheckout, "inner.txt"), "one\ntwo\n");
+    execFileSync("git", ["add", "inner.txt"], { cwd: submoduleCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "submodule change"], {
+      cwd: submoduleCheckout,
+    });
+
+    const uncommittedBeforeParentCommit = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+    const committedBeforeParentCommit = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+      includeStructured: true,
+    });
+
+    expect(
+      uncommittedBeforeParentCommit.structured?.map((file) => ({
+        path: file.path,
+        submodulePath: file.submodulePath,
+      })),
+    ).toEqual([{ path: "modules/sub/inner.txt", submodulePath: "modules/sub" }]);
+    expect(uncommittedBeforeParentCommit.diff).toContain("+two");
+    expect(committedBeforeParentCommit.structured).toEqual([]);
+
+    execFileSync("git", ["add", "-f", "modules/sub"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance submodule"], {
+      cwd: repoDir,
+    });
+
+    const uncommittedAfterParentCommit = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+    const committedAfterParentCommit = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+      includeStructured: true,
+    });
+
+    expect(uncommittedAfterParentCommit.structured).toEqual([]);
+    expect(
+      committedAfterParentCommit.structured?.map((file) => ({
+        path: file.path,
+        submodulePath: file.submodulePath,
+      })),
+    ).toEqual([{ path: "modules/sub/inner.txt", submodulePath: "modules/sub" }]);
+    expect(committedAfterParentCommit.diff).toContain("+two");
+  });
+
   it("includes untracked files inside submodules in an uncommitted diff", async () => {
     const submoduleSource = join(tempDir, "submodule-source");
     mkdirSync(submoduleSource, { recursive: true });
@@ -1311,9 +1392,11 @@ const x = 1;
     expect(diff.diff).toContain("# generated.js: diff too large omitted");
     expect(diff.diff).toContain(`-export const value = "old";`);
     expect(diff.diff).toContain(`+export const value = "new";`);
-    expect(commands).toContain("diff --numstat HEAD");
-    expect(commands).toContain("diff --submodule=diff HEAD -- generated.js");
-    expect(commands).toContain("diff --submodule=diff HEAD -- small.ts");
+    expect(commands).toContain("diff --numstat --ignore-submodules=dirty HEAD");
+    expect(commands).toContain(
+      "diff --submodule=diff --ignore-submodules=dirty HEAD -- generated.js",
+    );
+    expect(commands).toContain("diff --submodule=diff --ignore-submodules=dirty HEAD -- small.ts");
     expect(metrics.maxConcurrent).toBeLessThanOrEqual(8);
   });
 

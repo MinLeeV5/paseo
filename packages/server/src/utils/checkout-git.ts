@@ -196,8 +196,8 @@ interface SubmoduleFileChanges {
   untracked: CheckoutFileChange[];
 }
 
-function getCheckoutDiffRefArgs(refs: CheckoutDiffRefs): string[] {
-  return [refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
+function getCheckoutDiffComparisonArgs(refs: CheckoutDiffRefs): string[] {
+  return ["--ignore-submodules=dirty", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
 }
 
 function normalizeBranchSuggestionName(raw: string): string | null {
@@ -463,7 +463,7 @@ async function listCheckoutFileChanges(
   const { stdout: nameStatusOut } = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace,
-      extra: ["--name-status", ...getCheckoutDiffRefArgs(refs)],
+      extra: ["--name-status", ...getCheckoutDiffComparisonArgs(refs)],
     }),
     { cwd, envOverlay: READ_ONLY_GIT_ENV },
   );
@@ -610,7 +610,7 @@ const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 function isUnbornHeadDiffError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    error.message.includes("--name-status HEAD") &&
+    error.message.includes("--name-status --ignore-submodules=dirty HEAD") &&
     error.message.includes("ambiguous argument 'HEAD'")
   );
 }
@@ -623,7 +623,7 @@ async function getTrackedNumstatByPath(
   const result = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace,
-      extra: ["--numstat", ...getCheckoutDiffRefArgs(refs)],
+      extra: ["--numstat", ...getCheckoutDiffComparisonArgs(refs)],
     }),
     {
       cwd,
@@ -681,7 +681,12 @@ async function getTrackedDiffTextForPath(input: {
   const result = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace: input.ignoreWhitespace,
-      extra: ["--submodule=diff", ...getCheckoutDiffRefArgs(input.refsForDiff), "--", input.path],
+      extra: [
+        "--submodule=diff",
+        ...getCheckoutDiffComparisonArgs(input.refsForDiff),
+        "--",
+        input.path,
+      ],
     }),
     {
       cwd: input.cwd,
