@@ -151,10 +151,11 @@ tracked file, recursive tracked file, and untracked file uses the same remaining
 - rejected patches receive a hunk-free `too_large` placeholder and a best-effort omission comment
   through the same raw-text cap.
 
-Recursive tracked patches are rendered sequentially rather than all being buffered with
-`Promise.all`. Once no budget remains, later paths can be marked without spawning more patch
-renderers. Binary placeholders, whitespace filtering, and deterministic ordering retain their
-existing semantics.
+Recursive tracked fallback groups are resolved sequentially rather than all being buffered with
+`Promise.all`. Every group is resolved even when no budget remains so successful-empty paths
+disappear and the nearest fallback keeps ownership. Zero remaining bytes still admits no complete
+patch or structured hunks, and buffering stays bounded to one outer fallback group. Binary
+placeholders, whitespace filtering, and deterministic ordering retain their existing semantics.
 
 This intentionally tightens the historical behavior, which capped only `diffText` while allowing
 structured hunks to continue growing. The response schema is unchanged; only oversized entries

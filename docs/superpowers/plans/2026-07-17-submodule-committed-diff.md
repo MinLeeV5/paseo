@@ -752,13 +752,21 @@ const appendDiff = (text: string): void => {
 };
 ```
 
-Return `output.getText()` as `diff`, and use `output.remainingBytes() === 0` for loop short-circuiting.
+Return `output.getText()` as `diff`. A zero `remainingBytes()` may short-circuit output admission,
+but it must not short-circuit recursive fallback-group resolution.
 
 - [ ] **Step 4: Make recursive tracked rendering sequential and admission-aware**
 
 Change `processSubmoduleTrackedChanges()` to receive `output: DiffOutputAccumulator`. Replace its
 `Promise.all` and loop with this sequential admission flow while preserving the existing
 parse/highlight mapping for accepted patches:
+
+> **Approved implementation correction:** The initial per-path sketch below is superseded for
+> recursive ownership. Group tracked changes by their outer fallback, resolve every group
+> sequentially even when `remainingBytes()` is exactly zero, and then apply the admission flow to
+> the resolved winners. This removes successful-empty paths and preserves the nearest fallback.
+> Zero bytes admits no complete patch or structured hunks, and resolution buffers at most one outer
+> fallback group.
 
 ```typescript
 for (const trackedChange of trackedChanges) {
