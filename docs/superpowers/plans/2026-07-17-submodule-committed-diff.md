@@ -34,7 +34,7 @@
 **Interfaces:**
 
 - Consumes: `getCheckoutDiff(cwd, { mode, baseRef?, includeStructured })` and the existing `CheckoutDiffRefs` shape `{ baseRef, targetRef?, includeUntracked }`.
-- Produces: internal `getCheckoutDiffComparisonArgs(refs: CheckoutDiffRefs): string[]`, returning `--ignore-submodules=none` followed by the base and optional target refs.
+- Produces: internal `getCheckoutDiffComparisonArgs(refs: CheckoutDiffRefs): string[]`, returning `--ignore-submodules=dirty` followed by the base and optional target refs.
 
 - [ ] **Step 1: Write the failing real-repository regression test**
 
@@ -135,9 +135,13 @@ Rename the helper and prepend the explicit override in `packages/server/src/util
 
 ```typescript
 function getCheckoutDiffComparisonArgs(refs: CheckoutDiffRefs): string[] {
-  return ["--ignore-submodules=none", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
+  return ["--ignore-submodules=dirty", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
 }
 ```
+
+`dirty` deliberately includes gitlink/new-commit changes while leaving child-only worktree dirt to
+the existing recursive scanner. `none` must not be used because it also emits a duplicate
+submodule-root entry for child-only tracked or untracked changes.
 
 Use it in each tracked checkout-diff command:
 
@@ -158,12 +162,18 @@ extra: [
 ],
 ```
 
+Keep the unborn-repository fallback aligned with the generated command:
+
+```typescript
+error.message.includes("--name-status --ignore-submodules=dirty HEAD");
+```
+
 Update the exact command assertions in `packages/server/src/utils/checkout-git.test.ts`:
 
 ```typescript
-expect(commands).toContain("diff --numstat --ignore-submodules=none HEAD");
-expect(commands).toContain("diff --submodule=diff --ignore-submodules=none HEAD -- generated.js");
-expect(commands).toContain("diff --submodule=diff --ignore-submodules=none HEAD -- small.ts");
+expect(commands).toContain("diff --numstat --ignore-submodules=dirty HEAD");
+expect(commands).toContain("diff --submodule=diff --ignore-submodules=dirty HEAD -- generated.js");
+expect(commands).toContain("diff --submodule=diff --ignore-submodules=dirty HEAD -- small.ts");
 ```
 
 - [ ] **Step 4: Run the regression test and verify GREEN**
@@ -184,7 +194,7 @@ Run:
 npx vitest run packages/server/src/utils/checkout-git.test.ts --bail=1
 ```
 
-Expected: all tests in `checkout-git.test.ts` pass, including exact command metrics, ordinary files, ignored dirty submodules, untracked child files, whitespace filtering, and size limits.
+Expected: all tests in `checkout-git.test.ts` pass, including exact command metrics, ordinary files, unborn repositories, ignored dirty submodules, untracked child files without a duplicate submodule-root entry, whitespace filtering, and size limits.
 
 - [ ] **Step 6: Format and run repository static checks**
 

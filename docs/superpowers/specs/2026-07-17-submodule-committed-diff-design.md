@@ -34,7 +34,7 @@ gitlink as the source of truth for which view owns the change.
 ### Diff comparison arguments
 
 Rename the helper that assembles checkout comparison arguments so its name reflects that it
-returns both options and refs. Have it prepend `--ignore-submodules=none` before the base and target
+returns both options and refs. Have it prepend `--ignore-submodules=dirty` before the base and target
 refs.
 
 All tracked checkout-diff reads already use this shared argument list:
@@ -45,6 +45,11 @@ All tracked checkout-diff reads already use this shared argument list:
 
 Applying the override at this shared boundary keeps those reads consistent. It deliberately does
 not affect unrelated `git diff --no-index` calls used to render untracked files.
+
+Use `dirty`, not `none`: both values override `.gitmodules` `ignore = all` for gitlink/new-commit
+changes, but `none` also makes parent Git report child-only tracked or untracked worktree dirt as a
+submodule-root entry. The recursive scanner already owns that dirt and emits the real child files.
+`dirty` keeps those responsibilities separate and avoids a duplicate, empty submodule-root row.
 
 The override means “include submodule gitlink changes in this review,” not “change repository
 configuration.” It is read-only and does not write to `.gitmodules` or local Git config.
@@ -90,7 +95,7 @@ Add a real-repository regression test in
 5. Assert **Uncommitted** is empty and **Committed** returns the same child file and content.
 
 The test must fail on the current implementation because Git suppresses the parent path, then pass
-after the shared comparison arguments include `--ignore-submodules=none`. Update command-metrics
+after the shared comparison arguments include `--ignore-submodules=dirty`. Update command-metrics
 assertions that intentionally check the exact generated Git command. Run only the modified test
 file, followed by repository typecheck, lint, formatting, and formatting verification.
 
