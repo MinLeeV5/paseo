@@ -2667,8 +2667,15 @@ export async function getCheckoutSnapshotFacts(
 }
 
 const PER_FILE_DIFF_MAX_BYTES = 1024 * 1024; // 1MB
-const TOTAL_DIFF_MAX_BYTES = 2 * 1024 * 1024; // 2MB
+const LIVE_TOTAL_DIFF_MAX_BYTES = 2 * 1024 * 1024; // 2MB
+const COMMITTED_TOTAL_DIFF_MAX_BYTES = 20 * 1024 * 1024; // 20MB
 const UNTRACKED_BINARY_SNIFF_BYTES = 16 * 1024;
+
+let committedTotalDiffMaxBytesForTests: number | null = null;
+
+export function __setCommittedTotalDiffMaxBytesForTests(maxBytes: number | null): void {
+  committedTotalDiffMaxBytesForTests = maxBytes;
+}
 
 interface DiffOutputAccumulator {
   tryAppend: (text: string) => boolean;
@@ -2676,19 +2683,19 @@ interface DiffOutputAccumulator {
   getText: () => string;
 }
 
-function createDiffOutputAccumulator(): DiffOutputAccumulator {
+function createDiffOutputAccumulator(maxBytes: number): DiffOutputAccumulator {
   let text = "";
   let bytes = 0;
   return {
     tryAppend(candidate) {
       if (!candidate) return true;
       const candidateBytes = Buffer.byteLength(candidate, "utf8");
-      if (bytes + candidateBytes > TOTAL_DIFF_MAX_BYTES) return false;
+      if (bytes + candidateBytes > maxBytes) return false;
       text += candidate;
       bytes += candidateBytes;
       return true;
     },
-    remainingBytes: () => TOTAL_DIFF_MAX_BYTES - bytes,
+    remainingBytes: () => maxBytes - bytes,
     getText: () => text,
   };
 }
@@ -3568,6 +3575,7 @@ interface ProcessTrackedChangesInput {
   refsForDiff: CheckoutDiffRefs;
   trackedChanges: CheckoutFileChange[];
   ignoreWhitespace: boolean;
+  totalDiffMaxBytes: number;
   appendDiff: (text: string) => void;
 }
 
@@ -3581,7 +3589,8 @@ interface ProcessTrackedChangesResult {
 async function processTrackedChanges(
   input: ProcessTrackedChangesInput,
 ): Promise<ProcessTrackedChangesResult> {
-  const { cwd, refsForDiff, trackedChanges, ignoreWhitespace, appendDiff } = input;
+  const { cwd, refsForDiff, trackedChanges, ignoreWhitespace, totalDiffMaxBytes, appendDiff } =
+    input;
   const trackedChangeByPath = new Map(trackedChanges.map((change) => [change.path, change]));
   const trackedNumstatByPath =
     trackedChanges.length > 0
@@ -3626,7 +3635,7 @@ async function processTrackedChanges(
         continue;
       }
       const diffBytes = Buffer.byteLength(fileDiff.text, "utf8");
-      if (trackedDiffBytes + diffBytes > TOTAL_DIFF_MAX_BYTES) {
+      if (trackedDiffBytes + diffBytes > totalDiffMaxBytes) {
         trackedPlaceholderByPath.set(fileDiff.path, {
           status: "too_large",
           stat: trackedNumstatByPath.get(fileDiff.path) ?? null,
@@ -3703,7 +3712,13 @@ export async function getCheckoutDiff(
   });
 
   const structured: ParsedDiffFile[] = [];
-  const output = createDiffOutputAccumulator();
+  // Live diffs refresh on every edit, while committed diffs can cover a long-lived
+  // branch. Give the stable committed snapshot enough room to remain reviewable.
+  const totalDiffMaxBytes =
+    compare.mode === "base"
+      ? (committedTotalDiffMaxBytesForTests ?? COMMITTED_TOTAL_DIFF_MAX_BYTES)
+      : LIVE_TOTAL_DIFF_MAX_BYTES;
+  const output = createDiffOutputAccumulator(totalDiffMaxBytes);
   const appendDiff = (text: string): void => {
     output.tryAppend(text);
   };
@@ -3751,6 +3766,7 @@ export async function getCheckoutDiff(
     refsForDiff: effectiveRefsForDiff,
     trackedChanges,
     ignoreWhitespace,
+    totalDiffMaxBytes,
     appendDiff,
   });
 

@@ -15,6 +15,7 @@ import { tmpdir } from "os";
 import {
   __resetCheckoutShortstatCacheForTests,
   __resetPullRequestStatusCacheForTests,
+  __setCommittedTotalDiffMaxBytesForTests,
   __setPullRequestStatusCacheTtlForTests,
   commitAll,
   createPullRequest,
@@ -304,11 +305,13 @@ describe("checkout git utilities", () => {
     paseoHome = join(tempDir, "paseo-home");
     __resetCheckoutShortstatCacheForTests();
     __resetPullRequestStatusCacheForTests();
+    __setCommittedTotalDiffMaxBytesForTests(null);
   });
 
   afterEach(() => {
     __resetCheckoutShortstatCacheForTests();
     __resetPullRequestStatusCacheForTests();
+    __setCommittedTotalDiffMaxBytesForTests(null);
     rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -2287,6 +2290,48 @@ const x = 1;
     expect(diff.diff).toContain("# budget-4.txt: diff too large omitted");
   });
 
+  it("keeps aggregate committed diffs displayable beyond the live diff budget", async () => {
+    execFileSync("git", ["checkout", "-b", "feature/large-committed-diff"], { cwd: repoDir });
+    for (let i = 1; i <= 4; i += 1) {
+      writeFileSync(join(repoDir, `committed-budget-${i}.txt`), "old\n");
+    }
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add budget files"], {
+      cwd: repoDir,
+    });
+
+    const largeLine = "x".repeat(700_000);
+    for (let i = 1; i <= 4; i += 1) {
+      writeFileSync(join(repoDir, `committed-budget-${i}.txt`), `${largeLine}-${i}\n`);
+    }
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync(
+      "git",
+      ["-c", "commit.gpgsign=false", "commit", "-m", "expand committed budget files"],
+      { cwd: repoDir },
+    );
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "base",
+      baseRef: "main",
+      includeStructured: true,
+    });
+
+    expect(
+      diff.structured?.map((file) => ({
+        path: file.path,
+        status: file.status,
+        hunks: file.hunks.length,
+      })),
+    ).toEqual([
+      { path: "committed-budget-1.txt", status: "ok", hunks: 1 },
+      { path: "committed-budget-2.txt", status: "ok", hunks: 1 },
+      { path: "committed-budget-3.txt", status: "ok", hunks: 1 },
+      { path: "committed-budget-4.txt", status: "ok", hunks: 1 },
+    ]);
+    expect(Buffer.byteLength(diff.diff, "utf8")).toBeGreaterThan(2 * 1024 * 1024);
+  });
+
   it("shares the total diff budget with recursively rendered submodule files", async () => {
     const submoduleSource = join(tempDir, "budget-submodule-source");
     mkdirSync(submoduleSource, { recursive: true });
@@ -2347,6 +2392,7 @@ const x = 1;
   });
 
   it("resolves recursive ownership after the total diff budget is exactly exhausted", async () => {
+    __setCommittedTotalDiffMaxBytesForTests(2 * 1024 * 1024);
     const submoduleSource = join(tempDir, "exhausted-ownership-source");
     mkdirSync(submoduleSource, { recursive: true });
     execFileSync("git", ["init", "-b", "main"], { cwd: submoduleSource });

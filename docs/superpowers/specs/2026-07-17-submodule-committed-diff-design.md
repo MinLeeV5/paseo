@@ -24,8 +24,8 @@ underlying files. The recursive comparator addresses four separate model gaps:
    `includeUntracked`.
 2. A missing old gitlink is replaced with the child's current `HEAD`, so a newly added submodule is
    compared with itself instead of with an absent endpoint.
-3. Recursive patches are buffered and converted to structured hunks even after the shared 2 MB raw
-   diff budget is exhausted.
+3. Recursive patches are buffered and converted to structured hunks even after the shared raw diff
+   budget is exhausted.
 4. A parent-gitlink-only endpoint model conflates an unrecorded pointer with already-committed child
    files instead of comparing the child worktree from its own `HEAD`.
 
@@ -159,10 +159,12 @@ the end of `getCheckoutDiff`; repository state is never cached across calls. Thi
 `.gitmodules`, `rev-parse`, or `ls-tree` query from being issued repeatedly at adjacent recursion
 levels while avoiding stale results.
 
-### One output-admission budget
+### One output-admission budget per mode
 
-The existing limits remain 1 MB per file and 2 MB per checkout diff, but the total limit becomes an
-explicit contract for both raw and structured output.
+The per-file limit remains 1 MB. Uncommitted diffs retain a 2 MB total limit because they refresh on
+every edit; committed diffs use a 20 MB total limit so long-lived branches do not turn every file
+after the first 2 MB into a `too_large` placeholder. Each mode's total limit is an explicit contract
+for both raw and structured output.
 
 A request-local accumulator admits complete patch chunks in deterministic path order. Every root
 tracked file, recursive tracked file, and untracked file uses the same remaining-byte count:
@@ -198,7 +200,7 @@ groups and renders these shapes, so no protocol or UI compatibility gate is requ
 
 ## Testing
 
-Keep all existing real-Git regressions and add six architecture regressions:
+Keep all existing real-Git regressions and add seven architecture regressions:
 
 1. **Repository-local classification:** commit a child file without recording the new parent
    gitlink; assert Uncommitted contains only the compact pointer while Committed contains the file.
@@ -212,6 +214,8 @@ Keep all existing real-Git regressions and add six architecture regressions:
    aggregate; assert only budget-admitted files have hunks and the remainder are `too_large`.
 6. **Structural command cache:** inspect Git command metrics for a nested comparison and assert no
    identical `.gitmodules`, `rev-parse`, or `ls-tree` structural lookup is repeated.
+7. **Large committed aggregate:** create several individually valid committed patches above 2 MB in
+   aggregate and assert they remain fully displayable under the committed 20 MB budget.
 
 Each regression must be observed failing before production changes and passing afterward. Run only
 `packages/server/src/utils/checkout-git.test.ts`, using the clean Git environment documented in the
@@ -232,8 +236,8 @@ typecheck, lint, formatting verification, and `git diff --check`.
   nearest full `submodulePath`.
 - Traversal does not depend on untracked-file collection.
 - Missing data retains the nearest gitlink fallback without initialization, fetching, or mutation.
-- The 1 MB per-file and 2 MB total limits govern both raw patches and structured hunks across root,
-  recursive, tracked, and untracked paths.
+- The 1 MB per-file limit and the mode-specific total limits (2 MB uncommitted, 20 MB committed)
+  govern both raw patches and structured hunks across root, recursive, tracked, and untracked paths.
 - Structural Git queries are request-cached and recursion remains cycle-safe.
 - Normal files, whitespace filtering, binaries, unborn repositories, and existing path grouping
   retain their behavior.
