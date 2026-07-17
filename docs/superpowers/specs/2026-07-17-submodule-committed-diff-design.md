@@ -67,11 +67,23 @@ The existing client modes remain unchanged:
   Once the parent gitlink update is committed, the historical gitlink range is expanded into the
   changed child files.
 
-Existing duplicate prevention remains in place: when a parent diff reports a submodule path, the
-recursive dirty-worktree scan does not emit the same tracked child changes again. The same rule is
-applied at each recursive level. When recursive rendering expands a discovered nested gitlink, it
-emits the underlying files with full parent-relative paths, assigns the full nested gitlink path as
-`submodulePath`, and suppresses a second tracked scan of that nested child.
+Duplicate prevention is path-specific. A renderer owns direct files at its repository level, not
+every tracked path below an ancestor submodule. When an initialized nested gitlink is discovered,
+the scanner descends into that child instead of treating the gitlink root as a direct file. The
+child emits its own direct files with full parent-relative paths and its full path as
+`submodulePath`.
+
+Each descent resolves the child commit recorded at the parent comparison's base and target. For an
+uncommitted comparison, it also records the checked-out child `HEAD` and renders from the recorded
+base through the current child worktree. This covers both an intermediate commit that records a
+nested pointer and a nested checkout that has advanced beyond the pointer in that commit. Keeping
+the recorded target separate from the checked-out `HEAD` preserves both parts of that comparison
+through deeper recursive levels.
+
+If recursive expansion produces tracked child files, it owns them and the ancestor gitlink row is
+omitted. If it cannot produce a tracked child owner, the nearest discovered gitlink remains as the
+existing structured fallback. The initialized-worktree check, visited-set cycle guard, per-file
+limit, and total diff byte limit still bound recursion and output.
 
 ### Missing submodule data
 
@@ -107,6 +119,15 @@ Add two rendering regressions:
    Uncommitted must contain the nested child file at its full parent-relative path, assign the full
    nested submodule path, and expose its patch content.
 
+Add two recursive-ownership regressions with an outer `modules/mid` submodule and ignored
+`deps/leaf` nested submodule:
+
+1. Advance `mid` for a direct file without updating its recorded leaf pointer, then advance the
+   checked-out leaf. Both direct files must appear once under their respective `submodulePath`.
+2. Advance the leaf and commit both the direct `mid` file and new leaf pointer in `mid`, leaving the
+   parent gitlink uncommitted. The clean leaf worktree must still expand from the recorded old/new
+   leaf object IDs.
+
 The new regressions must fail before the rendering fix and pass afterward. Update command-metrics
 assertions so discovery/statistics expect `dirty` while per-file rendering expects `none`. Run only
 the modified test file, followed by repository typecheck, lint, formatting, and formatting
@@ -121,6 +142,8 @@ verification.
   both the committed and worktree content.
 - An ignored nested gitlink expands to its underlying files with full parent-relative paths and the
   full nested `submodulePath`.
+- An advancing ancestor owns only its direct files; separately advanced and newly recorded nested
+  gitlinks retain their own recursive file ownership without duplicates.
 - Normal files, untracked child files, whitespace filtering, size limits, and nested path grouping
   retain their existing behavior.
 - No app or protocol change is introduced.

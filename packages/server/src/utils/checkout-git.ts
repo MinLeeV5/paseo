@@ -188,12 +188,20 @@ interface CheckoutDiffRefs {
 interface SubmoduleTrackedFileChange {
   cwd: string;
   displayPrefix: string;
+  refsForDiff: CheckoutDiffRefs;
   change: CheckoutFileChange;
 }
 
 interface SubmoduleFileChanges {
   tracked: SubmoduleTrackedFileChange[];
   untracked: CheckoutFileChange[];
+}
+
+interface SubmoduleDiffComparison {
+  baseRef: string;
+  recordedTargetRef: string;
+  worktreeTargetRef?: string;
+  includeUntracked: boolean;
 }
 
 function getCheckoutDiffDiscoveryArgs(refs: CheckoutDiffRefs): string[] {
@@ -755,6 +763,73 @@ async function listInitializedSubmodulePaths(cwd: string): Promise<string[]> {
   return Array.from(new Set(paths)).sort();
 }
 
+async function readGitlinkObjectIdAtRef(
+  cwd: string,
+  ref: string,
+  path: string,
+): Promise<string | null> {
+  try {
+    const result = await runGitCommand(["ls-tree", ref, "--", path], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    const metadata = result.stdout.split("\t", 1)[0]?.trim().split(/\s+/) ?? [];
+    const [mode, type, objectId] = metadata;
+    return mode === "160000" && type === "commit" && objectId ? objectId : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readHeadObjectId(cwd: string): Promise<string | null> {
+  try {
+    const result = await runGitCommand(["rev-parse", "HEAD"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    return result.stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function getSubmoduleComparisonDiffRefs(comparison: SubmoduleDiffComparison): CheckoutDiffRefs {
+  if (comparison.worktreeTargetRef) {
+    return {
+      baseRef: comparison.baseRef,
+      includeUntracked: comparison.includeUntracked,
+    };
+  }
+  return {
+    baseRef: comparison.baseRef,
+    targetRef: comparison.recordedTargetRef,
+    includeUntracked: false,
+  };
+}
+
+async function resolveSubmoduleDiffComparison(input: {
+  parentCwd: string;
+  submoduleCwd: string;
+  submodulePath: string;
+  parentComparison: SubmoduleDiffComparison;
+}): Promise<SubmoduleDiffComparison> {
+  const targetTreeRef =
+    input.parentComparison.worktreeTargetRef ?? input.parentComparison.recordedTargetRef;
+  const [baseRef, recordedTargetRef, worktreeTargetRef] = await Promise.all([
+    readGitlinkObjectIdAtRef(input.parentCwd, input.parentComparison.baseRef, input.submodulePath),
+    readGitlinkObjectIdAtRef(input.parentCwd, targetTreeRef, input.submodulePath),
+    input.parentComparison.worktreeTargetRef ? readHeadObjectId(input.submoduleCwd) : null,
+  ]);
+
+  const fallbackTargetRef = worktreeTargetRef ?? recordedTargetRef ?? "HEAD";
+  return {
+    baseRef: baseRef ?? "HEAD",
+    recordedTargetRef: recordedTargetRef ?? fallbackTargetRef,
+    ...(worktreeTargetRef ? { worktreeTargetRef } : null),
+    includeUntracked: input.parentComparison.includeUntracked,
+  };
+}
+
 // Parent `git diff` may not enumerate submodule worktree changes, especially
 // when `.gitmodules` configures `ignore = all`. Scan initialized submodules so
 // the checkout diff pane can show those files with parent-repo-relative paths.
@@ -762,6 +837,7 @@ async function listSubmoduleFileChanges(input: {
   cwd: string;
   displayPrefix?: string;
   ignoreWhitespace: boolean;
+  comparison: SubmoduleDiffComparison;
   skipTrackedSubmodulePaths?: ReadonlySet<string>;
   visited?: Set<string>;
 }): Promise<SubmoduleFileChanges> {
@@ -769,6 +845,7 @@ async function listSubmoduleFileChanges(input: {
     cwd,
     displayPrefix = "",
     ignoreWhitespace,
+    comparison,
     skipTrackedSubmodulePaths = new Set<string>(),
     visited = new Set<string>(),
   } = input;
@@ -789,15 +866,20 @@ async function listSubmoduleFileChanges(input: {
   for (const submodulePath of submodulePaths) {
     const submoduleCwd = resolve(cwd, submodulePath);
     const displaySubmodulePath = joinGitPath(displayPrefix, submodulePath);
-    const nestedSkipTrackedSubmodulePaths = new Set(skipTrackedSubmodulePaths);
+    const submoduleComparison = await resolveSubmoduleDiffComparison({
+      parentCwd: cwd,
+      submoduleCwd,
+      submodulePath,
+      parentComparison: comparison,
+    });
+    const refsForDiff = getSubmoduleComparisonDiffRefs(submoduleComparison);
+    const nestedSubmodulePaths = new Set(await listInitializedSubmodulePaths(submoduleCwd));
+    const nestedTrackedFallbacks: SubmoduleTrackedFileChange[] = [];
 
     try {
       const submoduleChanges = await listCheckoutFileChanges(
         submoduleCwd,
-        {
-          baseRef: "HEAD",
-          includeUntracked: true,
-        },
+        refsForDiff,
         ignoreWhitespace,
       );
       for (const change of submoduleChanges) {
@@ -813,14 +895,23 @@ async function listSubmoduleFileChanges(input: {
           continue;
         }
 
+        if (nestedSubmodulePaths.has(change.path)) {
+          nestedTrackedFallbacks.push({
+            cwd: submoduleCwd,
+            displayPrefix: displaySubmodulePath,
+            refsForDiff,
+            change,
+          });
+          continue;
+        }
         if (!skipTrackedSubmodulePaths.has(displaySubmodulePath)) {
           tracked.push({
             cwd: submoduleCwd,
             displayPrefix: displaySubmodulePath,
+            refsForDiff,
             change,
           });
         }
-        nestedSkipTrackedSubmodulePaths.add(joinGitPath(displaySubmodulePath, change.path));
       }
     } catch {
       // Ignore uninitialized or temporarily unavailable submodules; the parent
@@ -831,9 +922,21 @@ async function listSubmoduleFileChanges(input: {
       cwd: submoduleCwd,
       displayPrefix: displaySubmodulePath,
       ignoreWhitespace,
-      skipTrackedSubmodulePaths: nestedSkipTrackedSubmodulePaths,
+      comparison: submoduleComparison,
+      skipTrackedSubmodulePaths,
       visited,
     });
+    for (const fallback of nestedTrackedFallbacks) {
+      const fallbackPath = joinGitPath(fallback.displayPrefix, fallback.change.path);
+      const hasRecursiveOwner = nestedChanges.tracked.some((nestedChange) =>
+        joinGitPath(nestedChange.displayPrefix, nestedChange.change.path).startsWith(
+          `${fallbackPath}/`,
+        ),
+      );
+      if (!hasRecursiveOwner) {
+        tracked.push(fallback);
+      }
+    }
     tracked.push(...nestedChanges.tracked);
     untracked.push(...nestedChanges.untracked);
   }
@@ -858,10 +961,9 @@ async function getSubmoduleTrackedDiffTextForPath(input: {
       ignoreWhitespace: input.ignoreWhitespace,
       extra: [
         "--submodule=diff",
-        "--ignore-submodules=none",
         `--src-prefix=a/${trackedChange.displayPrefix}/`,
         `--dst-prefix=b/${trackedChange.displayPrefix}/`,
-        "HEAD",
+        ...getCheckoutDiffRenderingArgs(trackedChange.refsForDiff),
         "--",
         trackedChange.change.path,
       ],
@@ -2762,6 +2864,12 @@ export async function getCheckoutDiff(
     ? await listSubmoduleFileChanges({
         cwd,
         ignoreWhitespace,
+        comparison: {
+          baseRef: effectiveRefsForDiff.baseRef,
+          recordedTargetRef: effectiveRefsForDiff.targetRef ?? effectiveRefsForDiff.baseRef,
+          ...(effectiveRefsForDiff.targetRef ? null : { worktreeTargetRef: "HEAD" }),
+          includeUntracked: effectiveRefsForDiff.includeUntracked,
+        },
         skipTrackedSubmodulePaths: parentTrackedChangePaths,
       })
     : { tracked: [], untracked: [] };

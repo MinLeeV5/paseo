@@ -7,7 +7,8 @@
 **Architecture:** Preserve the parent gitlink as the source of truth. Discover paths and collect
 statistics with `--ignore-submodules=dirty`, then render already-discovered tracked paths with
 `--ignore-submodules=none`. Real-repository regressions cover mode ownership, mixed child
-commit/worktree dirt, and nested ignored gitlinks.
+commit/worktree dirt, nested ignored gitlinks, and path-specific recursive ownership based on
+recorded gitlink object IDs.
 
 **Tech Stack:** TypeScript, Node.js child processes, Git, Vitest.
 
@@ -258,8 +259,8 @@ Keep `--name-status` and `--numstat` on the discovery helper (`dirty`). Use the 
 
 When recursive submodule rendering parses files below a discovered gitlink, emit those files rather
 than a gitlink-root fallback. Preserve their full prefixed paths and use the full discovered gitlink
-path as `submodulePath`. Pass discovered nested gitlink paths into recursive tracked-scan suppression
-so the expanded patch and child scan cannot emit the same tracked file twice.
+path as `submodulePath`. Keep one owner for each tracked path; Task 3 refines this rule so an
+ancestor owns direct files without suppressing separately discovered deeper gitlinks.
 
 - [ ] **Step 4: Verify focused and complete behavior**
 
@@ -272,3 +273,50 @@ causes teardown-only fixture failures.
 
 Run the repository formatting, typecheck, lint, formatting verification, and `git diff --check`.
 Commit the scoped code, tests, design, and plan updates with a final-review fix subject.
+
+---
+
+### Task 3: Preserve deeper gitlinks beneath an advanced ancestor
+
+**Files:**
+
+- Modify: `packages/server/src/utils/checkout-git.test.ts`
+- Modify: `packages/server/src/utils/checkout-git.ts`
+- Modify: `docs/superpowers/specs/2026-07-17-submodule-committed-diff-design.md`
+- Modify: `docs/superpowers/plans/2026-07-17-submodule-committed-diff.md`
+
+- [ ] **Step 1: Add both real-Git ownership regressions and verify RED**
+
+Create a `modules/mid` submodule with ignored nested `deps/leaf`. First advance `mid` for a direct
+file and advance the leaf checkout without recording that pointer in `mid`. Then cover a separate
+case where the new `mid` commit records both its direct file and the advanced leaf pointer. In both
+cases assert exactly the `mid` direct file and underlying leaf file, with their respective full
+`submodulePath` values and visible patch content. Run each test by name before production edits and
+confirm the leaf file is missing.
+
+- [ ] **Step 2: Make recursive ownership direct-file-specific**
+
+At each initialized submodule level, classify configured nested gitlink paths separately from
+direct files. A parent renderer continues to suppress duplicate direct files that it already owns,
+but a nested gitlink descends into its child instead of inheriting ancestor suppression. Emit the
+nearest gitlink fallback only when recursive descent produces no tracked child owner.
+
+- [ ] **Step 3: Carry recorded gitlink comparisons through recursion**
+
+Resolve each child object's ID from the parent base and recorded target trees. When the comparison
+includes worktree state, also retain the checked-out child `HEAD` and render the combined range from
+the recorded base through the worktree. Pass the derived comparison into the next recursive level
+and into per-file rendering. Preserve initialized-worktree checks, the visited-set cycle guard, and
+existing diff byte limits.
+
+- [ ] **Step 4: Verify focused and complete behavior**
+
+Run both new regressions and all prior submodule transition, mixed commit/worktree, nested ignored,
+unborn, child-only tracked/untracked, and exact-command cases. Run
+`packages/server/src/utils/checkout-git.test.ts` exactly once in full after formatting.
+
+- [ ] **Step 5: Run static checks, review, and commit**
+
+Run `npm run format`, `npm run typecheck`, `npm run lint`, `npm run format:check`, and
+`git diff --check`. Confirm the patch is limited to code, tests, design, and plan, then commit with a
+round-2 fix subject and append exact evidence to the ignored task report.

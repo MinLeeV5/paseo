@@ -216,6 +216,64 @@ function commitFile(cwd: string, path: string, content: string, message: string)
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", message], { cwd });
 }
 
+function setupNestedIgnoredSubmoduleFixture(input: { tempDir: string; repoDir: string }): {
+  midCheckout: string;
+  leafCheckout: string;
+} {
+  const leafSource = join(input.tempDir, "leaf-source");
+  mkdirSync(leafSource, { recursive: true });
+  execFileSync("git", ["init", "-b", "main"], { cwd: leafSource });
+  execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: leafSource });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: leafSource });
+  writeFileSync(join(leafSource, "leaf.txt"), "leaf-one\n");
+  execFileSync("git", ["add", "leaf.txt"], { cwd: leafSource });
+  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "leaf initial"], {
+    cwd: leafSource,
+  });
+
+  const midSource = join(input.tempDir, "mid-source");
+  mkdirSync(midSource, { recursive: true });
+  execFileSync("git", ["init", "-b", "main"], { cwd: midSource });
+  execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: midSource });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: midSource });
+  writeFileSync(join(midSource, "mid.txt"), "mid-one\n");
+  execFileSync(
+    "git",
+    ["-c", "protocol.file.allow=always", "submodule", "add", leafSource, "deps/leaf"],
+    { cwd: midSource },
+  );
+  execFileSync("git", ["config", "--file", ".gitmodules", "submodule.deps/leaf.ignore", "all"], {
+    cwd: midSource,
+  });
+  execFileSync("git", ["add", ".gitmodules", "deps/leaf", "mid.txt"], { cwd: midSource });
+  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "mid initial"], {
+    cwd: midSource,
+  });
+
+  execFileSync(
+    "git",
+    ["-c", "protocol.file.allow=always", "submodule", "add", midSource, "modules/mid"],
+    { cwd: input.repoDir },
+  );
+  execFileSync("git", ["add", ".gitmodules", "modules/mid"], { cwd: input.repoDir });
+  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add mid submodule"], {
+    cwd: input.repoDir,
+  });
+  execFileSync(
+    "git",
+    ["-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive"],
+    { cwd: input.repoDir },
+  );
+
+  const midCheckout = join(input.repoDir, "modules/mid");
+  const leafCheckout = join(midCheckout, "deps/leaf");
+  for (const checkout of [midCheckout, leafCheckout]) {
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: checkout });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: checkout });
+  }
+  return { midCheckout, leafCheckout };
+}
+
 describe("checkout git utilities", () => {
   let tempDir: string;
   let repoDir: string;
@@ -665,6 +723,90 @@ describe("checkout git utilities", () => {
       "diff --git a/modules/outer/deps/nested/nested.txt b/modules/outer/deps/nested/nested.txt",
     );
     expect(diff.diff).toContain("+two");
+  });
+
+  it("keeps a separately advanced nested gitlink beneath an advanced ancestor", async () => {
+    const { midCheckout, leafCheckout } = setupNestedIgnoredSubmoduleFixture({
+      tempDir,
+      repoDir,
+    });
+
+    writeFileSync(join(midCheckout, "mid.txt"), "mid-one\nmid-two\n");
+    execFileSync("git", ["add", "mid.txt"], { cwd: midCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance mid"], {
+      cwd: midCheckout,
+    });
+
+    writeFileSync(join(leafCheckout, "leaf.txt"), "leaf-one\nleaf-two\n");
+    execFileSync("git", ["add", "leaf.txt"], { cwd: leafCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance leaf"], {
+      cwd: leafCheckout,
+    });
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(
+      diff.structured
+        ?.map((file) => ({ path: file.path, submodulePath: file.submodulePath }))
+        .sort((a, b) => a.path.localeCompare(b.path)),
+    ).toEqual([
+      {
+        path: "modules/mid/deps/leaf/leaf.txt",
+        submodulePath: "modules/mid/deps/leaf",
+      },
+      { path: "modules/mid/mid.txt", submodulePath: "modules/mid" },
+    ]);
+    expect(diff.diff).toContain(
+      "diff --git a/modules/mid/deps/leaf/leaf.txt b/modules/mid/deps/leaf/leaf.txt",
+    );
+    expect(diff.diff).toContain("diff --git a/modules/mid/mid.txt b/modules/mid/mid.txt");
+    expect(diff.diff).toContain("+leaf-two");
+    expect(diff.diff).toContain("+mid-two");
+  });
+
+  it("expands a nested gitlink recorded by an advanced ancestor commit", async () => {
+    const { midCheckout, leafCheckout } = setupNestedIgnoredSubmoduleFixture({
+      tempDir,
+      repoDir,
+    });
+
+    writeFileSync(join(leafCheckout, "leaf.txt"), "leaf-one\nleaf-two\n");
+    execFileSync("git", ["add", "leaf.txt"], { cwd: leafCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance leaf"], {
+      cwd: leafCheckout,
+    });
+    writeFileSync(join(midCheckout, "mid.txt"), "mid-one\nmid-two\n");
+    execFileSync("git", ["add", "mid.txt"], { cwd: midCheckout });
+    execFileSync("git", ["add", "-f", "deps/leaf"], { cwd: midCheckout });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "advance mid and leaf"], {
+      cwd: midCheckout,
+    });
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(
+      diff.structured
+        ?.map((file) => ({ path: file.path, submodulePath: file.submodulePath }))
+        .sort((a, b) => a.path.localeCompare(b.path)),
+    ).toEqual([
+      {
+        path: "modules/mid/deps/leaf/leaf.txt",
+        submodulePath: "modules/mid/deps/leaf",
+      },
+      { path: "modules/mid/mid.txt", submodulePath: "modules/mid" },
+    ]);
+    expect(diff.diff).toContain(
+      "diff --git a/modules/mid/deps/leaf/leaf.txt b/modules/mid/deps/leaf/leaf.txt",
+    );
+    expect(diff.diff).toContain("diff --git a/modules/mid/mid.txt b/modules/mid/mid.txt");
+    expect(diff.diff).toContain("+leaf-two");
+    expect(diff.diff).toContain("+mid-two");
   });
 
   it("includes untracked files inside submodules in an uncommitted diff", async () => {
