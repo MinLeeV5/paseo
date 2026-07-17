@@ -4,14 +4,14 @@
 
 **Goal:** Replace the legacy untracked-gated submodule scanner with an endpoint-aware recursive comparator that classifies each initialized repository at its own commit boundary, handles newly added nested submodules, and shares one output budget and request-local structural cache.
 
-**Architecture:** Keep the root ordinary-file pipeline, but model recursive endpoints as `absent`, exact `commit`, checked-out `checkedCommit`, or `worktree`. Uncommitted compares every repository's own `HEAD -> worktree`; Committed compares the historical parent-recorded endpoint to each initialized child's checked-out `HEAD`. Always traverse initialized children, let `includeUntracked` control only untracked discovery, preserve at most one compact unrecorded gitlink when no tracked child output replaces it, and admit every complete patch through the same 2 MB accumulator before creating structured hunks.
+**Architecture:** Keep the root ordinary-file pipeline, but model recursive endpoints as `absent`, exact `commit`, checked-out `checkedCommit`, or `worktree`. Uncommitted compares every repository's own `HEAD -> worktree`; Committed compares each initialized child's locally available `.gitmodules` tracking branch to its checked-out `HEAD`, falling back to `HEAD -> HEAD` when the branch is absent or unresolved. Parent-recorded gitlinks remain compact pointer fallbacks. Always traverse initialized children, let `includeUntracked` control only untracked discovery, and admit every complete patch through the mode-specific accumulator before creating structured hunks.
 
 **Tech Stack:** TypeScript, Node.js child processes, Git, Vitest.
 
 ## Global Constraints
 
 - Do not add a root-versus-submodule filter or per-submodule mode selector.
-- Do not infer or compare a submodule's own base branch.
+- Do not fetch submodule branches during diff reads; only locally available refs are eligible.
 - Do not change Git status, commit, staging, mutation behavior, WebSocket schemas, feature flags, or client state.
 - Do not initialize submodules, fetch missing objects, or write repository configuration.
 - Preserve `--ignore-submodules=dirty` for discovery and `--ignore-submodules=none` for rendering.

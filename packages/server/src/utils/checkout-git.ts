@@ -199,6 +199,11 @@ interface SubmoduleFileChanges {
   expandedSubmodulePaths: Set<string>;
 }
 
+interface InitializedSubmodule {
+  path: string;
+  branch: string | null;
+}
+
 type RecursiveDiffEndpoint =
   | { kind: "absent" }
   | { kind: "commit"; ref: string }
@@ -226,16 +231,18 @@ type GitlinkLookup =
   | { kind: "unavailable" };
 
 interface SubmoduleScanCache {
-  initializedPaths: Map<string, Promise<string[]>>;
+  initializedSubmodules: Map<string, Promise<InitializedSubmodule[]>>;
   gitlinks: Map<string, Promise<GitlinkLookup>>;
   headObjectIds: Map<string, Promise<string | null>>;
+  currentBranchNames: Map<string, Promise<string | null>>;
 }
 
 function createSubmoduleScanCache(): SubmoduleScanCache {
   return {
-    initializedPaths: new Map(),
+    initializedSubmodules: new Map(),
     gitlinks: new Map(),
     headObjectIds: new Map(),
+    currentBranchNames: new Map(),
   };
 }
 
@@ -749,11 +756,11 @@ async function getTrackedDiffTextForPath(input: {
   };
 }
 
-async function listInitializedSubmodulePaths(cwd: string): Promise<string[]> {
+async function listInitializedSubmodules(cwd: string): Promise<InitializedSubmodule[]> {
   let result;
   try {
     result = await runGitCommand(
-      ["config", "--file", ".gitmodules", "--get-regexp", "^submodule\\..*\\.path$"],
+      ["config", "--file", ".gitmodules", "--get-regexp", "^submodule\\..*\\.(path|branch)$"],
       {
         cwd,
         envOverlay: READ_ONLY_GIT_ENV,
@@ -768,7 +775,7 @@ async function listInitializedSubmodulePaths(cwd: string): Promise<string[]> {
     return [];
   }
 
-  const paths: string[] = [];
+  const entriesByName = new Map<string, Partial<InitializedSubmodule>>();
   for (const line of result.stdout
     .split("\n")
     .map((candidate) => candidate.trim())
@@ -778,10 +785,27 @@ async function listInitializedSubmodulePaths(cwd: string): Promise<string[]> {
       continue;
     }
 
-    const submodulePath = line.slice(separatorIndex + 1).trim();
-    if (!submodulePath || submodulePath.startsWith("/")) {
+    const key = line.slice(0, separatorIndex);
+    const value = line.slice(separatorIndex + 1).trim();
+    const match = key.match(/^submodule\.(.*)\.(path|branch)$/);
+    if (!match || !value) {
       continue;
     }
+    const [, name, field] = match;
+    if (!name || !field) continue;
+    const entry = entriesByName.get(name) ?? {};
+    if (field === "path") {
+      entry.path = value;
+    } else {
+      entry.branch = value;
+    }
+    entriesByName.set(name, entry);
+  }
+
+  const initialized: InitializedSubmodule[] = [];
+  for (const entry of entriesByName.values()) {
+    const submodulePath = entry.path;
+    if (!submodulePath || submodulePath.startsWith("/")) continue;
 
     try {
       await runGitCommand(["rev-parse", "--is-inside-work-tree"], {
@@ -792,10 +816,12 @@ async function listInitializedSubmodulePaths(cwd: string): Promise<string[]> {
       continue;
     }
 
-    paths.push(submodulePath);
+    initialized.push({ path: submodulePath, branch: entry.branch ?? null });
   }
 
-  return Array.from(new Set(paths)).sort();
+  return [...new Map(initialized.map((entry) => [entry.path, entry])).values()].sort((a, b) =>
+    a.path.localeCompare(b.path),
+  );
 }
 
 async function readGitlinkObjectIdAtRef(
@@ -827,16 +853,77 @@ function getCanonicalPathOrResolved(path: string): string {
   }
 }
 
-function listInitializedSubmodulePathsCached(
+function listInitializedSubmodulesCached(
   cwd: string,
   cache: SubmoduleScanCache,
-): Promise<string[]> {
+): Promise<InitializedSubmodule[]> {
   const key = getCanonicalPathOrResolved(cwd);
-  const cached = cache.initializedPaths.get(key);
+  const cached = cache.initializedSubmodules.get(key);
   if (cached) return cached;
-  const load = listInitializedSubmodulePaths(cwd);
-  cache.initializedPaths.set(key, load);
+  const load = listInitializedSubmodules(cwd);
+  cache.initializedSubmodules.set(key, load);
   return load;
+}
+
+async function readCurrentBranchName(cwd: string): Promise<string | null> {
+  try {
+    const result = await runGitCommand(["symbolic-ref", "--quiet", "--short", "HEAD"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    return result.stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function readCurrentBranchNameCached(
+  cwd: string,
+  cache: SubmoduleScanCache,
+): Promise<string | null> {
+  const key = getCanonicalPathOrResolved(cwd);
+  const cached = cache.currentBranchNames.get(key);
+  if (cached) return cached;
+  const load = readCurrentBranchName(cwd);
+  cache.currentBranchNames.set(key, load);
+  return load;
+}
+
+function getSubmoduleBranchRefCandidates(branch: string): string[] {
+  if (branch.startsWith("refs/")) return [branch];
+  const normalized = branch.startsWith("origin/") ? branch.slice("origin/".length) : branch;
+  return [`refs/remotes/origin/${normalized}`, `refs/heads/${normalized}`];
+}
+
+async function resolveSubmoduleCommittedBaseRef(input: {
+  parentCwd: string;
+  childCwd: string;
+  configuredBranch: string | null;
+  cache: SubmoduleScanCache;
+}): Promise<string | null> {
+  const headCommit = await readHeadObjectIdCached(input.childCwd, input.cache);
+  const configuredBranch = input.configuredBranch?.trim();
+  if (!headCommit || !configuredBranch) return headCommit;
+
+  const branch =
+    configuredBranch === "."
+      ? await readCurrentBranchNameCached(input.parentCwd, input.cache)
+      : configuredBranch;
+  if (!branch) return headCommit;
+
+  for (const ref of getSubmoduleBranchRefCandidates(branch)) {
+    try {
+      const result = await runGitCommand(["rev-parse", "--verify", ref], {
+        cwd: input.childCwd,
+        envOverlay: READ_ONLY_GIT_ENV,
+      });
+      const objectId = result.stdout.trim();
+      if (objectId) return objectId;
+    } catch {
+      // Try the next local ref before falling back to the checked-out HEAD.
+    }
+  }
+  return headCommit;
 }
 
 function readGitlinkObjectIdAtRefCached(
@@ -987,6 +1074,7 @@ async function resolveSubmoduleDiffComparison(input: {
   parentCwd: string;
   submoduleCwd: string;
   submodulePath: string;
+  configuredBranch: string | null;
   parentComparison: SubmoduleDiffComparison;
   cache: SubmoduleScanCache;
 }): Promise<SubmoduleDiffComparison | null> {
@@ -1010,11 +1098,53 @@ async function resolveSubmoduleDiffComparison(input: {
     };
   }
 
-  // Committed keeps the historical parent-derived endpoint on the left, but the
-  // initialized child's checked-out HEAD is the final committed state on the right.
-  // Keeping the target parent's recorded object ID lets rendering fall back to a
-  // bounded short gitlink diff when child objects cannot be rendered.
-  const [oldEndpoint, recordedNewEndpoint, checkedHeadCommit] = await Promise.all([
+  // A configured `.gitmodules` branch is the child's committed baseline. Prefer
+  // its fetched origin ref, then its local branch; without a resolvable branch,
+  // compare HEAD to itself so a stale parent gitlink cannot expand old history.
+  const [committedBaseRef, recordedNewEndpoint, checkedHeadCommit] = await Promise.all([
+    resolveSubmoduleCommittedBaseRef({
+      parentCwd: input.parentCwd,
+      childCwd: input.submoduleCwd,
+      configuredBranch: input.configuredBranch,
+      cache: input.cache,
+    }),
+    resolveChildEndpoint({
+      parentCwd: input.parentCwd,
+      childCwd: input.submoduleCwd,
+      submodulePath: input.submodulePath,
+      endpoint: input.parentComparison.newEndpoint,
+      cache: input.cache,
+    }),
+    readHeadObjectIdCached(input.submoduleCwd, input.cache),
+  ]);
+  let newEndpoint: RecursiveDiffEndpoint | null = recordedNewEndpoint;
+  if (recordedNewEndpoint?.kind === "commit" && checkedHeadCommit) {
+    newEndpoint = {
+      kind: "checkedCommit",
+      recordedCommit: recordedNewEndpoint.ref,
+      headCommit: checkedHeadCommit,
+    };
+  } else if (checkedHeadCommit) {
+    newEndpoint = { kind: "commit", ref: checkedHeadCommit };
+  }
+  if (!committedBaseRef || !newEndpoint) return null;
+
+  return {
+    mode: "committed",
+    oldEndpoint: { kind: "commit", ref: committedBaseRef },
+    newEndpoint,
+    includeUntracked: input.parentComparison.includeUntracked,
+  };
+}
+
+async function resolveParentRecordedSubmoduleComparison(input: {
+  parentCwd: string;
+  submoduleCwd: string;
+  submodulePath: string;
+  parentComparison: SubmoduleDiffComparison;
+  cache: SubmoduleScanCache;
+}): Promise<SubmoduleDiffComparison | null> {
+  const [oldEndpoint, newEndpoint] = await Promise.all([
     resolveChildEndpoint({
       parentCwd: input.parentCwd,
       childCwd: input.submoduleCwd,
@@ -1029,24 +1159,22 @@ async function resolveSubmoduleDiffComparison(input: {
       endpoint: input.parentComparison.newEndpoint,
       cache: input.cache,
     }),
-    readHeadObjectIdCached(input.submoduleCwd, input.cache),
   ]);
-  const newEndpoint =
-    recordedNewEndpoint?.kind === "commit" && checkedHeadCommit
-      ? ({
-          kind: "checkedCommit",
-          recordedCommit: recordedNewEndpoint.ref,
-          headCommit: checkedHeadCommit,
-        } satisfies RecursiveDiffEndpoint)
-      : recordedNewEndpoint;
   if (!oldEndpoint || !newEndpoint) return null;
-
   return {
     mode: "committed",
     oldEndpoint,
     newEndpoint,
-    includeUntracked: input.parentComparison.includeUntracked,
+    includeUntracked: false,
   };
+}
+
+function hasEndpointChange(comparison: SubmoduleDiffComparison | null): boolean {
+  if (!comparison) return false;
+  return (
+    getCommitRefForEndpoint(comparison.oldEndpoint) !==
+    getCommitRefForEndpoint(comparison.newEndpoint)
+  );
 }
 
 function hasUncommittedGitlinkChange(comparison: SubmoduleDiffComparison): boolean {
@@ -1074,6 +1202,49 @@ function getSubmoduleFallbackDiffRefs(input: {
   return parentTargetRef
     ? { baseRef: parentTargetRef, includeUntracked: false }
     : input.defaultRefs;
+}
+
+function appendDirectSubmoduleChanges(input: {
+  childChanges: CheckoutFileChange[];
+  nestedSubmodulePaths: Set<string>;
+  displaySubmodulePath: string;
+  submoduleCwd: string;
+  refsForDiff: CheckoutDiffRefs;
+  childFallback: SubmoduleTrackedFileChange;
+  tracked: SubmoduleTrackedFileChange[];
+  untracked: CheckoutFileChange[];
+}): Map<string, SubmoduleTrackedFileChange> {
+  const nestedFallbacks = new Map<string, SubmoduleTrackedFileChange>();
+  for (const change of input.childChanges) {
+    if (change.isUntracked) {
+      input.untracked.push({
+        path: joinGitPath(input.displaySubmodulePath, change.path),
+        submodulePath: input.displaySubmodulePath,
+        status: "U",
+        isNew: true,
+        isDeleted: false,
+        isUntracked: true,
+      });
+    } else if (input.nestedSubmodulePaths.has(change.path)) {
+      nestedFallbacks.set(joinGitPath(input.displaySubmodulePath, change.path), {
+        cwd: input.submoduleCwd,
+        displayPrefix: input.displaySubmodulePath,
+        refsForDiff: input.refsForDiff,
+        change,
+        fallback: input.childFallback,
+        isGitlinkFallback: true,
+      });
+    } else {
+      input.tracked.push({
+        cwd: input.submoduleCwd,
+        displayPrefix: input.displaySubmodulePath,
+        refsForDiff: input.refsForDiff,
+        change,
+        fallback: input.childFallback,
+      });
+    }
+  }
+  return nestedFallbacks;
 }
 
 // Parent `git diff` may not enumerate submodule worktree changes, especially
@@ -1123,17 +1294,29 @@ async function listSubmoduleFileChanges(input: {
   if (!parentRefsForDiff) {
     return { tracked, untracked, expandedSubmodulePaths };
   }
-  const submodulePaths = await listInitializedSubmodulePathsCached(cwd, cache);
-  for (const submodulePath of submodulePaths) {
+  const submodules = await listInitializedSubmodulesCached(cwd, cache);
+  for (const { path: submodulePath, branch: configuredBranch } of submodules) {
     const submoduleCwd = resolve(cwd, submodulePath);
     const displaySubmodulePath = joinGitPath(displayPrefix, submodulePath);
-    const submoduleComparison = await resolveSubmoduleDiffComparison({
-      parentCwd: cwd,
-      submoduleCwd,
-      submodulePath,
-      parentComparison: comparison,
-      cache,
-    });
+    const [submoduleComparison, parentRecordedComparison] = await Promise.all([
+      resolveSubmoduleDiffComparison({
+        parentCwd: cwd,
+        submoduleCwd,
+        submodulePath,
+        configuredBranch,
+        parentComparison: comparison,
+        cache,
+      }),
+      comparison.mode === "committed"
+        ? resolveParentRecordedSubmoduleComparison({
+            parentCwd: cwd,
+            submoduleCwd,
+            submodulePath,
+            parentComparison: comparison,
+            cache,
+          })
+        : Promise.resolve(null),
+    ]);
     const childFallback: SubmoduleTrackedFileChange = {
       cwd,
       displayPrefix,
@@ -1148,15 +1331,23 @@ async function listSubmoduleFileChanges(input: {
       ...(parentFallback ? { fallback: parentFallback } : null),
       isGitlinkFallback: true,
     };
+    const parentPointerFallback: SubmoduleTrackedFileChange = {
+      cwd,
+      displayPrefix,
+      refsForDiff: parentRefsForDiff,
+      change: createSubmoduleFallbackChange(submodulePath, parentRecordedComparison),
+      ...(parentFallback ? { fallback: parentFallback } : null),
+      isGitlinkFallback: true,
+    };
     if (!submoduleComparison) continue;
     const refsForDiff = getSubmoduleComparisonDiffRefs(submoduleComparison);
     if (!refsForDiff) continue;
 
     const trackedBeforeChild = tracked.length;
     const nestedSubmodulePaths = new Set(
-      await listInitializedSubmodulePathsCached(submoduleCwd, cache),
+      (await listInitializedSubmodulesCached(submoduleCwd, cache)).map((entry) => entry.path),
     );
-    const nestedFallbacks = new Map<string, SubmoduleTrackedFileChange>();
+    let nestedFallbacks: Map<string, SubmoduleTrackedFileChange>;
 
     try {
       const childChanges = await listCheckoutFileChanges(
@@ -1164,35 +1355,16 @@ async function listSubmoduleFileChanges(input: {
         refsForDiff,
         ignoreWhitespace,
       );
-      for (const change of childChanges) {
-        if (change.isUntracked) {
-          untracked.push({
-            path: joinGitPath(displaySubmodulePath, change.path),
-            submodulePath: displaySubmodulePath,
-            status: "U",
-            isNew: true,
-            isDeleted: false,
-            isUntracked: true,
-          });
-        } else if (nestedSubmodulePaths.has(change.path)) {
-          nestedFallbacks.set(joinGitPath(displaySubmodulePath, change.path), {
-            cwd: submoduleCwd,
-            displayPrefix: displaySubmodulePath,
-            refsForDiff,
-            change,
-            fallback: childFallback,
-            isGitlinkFallback: true,
-          });
-        } else {
-          tracked.push({
-            cwd: submoduleCwd,
-            displayPrefix: displaySubmodulePath,
-            refsForDiff,
-            change,
-            fallback: childFallback,
-          });
-        }
-      }
+      nestedFallbacks = appendDirectSubmoduleChanges({
+        childChanges,
+        nestedSubmodulePaths,
+        displaySubmodulePath,
+        submoduleCwd,
+        refsForDiff,
+        childFallback,
+        tracked,
+        untracked,
+      });
     } catch {
       tracked.push(childFallback);
       expandedSubmodulePaths.add(displaySubmodulePath);
@@ -1216,6 +1388,9 @@ async function listSubmoduleFileChanges(input: {
     tracked.push(...nestedChanges.tracked);
     untracked.push(...nestedChanges.untracked);
     if (tracked.length > trackedBeforeChild) {
+      expandedSubmodulePaths.add(displaySubmodulePath);
+    } else if (hasEndpointChange(parentRecordedComparison)) {
+      tracked.push(parentPointerFallback);
       expandedSubmodulePaths.add(displaySubmodulePath);
     } else if (hasUncommittedGitlinkChange(submoduleComparison)) {
       // Do not let the root renderer expand recorded-to-checked child history back

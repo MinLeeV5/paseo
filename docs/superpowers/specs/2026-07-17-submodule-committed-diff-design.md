@@ -6,15 +6,18 @@ The Changes pane already lets users switch between **Uncommitted** and **Committ
 initialized repository must classify its own files at its own commit boundary:
 
 - child `HEAD -> worktree` changes are **Uncommitted**;
-- commits between the parent-recorded gitlink and the checked-out child `HEAD` are **Committed**,
-  even before the parent records the newer gitlink;
+- commits between the locally fetched `.gitmodules` tracking branch and the checked-out child
+  `HEAD` are **Committed**;
+- when no tracking branch is configured or resolvable, child `HEAD -> HEAD` is the committed
+  comparison and does not expand stale history;
 - the still-unrecorded parent gitlink may remain as one compact **Uncommitted** pointer row, but it
   must not pull the child's already-committed file history into that view.
 
 This distinction matters in real worktrees whose setup advances ignored submodules to their remote
 tracking commits. The parent checkout can be clean against its base while initialized children are
-hundreds of committed files ahead of the recorded gitlinks. Treating the parent gitlink as the file
-classification boundary produces a large false-Uncommitted list and an empty Committed view.
+hundreds of commits ahead of stale recorded gitlinks but exactly equal to their configured tracking
+branches. Treating the parent gitlink as the committed baseline produces hundreds of false file
+changes even though the child is not ahead of its branch.
 
 Git's default diff behavior can also hide submodules when `.gitmodules` uses `ignore = all`. Paseo
 therefore overrides submodule-ignore behavior and expands initialized child repositories into their
@@ -22,12 +25,13 @@ underlying files. The recursive comparator addresses four separate model gaps:
 
 1. Committed comparisons never enter the scanner because recursion is still gated by
    `includeUntracked`.
-2. A missing old gitlink is replaced with the child's current `HEAD`, so a newly added submodule is
-   compared with itself instead of with an absent endpoint.
+2. Initialized submodule discovery does not retain `.gitmodules` branch metadata, so committed
+   comparisons cannot use the child's intended tracking baseline.
 3. Recursive patches are buffered and converted to structured hunks even after the shared raw diff
    budget is exhausted.
-4. A parent-gitlink-only endpoint model conflates an unrecorded pointer with already-committed child
-   files instead of comparing the child worktree from its own `HEAD`.
+4. A parent-gitlink-only endpoint model conflates the parent's historical pointer with the child's
+   own branch divergence instead of comparing each initialized repository from its configured
+   branch.
 
 These are architectural gaps rather than isolated ignore-mode bugs. Traversal, endpoint identity,
 and output admission need independent models.
@@ -36,16 +40,18 @@ and output admission need independent models.
 
 Make all initialized submodule file changes visible through the existing
 **Uncommitted / Committed** switch, including ignored and nested submodules, while classifying each
-repository at its own `HEAD`, retaining the parent gitlink as the historical baseline and fallback,
-and applying one deterministic output budget to the complete checkout diff.
+repository at its own `HEAD`, using the configured submodule branch as the committed baseline,
+retaining parent gitlinks as compact fallbacks, and applying one deterministic output budget to the
+complete checkout diff.
 
 ## Non-goals
 
 - Do not add a root-versus-submodule filter or per-submodule mode selector.
-- Do not infer or compare a submodule's own base branch.
 - Do not change Git status, commit, staging, or mutation behavior.
 - Do not change WebSocket schemas, feature flags, or client state.
 - Do not initialize submodules, fetch missing objects, or write repository configuration.
+- Do not fetch a configured branch while reading a diff; only locally available remote-tracking or
+  local refs are eligible.
 - Do not expand historical-only submodules that have no initialized checkout. Their nearest
   gitlink remains the fallback row.
 
@@ -93,10 +99,11 @@ At each initialized gitlink, resolve the modes independently:
 - **Uncommitted:** resolve the parent-recorded gitlink and child `HEAD`, then compare child `HEAD`
   to child worktree. A recorded/checked-out mismatch is a compact gitlink change, not the baseline
   for expanding child files.
-- **Committed:** resolve the old child from the historical parent endpoint. If the target parent
-  contains the gitlink and the initialized child `HEAD` is readable, use that checked-out commit as
-  the target. Retain the target parent's recorded gitlink for fallback. This compares final child
-  state without inferring a child base branch.
+- **Committed:** read the branch configured for the child in the current `.gitmodules`. Resolve
+  `refs/remotes/origin/<branch>` first, then `refs/heads/<branch>`, and compare that commit to the
+  initialized child `HEAD`. The special branch `.` resolves to the parent repository's current
+  branch. If the branch is absent, missing, or the parent is detached for `.`, use child `HEAD` as
+  both endpoints. Retain parent-recorded gitlinks only for compact pointer fallback rows.
 - A parent `absent` old endpoint still becomes child `absent`; a successfully missing target
   gitlink remains absent and is never replaced by an unrelated checkout.
 
@@ -124,10 +131,11 @@ each tracked path one nearest owner and preserves the full nested `submodulePath
 When descent emits tracked child files, they replace the parent gitlink row. In Uncommitted, those
 files are only child `HEAD -> worktree` changes. If there is no tracked child owner and the checked
 child commit differs from the parent record, the nearest gitlink remains as one compact
-`--submodule=short` row. In Committed, child files compare the historical endpoint to checked child
-`HEAD`; when that patch is unavailable, fallback first renders the target-parent record to checked
-child `HEAD`, then climbs outward. The canonical-path visited set still prevents cycles. Results are
-deduplicated and sorted by full display path before rendering.
+`--submodule=short` row. In Committed, child files compare the configured branch to checked child
+`HEAD`; when that patch is unavailable, fallback first renders a compact parent gitlink change, then
+climbs outward. A parent gitlink committed between the root comparison endpoints remains visible as
+one compact row when the child branch has no file diff. The canonical-path visited set still
+prevents cycles. Results are deduplicated and sorted by full display path before rendering.
 
 The root repository keeps its existing ordinary-file pipeline. The recursive comparator returns
 which root gitlinks were successfully expanded so those exact root rows can be removed without
@@ -150,9 +158,10 @@ through the initialized child checkout. Neither command mutates repository confi
 
 The recursive walk shares a request-local cache for:
 
-- configured-and-initialized child paths by canonical repository path;
+- configured-and-initialized child paths and branch metadata by canonical repository path;
 - gitlink object lookup by canonical repository path, commit, and child path;
-- checked-out child `HEAD` by canonical child path.
+- checked-out child `HEAD` by canonical child path;
+- current parent branch names used by the special submodule branch `.`.
 
 The cache stores promises so concurrent requests inside the same walk coalesce. It is discarded at
 the end of `getCheckoutDiff`; repository state is never cached across calls. This prevents the same
@@ -188,9 +197,10 @@ become bounded placeholders consistently.
 ### Missing submodule data
 
 Only initialized child worktrees are expanded. A missing checkout, failed Git command, unavailable
-historical object, or cycle must not make the parent diff fail. The nearest discovered gitlink stays
-visible instead. Paseo never runs `submodule update`, fetches an object, or writes `.gitmodules` or
-local Git config while reading a diff.
+branch object, or cycle must not make the parent diff fail. An unresolved configured branch falls
+back to child `HEAD`; an unavailable patch retains the nearest compact gitlink when one changed.
+Paseo never runs `submodule update`, fetches an object, or writes `.gitmodules` or local Git config
+while reading a diff.
 
 ## Compatibility
 
@@ -200,21 +210,23 @@ groups and renders these shapes, so no protocol or UI compatibility gate is requ
 
 ## Testing
 
-Keep all existing real-Git regressions and add seven architecture regressions:
+Keep all existing real-Git regressions and add eight architecture regressions:
 
-1. **Repository-local classification:** commit a child file without recording the new parent
-   gitlink; assert Uncommitted contains only the compact pointer while Committed contains the file.
-2. **Mixed child state:** commit one child revision, modify the child worktree again, and assert the
-   two patches are split between Committed and Uncommitted.
-3. **Committed deep recursion:** advance an outer submodule and its nested ignored gitlink, record
-   both pointers through the parent, and assert Committed contains both direct and leaf files.
-4. **New submodule from absent:** add and commit an initialized outer submodule that already contains
-   a nested submodule; compare with the pre-add base and assert both levels expand as additions.
-5. **Shared recursive budget:** create four submodule file patches below 1 MB each but above 2 MB in
+1. **Configured branch at HEAD:** leave parent gitlinks stale while the configured remote-tracking
+   refs equal each child HEAD; assert Committed contains no child files.
+2. **Missing branch fallback:** omit `submodule.*.branch`, advance and then record a child gitlink,
+   and assert only the compact parent pointer appears in Committed.
+3. **Mixed child state:** keep the configured branch behind a child commit, modify the child
+   worktree again, and assert the two patches are split between Committed and Uncommitted.
+4. **Committed deep recursion:** configure a branch at each initialized level and assert direct and
+   leaf commits ahead of those branches are both visible.
+5. **New submodule at branch HEAD:** add an initialized nested submodule whose configured branches
+   equal their HEADs and assert only the compact parent pointer is emitted.
+6. **Shared recursive budget:** create four submodule file patches below 1 MB each but above 2 MB in
    aggregate; assert only budget-admitted files have hunks and the remainder are `too_large`.
-6. **Structural command cache:** inspect Git command metrics for a nested comparison and assert no
+7. **Structural command cache:** inspect Git command metrics for a nested comparison and assert no
    identical `.gitmodules`, `rev-parse`, or `ls-tree` structural lookup is repeated.
-7. **Large committed aggregate:** create several individually valid committed patches above 2 MB in
+8. **Large committed aggregate:** create several individually valid committed patches above 2 MB in
    aggregate and assert they remain fully displayable under the committed 20 MB budget.
 
 Each regression must be observed failing before production changes and passing afterward. Run only
@@ -224,14 +236,17 @@ typecheck, lint, formatting verification, and `git diff --check`.
 
 ## Acceptance criteria
 
-- A child commit appears under **Committed** immediately, including with `ignore = all`; before the
-  parent records its gitlink, Uncommitted contains at most the compact pointer rather than the
-  child's committed files.
+- A child commit appears under **Committed** only when its HEAD differs from the configured branch,
+  including with `ignore = all`; Uncommitted contains only the child worktree patch and any compact
+  unrecorded parent pointer.
+- A configured remote-tracking ref equal to child HEAD yields no child files even when the parent
+  gitlink is far behind.
+- A missing or unresolved branch uses `HEAD -> HEAD` and never expands stale parent history.
 - A child file modified again after its commit appears only as `HEAD -> worktree` content under
   **Uncommitted**, while the committed portion remains under **Committed**.
 - Committed comparisons recurse through every initialized nested level.
-- A newly added initialized submodule compares from an absent endpoint and exposes its direct and
-  nested files.
+- A newly added initialized submodule at its configured branch HEAD stays compact rather than
+  exposing its complete direct and nested trees.
 - Direct ancestor files and deeper gitlink files each have one full parent-relative path and the
   nearest full `submodulePath`.
 - Traversal does not depend on untracked-file collection.
