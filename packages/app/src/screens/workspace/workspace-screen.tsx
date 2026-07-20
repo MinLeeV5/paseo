@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -90,6 +91,7 @@ import {
   normalizeWorkspaceTabTarget,
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
+import { selectVisibleAgentIds } from "./visible-agent-ids";
 import {
   getHostRuntimeStore,
   useHostRuntimeClient,
@@ -2044,6 +2046,31 @@ function WorkspaceScreenContent({
       }),
     [uiTabs, workspaceLayout],
   );
+  const viewedTimelineSync = useSessionStore(
+    (state) => state.sessions[normalizedServerId]?.viewedTimelineSync ?? null,
+  );
+  const visibleAgentIds = useMemo(
+    () =>
+      selectVisibleAgentIds({
+        layout: workspaceLayout,
+        tabs: uiTabs,
+        routeFocused: isRouteFocused,
+        focusedPaneOnly: isMobile || isFocusModeEnabled || !supportsDesktopPaneSplits(),
+      }),
+    [isFocusModeEnabled, isMobile, isRouteFocused, uiTabs, workspaceLayout],
+  );
+  useLayoutEffect(() => {
+    if (!persistenceKey || !viewedTimelineSync) {
+      return;
+    }
+    viewedTimelineSync.replaceVisibleAgentIds(persistenceKey, visibleAgentIds);
+  }, [persistenceKey, viewedTimelineSync, visibleAgentIds]);
+  useEffect(() => {
+    if (!persistenceKey || !viewedTimelineSync) {
+      return;
+    }
+    return () => viewedTimelineSync.replaceVisibleAgentIds(persistenceKey, []);
+  }, [persistenceKey, viewedTimelineSync]);
   const setFocusedAgentId = useSessionStore((state) => state.setFocusedAgentId);
   const setFocusedTerminalId = useSessionStore((state) => state.setFocusedTerminalId);
   const focusedPaneAgentId = useMemo(() => {
@@ -2784,7 +2811,7 @@ function WorkspaceScreenContent({
         // dropped against the stale cursor.
         const sessionState = useSessionStore.getState().sessions[normalizedServerId];
         const currentCursor = sessionState?.agentTimelineCursor.get(agentId);
-        await client.fetchAgentTimeline(agentId, {
+        await getHostRuntimeStore().fetchAgentTimeline(normalizedServerId, agentId, {
           direction: "tail",
           projection: "projected",
           ...(currentCursor
@@ -3358,7 +3385,7 @@ function WorkspaceScreenContent({
     [t],
   );
 
-  const containerStyle = containerWithWorkspaceBackgroundStyle;
+  const containerStyle = [styles.container, styles.containerWorkspaceBackground];
 
   const menuNewAgentIcon = MENU_NEW_AGENT_ICON;
   const menuNewTerminalIcon = MENU_NEW_TERMINAL_ICON;
@@ -4108,10 +4135,5 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
 }));
-
-const containerWithWorkspaceBackgroundStyle = [
-  styles.container,
-  styles.containerWorkspaceBackground,
-];
 
 const EXPLORER_TOGGLE_KEYS: ShortcutKey[] = ["mod", "E"];

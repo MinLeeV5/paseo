@@ -94,6 +94,7 @@ export function toStoredAgentRecord(
       ? agent.attention.attentionTimestamp.toISOString()
       : null,
     internal: options?.internal,
+    owner: agent.owner,
   } satisfies StoredAgentRecord;
 }
 

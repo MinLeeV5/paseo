@@ -244,7 +244,7 @@ export async function buildAgentSessionConfig(
               ),
       },
     );
-    cwd = createdWorktree.worktree.worktreePath;
+    cwd = createdWorktree.workspace.cwd;
     setupContinuation = createdWorktree.setupContinuation;
     createdWorkspaceId = createdWorktree.workspace.workspaceId;
   } else if (normalized.createNewBranch) {
@@ -629,6 +629,7 @@ export async function createPaseoWorktreeWorkflow(
         shouldBootstrap: createdWorktree.created,
         slug,
         worktreePath: createdWorktree.worktree.worktreePath,
+        workspaceCwd: workspace.cwd,
       });
     }
   }, 0);
@@ -643,6 +644,7 @@ export async function createPaseoWorktreeWorkflow(
             agentId,
             workspaceId: workspace.workspaceId,
             worktree: createdWorktree.worktree,
+            workspaceCwd: workspace.cwd,
             shouldBootstrap: createdWorktree.created,
             terminalManager: setupContinuation.terminalManager,
             appendTimelineItem: (item) => setupContinuation.appendTimelineItem({ agentId, item }),
@@ -687,6 +689,7 @@ export async function runWorktreeSetupInBackground(
     shouldBootstrap: boolean;
     slug: string;
     worktreePath: string;
+    workspaceCwd?: string;
   },
 ): Promise<void> {
   let worktree: WorktreeConfig = options.worktree;
@@ -725,7 +728,8 @@ export async function runWorktreeSetupInBackground(
       if (!options.shouldBootstrap) {
         emitSetupProgress("completed", null);
       } else {
-        const setupCommands = getWorktreeSetupCommands(worktree.worktreePath);
+        const workspaceCwd = options.workspaceCwd ?? worktree.worktreePath;
+        const setupCommands = getWorktreeSetupCommands(workspaceCwd);
         if (setupCommands.length === 0) {
           setupStarted = true;
           emitSetupProgress("completed", null);
@@ -736,12 +740,12 @@ export async function runWorktreeSetupInBackground(
             repoRootPath: options.repoRoot,
           });
           dependencies.terminalManager?.registerCwdEnv({
-            cwd: worktree.worktreePath,
+            cwd: workspaceCwd,
             env: runtimeEnv,
           });
           setupStarted = true;
           setupResults = await runWorktreeSetupCommands({
-            worktreePath: worktree.worktreePath,
+            worktreePath: workspaceCwd,
             branchName: worktree.branchName,
             cleanupOnFailure: false,
             repoRootPath: options.repoRoot,
