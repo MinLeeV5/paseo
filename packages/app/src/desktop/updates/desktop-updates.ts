@@ -38,7 +38,9 @@ export interface LocalDaemonVersionResult {
   error: string | null;
 }
 
-const RELEASE_DOWNLOAD_BASE_URL = "https://github.com/getpaseo/paseo/releases/download";
+// Keep this manual Rosetta download target aligned with the packaged updater
+// repository in packages/desktop/electron-builder.yml.
+const RELEASE_DOWNLOAD_BASE_URL = "https://github.com/MinLeeV5/paseo/releases/download";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

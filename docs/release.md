@@ -137,6 +137,19 @@ Desktop release builds now publish in two phases:
 
 Updater clients only discover a release through those `.yml` manifests, so there is no silent 100% admission window before rollout metadata is present.
 
+### Update repository
+
+This checkout's packaged desktop updater targets `MinLeeV5/paseo`. The automatic
+feed is embedded at build time from `publish.owner` and `publish.repo` in
+`packages/desktop/electron-builder.yml`; the Rosetta migration callout builds its
+direct Apple Silicon DMG URL in
+`packages/app/src/desktop/updates/desktop-updates.ts`. Keep both locations pointed
+at the same GitHub repository. The release workflow uploads assets to
+`${{ github.repository }}` automatically, but it must publish the platform updater
+manifests (`latest-mac.yml`, `latest-linux.yml`, and `latest.yml`) alongside the
+installers. Existing installations retain the repository embedded in their build
+until they install a build containing the new updater configuration.
+
 ### Default behavior
 
 `npm run release:patch` or `npm run release:minor` → tag push → 36h ramp. No extra action needed.
