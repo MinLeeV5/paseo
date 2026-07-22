@@ -89,6 +89,7 @@ export interface UserMessageItem {
   text: string;
   timestamp: Date;
   optimistic?: true;
+  optimisticMatch?: "next_canonical_user";
   images?: UserMessageImageAttachment[];
   attachments?: AgentAttachment[];
 }
@@ -319,7 +320,7 @@ export function handoffCreatedAgentUserMessageToStream(params: {
     return appendOptimisticUserMessageToStream({
       tail,
       head,
-      message,
+      message: { ...message, optimisticMatch: "next_canonical_user" },
       placement: "tail",
     });
   }

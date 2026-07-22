@@ -83,6 +83,12 @@ the existing optimistic-message rules, then restores any unmatched prompts after
 history. This keeps late history before a newly submitted prompt without duplicating an
 acknowledged prompt.
 
+An initial create prompt has a stronger reconciliation anchor than a normal optimistic send: agent
+creation guarantees that it is the next canonical user row. The app carries that fact through the
+create handoff so a provider-owned message ID can still acknowledge the prompt after an initially
+empty timeline is revisited. Normal optimistic sends keep the existing ID-aware matching rules, so
+another client's identified user row cannot consume them during catch-up.
+
 ## Relevant code
 
 - Server live stream forwarding: `packages/server/src/server/session.ts`

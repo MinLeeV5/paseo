@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentStreamEventPayload } from "@getpaseo/protocol/messages";
 import {
   buildOptimisticUserMessage,
+  handoffCreatedAgentUserMessageToStream,
   hydrateStreamState,
   type AgentToolCallItem,
   type StreamItem,
@@ -413,6 +414,67 @@ describe("processTimelineResponse", () => {
     });
 
     expect(result.tail).toEqual([optimistic]);
+  });
+
+  it("reconciles an optimistic create prompt when a later no-cursor tail reveals history", () => {
+    const optimistic = makeOptimisticUserMessage("Create this", "client-create-prompt");
+    const handedOff = handoffCreatedAgentUserMessageToStream({
+      tail: [],
+      head: [],
+      message: optimistic,
+    });
+    const emptyBootstrap = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: handedOff.tail,
+      isInitializing: true,
+      hasActiveInitDeferred: true,
+      initRequestDirection: "tail",
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        entries: [],
+      },
+    });
+
+    expect(emptyBootstrap.tail).toEqual([
+      { ...optimistic, optimisticMatch: "next_canonical_user" },
+    ]);
+    expect(emptyBootstrap.cursor).toBeNull();
+
+    const resumed = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: emptyBootstrap.tail,
+      currentCursor: emptyBootstrap.cursor ?? undefined,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 1 },
+        endCursor: { seq: 2 },
+        entries: [
+          {
+            ...makeTimelineEntry(1, "Create this", "user_message"),
+            item: {
+              type: "user_message",
+              text: "server-rendered create prompt",
+              messageId: "provider-create-prompt",
+            },
+          },
+          makeTimelineEntry(2, "Working on it"),
+        ],
+      },
+    });
+
+    expect(
+      resumed.tail
+        .filter((item) => item.kind === "user_message" || item.kind === "assistant_message")
+        .map((item) => ({ kind: item.kind, text: item.text })),
+    ).toEqual([
+      { kind: "user_message", text: "Create this" },
+      { kind: "assistant_message", text: "Working on it" },
+    ]);
+    const userMessages = resumed.tail.filter((item) => item.kind === "user_message");
+    expect(userMessages).toHaveLength(1);
+    expect(userMessages[0]?.optimistic).toBeUndefined();
   });
 
   it("sets cursor to null when reset=true but no cursors in payload", () => {

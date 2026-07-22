@@ -773,6 +773,9 @@ function matchesOptimisticUserMessage(params: {
   if (event.type !== "timeline" || event.item.type !== "user_message") {
     return false;
   }
+  if (params.optimistic.optimisticMatch === "next_canonical_user") {
+    return true;
+  }
   if (event.item.messageId !== undefined) {
     return event.item.messageId === params.optimistic.id;
   }
