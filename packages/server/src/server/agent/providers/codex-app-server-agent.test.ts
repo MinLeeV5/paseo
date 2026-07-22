@@ -1014,6 +1014,29 @@ describe("Codex app-server provider", () => {
     await session.close();
   });
 
+  test("rewinds the conversation using a client-presented Codex user message id", async () => {
+    const appServer = createFakeCodexAppServer();
+    const session = new CodexAppServerAgentSession(
+      createConfig({ cwd: "/workspace/project" }),
+      null,
+      createTestLogger(),
+      async () => appServer.child,
+    );
+
+    await session.startTurn("remember first", { messageId: "client-first" });
+    emitCodexUserMessage(appServer, { id: "codex-first", text: "remember first" });
+    appServer.completeTurn();
+    await session.startTurn("remember second", { messageId: "client-second" });
+    emitCodexUserMessage(appServer, { id: "codex-second", text: "remember second" });
+    appServer.completeTurn();
+
+    await session.revertConversation({ messageId: "client-first" });
+
+    expect(appServer.recordedRollbacks).toEqual([{ threadId: "forked-thread", numTurns: 2 }]);
+    appServer.assertNoErrors();
+    await session.close();
+  });
+
   test("configures Codex app-server to use a custom provider base URL", async () => {
     const capturedRequests = await runCustomCodexProviderTurn(
       "codex-iisb",
@@ -3638,6 +3661,97 @@ describe("Codex app-server provider", () => {
           type: "user_message",
           text: "Use the native Codex id.",
           messageId: "codex-user-live-1",
+        },
+      },
+    ]);
+  });
+
+  test("presents a live Codex user message with the client message id", async () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    const request = vi.fn(async (method: string) => {
+      if (method === "thread/loaded/list") {
+        return { data: ["test-thread"] };
+      }
+      if (method === "turn/start") {
+        return {};
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+    session.activeForegroundTurnId = null;
+    session.client = createStub<CodexClientLike>({ request });
+    session.subscribe((event) => events.push(event));
+
+    await session.startTurn("Keep this prompt anchored.", { messageId: "client-user-1" });
+
+    const userMessageItem = {
+      type: "userMessage",
+      id: "codex-user-1",
+      content: [{ type: "text", text: "Keep this prompt anchored." }],
+    };
+    asInternals(session).handleNotification("item/started", {
+      threadId: "test-thread",
+      item: userMessageItem,
+    });
+    asInternals(session).handleNotification("item/completed", {
+      threadId: "test-thread",
+      item: userMessageItem,
+    });
+
+    expect(events).toEqual([
+      {
+        type: "timeline",
+        provider: "codex",
+        turnId: "codex-turn-0",
+        item: {
+          type: "user_message",
+          text: "Keep this prompt anchored.",
+          messageId: "client-user-1",
+        },
+      },
+    ]);
+  });
+
+  test("retains the client message id for a user event arriving after turn/start fails", async () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.activeForegroundTurnId = null;
+    session.client = createStub<CodexClientLike>({
+      request: vi.fn(async (method: string) => {
+        if (method === "thread/loaded/list") {
+          return { data: ["test-thread"] };
+        }
+        if (method === "turn/start") {
+          throw new Error("turn/start timed out");
+        }
+        throw new Error(`Unexpected request: ${method}`);
+      }),
+    });
+    session.subscribe((event) => events.push(event));
+
+    await expect(
+      session.startTurn("The provider may already have accepted this.", {
+        messageId: "client-user-after-timeout",
+      }),
+    ).rejects.toThrow("turn/start timed out");
+
+    asInternals(session).handleNotification("item/started", {
+      threadId: "test-thread",
+      item: {
+        type: "userMessage",
+        id: "codex-user-after-timeout",
+        content: [{ type: "text", text: "The provider may already have accepted this." }],
+      },
+    });
+
+    expect(events).toEqual([
+      {
+        type: "timeline",
+        provider: "codex",
+        item: {
+          type: "user_message",
+          text: "The provider may already have accepted this.",
+          messageId: "client-user-after-timeout",
         },
       },
     ]);

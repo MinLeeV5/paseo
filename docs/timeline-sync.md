@@ -89,6 +89,11 @@ create handoff so a provider-owned message ID can still acknowledge the prompt a
 empty timeline is revisited. Normal optimistic sends keep the existing ID-aware matching rules, so
 another client's identified user row cannot consume them during catch-up.
 
+For normal sends, providers that assign their own native user-message IDs publish the
+client-provided message ID when it is available. The provider keeps the native-to-presented mapping
+internally for lifecycle deduplication and rewind turn indexing. This lets a missed live row reconcile
+by ID during authoritative catch-up without weakening the cross-client matching rule.
+
 ## Relevant code
 
 - Server live stream forwarding: `packages/server/src/server/session.ts`
