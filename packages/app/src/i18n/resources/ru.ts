@@ -223,6 +223,14 @@ export const ru: TranslationResources = {
         budgetLimited: "Лимит бюджета",
         needsAttention: "Требует внимания",
       },
+      archive: {
+        action: "Архивировать агента",
+        title: "Архивировать агента?",
+        message: "Агент будет архивирован, а его вкладка закрыта.",
+        runningTitle: "Архивировать работающего агента?",
+        runningMessage:
+          "Эта цель всё ещё активна. Архивация остановит агента и закроет его вкладку.",
+      },
     },
   },
   sessions: {

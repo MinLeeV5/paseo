@@ -225,6 +225,14 @@ export const fr: TranslationResources = {
         budgetLimited: "Limite de budget",
         needsAttention: "Attention requise",
       },
+      archive: {
+        action: "Archiver l’agent",
+        title: "Archiver l’agent ?",
+        message: "Cela archivera l’agent et fermera son onglet.",
+        runningTitle: "Archiver l’agent en cours d’exécution ?",
+        runningMessage:
+          "Cet objectif est toujours actif. L’archivage arrêtera l’agent et fermera son onglet.",
+      },
     },
   },
   sessions: {

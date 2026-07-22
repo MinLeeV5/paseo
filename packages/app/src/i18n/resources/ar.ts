@@ -221,6 +221,14 @@ export const ar: TranslationResources = {
         budgetLimited: "حد الميزانية",
         needsAttention: "يحتاج إلى انتباه",
       },
+      archive: {
+        action: "أرشفة الوكيل",
+        title: "أرشفة الوكيل؟",
+        message: "سيؤدي هذا إلى أرشفة الوكيل وإغلاق علامة التبويب الخاصة به.",
+        runningTitle: "أرشفة الوكيل قيد التشغيل؟",
+        runningMessage:
+          "لا يزال الهدف نشطًا. ستؤدي الأرشفة إلى إيقاف الوكيل وإغلاق علامة التبويب الخاصة به.",
+      },
     },
   },
   sessions: {

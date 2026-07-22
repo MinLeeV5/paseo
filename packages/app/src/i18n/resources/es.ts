@@ -224,6 +224,14 @@ export const es: TranslationResources = {
         budgetLimited: "Límite de presupuesto",
         needsAttention: "Requiere atención",
       },
+      archive: {
+        action: "Archivar agente",
+        title: "¿Archivar agente?",
+        message: "Esto archivará el agente y cerrará su pestaña.",
+        runningTitle: "¿Archivar agente en ejecución?",
+        runningMessage:
+          "Este objetivo sigue activo. Al archivarlo, se detendrá el agente y se cerrará su pestaña.",
+      },
     },
   },
   sessions: {

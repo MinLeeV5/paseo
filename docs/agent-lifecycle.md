@@ -56,6 +56,8 @@ Permission and lifecycle-error presentation still outrank an active Goal. Otherw
 
 Stop is Goal-aware: it pauses an active Goal first, then interrupts a current turn if one exists. `cancelAgentRun` remains a lower-level, turn-only operation for internal flows that explicitly want that behavior. A pause failure does not prevent Paseo from attempting the turn interrupt, but the Stop request still reports the failure so callers do not mistake the Goal for stopped.
 
+The Goal status strip above the composer also exposes an explicit archive action. It confirms before archiving, warns when the agent is still ongoing, and uses the normal global agent archive lifecycle (including stopping the Goal, closing the runtime, and cascading to managed children).
+
 ### Cancellation
 
 Cancellation changes lifecycle state only after the provider acknowledges the interrupt or emits a terminal turn event. If the interrupt is rejected or times out, the agent remains `running` with its active foreground turn intact. Follow-up actions such as replacement, reload, rewind, and Stop must report that failure instead of accepting work they cannot perform. Synthesizing a local cancellation without provider acknowledgment creates a split-brain session: Paseo accepts a new prompt while the provider still owns the previous foreground turn.

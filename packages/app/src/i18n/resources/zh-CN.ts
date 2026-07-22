@@ -221,6 +221,13 @@ export const zhCN: TranslationResources = {
         budgetLimited: "预算受限",
         needsAttention: "需要处理",
       },
+      archive: {
+        action: "归档 Agent",
+        title: "归档 Agent？",
+        message: "这会归档 Agent 并关闭其标签页。",
+        runningTitle: "归档运行中的 Agent？",
+        runningMessage: "此 Goal 仍在执行。归档会停止 Agent 并关闭其标签页。",
+      },
     },
   },
   sessions: {

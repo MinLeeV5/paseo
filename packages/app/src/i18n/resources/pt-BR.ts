@@ -224,6 +224,14 @@ export const ptBR: TranslationResources = {
         budgetLimited: "Limite de orçamento",
         needsAttention: "Requer atenção",
       },
+      archive: {
+        action: "Arquivar agente",
+        title: "Arquivar agente?",
+        message: "Isso arquivará o agente e fechará sua aba.",
+        runningTitle: "Arquivar agente em execução?",
+        runningMessage:
+          "Este objetivo ainda está ativo. O arquivamento interromperá o agente e fechará sua aba.",
+      },
     },
   },
   sessions: {

@@ -220,6 +220,14 @@ export const en = {
         budgetLimited: "Budget limit",
         needsAttention: "Needs attention",
       },
+      archive: {
+        action: "Archive agent",
+        title: "Archive agent?",
+        message: "This will archive the agent and close its tab.",
+        runningTitle: "Archive running agent?",
+        runningMessage:
+          "This Goal is still active. Archiving will stop the agent and close its tab.",
+      },
     },
   },
   sessions: {

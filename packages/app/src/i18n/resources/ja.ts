@@ -224,6 +224,14 @@ export const ja: TranslationResources = {
         budgetLimited: "予算上限",
         needsAttention: "要確認",
       },
+      archive: {
+        action: "エージェントをアーカイブ",
+        title: "エージェントをアーカイブしますか？",
+        message: "エージェントをアーカイブし、タブを閉じます。",
+        runningTitle: "実行中のエージェントをアーカイブしますか？",
+        runningMessage:
+          "この Goal はまだ実行中です。アーカイブするとエージェントを停止し、タブを閉じます。",
+      },
     },
   },
   sessions: {
