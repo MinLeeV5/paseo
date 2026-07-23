@@ -14,6 +14,7 @@ import { Maximize2, X } from "lucide-react-native";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { mermaidWebViewHtml } from "@/components/mermaid/webview/mermaid-webview-html";
 import type { Theme } from "@/styles/theme";
+import { normalizeMermaidSource } from "./source";
 import { type MermaidThemePayload, useMermaidThemePayload } from "./theme";
 
 export interface MermaidDiagramProps {
@@ -210,6 +211,7 @@ function MermaidWebViewSurface({
 }
 
 function MermaidDiagramContent({ diagram, theme }: MermaidDiagramContentProps) {
+  const source = useMemo(() => normalizeMermaidSource(diagram), [diagram]);
   const themePayload = useMermaidThemePayload(theme);
   const [height, setHeight] = useState(MIN_WEBVIEW_HEIGHT);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -235,7 +237,7 @@ function MermaidDiagramContent({ diagram, theme }: MermaidDiagramContentProps) {
         <Maximize2 size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
       </Pressable>
       <MermaidWebViewSurface
-        diagram={diagram}
+        diagram={source}
         themePayload={themePayload}
         style={webViewStyle}
         scrollEnabled={false}
@@ -259,7 +261,7 @@ function MermaidDiagramContent({ diagram, theme }: MermaidDiagramContentProps) {
             <View style={styles.previewContentLayer}>
               <View style={styles.previewDiagramArea}>
                 <MermaidWebViewSurface
-                  diagram={diagram}
+                  diagram={source}
                   themePayload={themePayload}
                   style={styles.previewWebView}
                   scrollEnabled

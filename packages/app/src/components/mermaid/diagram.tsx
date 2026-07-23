@@ -7,6 +7,7 @@ import { Maximize2, X } from "lucide-react-native";
 import { isWeb } from "@/constants/platform";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import type { Theme } from "@/styles/theme";
+import { normalizeMermaidSource } from "./source";
 import { useMermaidThemePayload } from "./theme";
 
 export interface MermaidDiagramProps {
@@ -66,6 +67,7 @@ function previewButtonStyle({ hovered, pressed }: PressableStateCallbackType) {
 function MermaidDiagramContent({ diagram, theme }: MermaidDiagramContentProps) {
   const reactId = useId();
   const renderId = useMemo(() => normalizeMermaidRenderId(reactId), [reactId]);
+  const source = useMemo(() => normalizeMermaidSource(diagram), [diagram]);
   const themePayload = useMermaidThemePayload(theme);
   const [state, setState] = useState<MermaidRenderState>({ kind: "loading" });
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -88,7 +90,7 @@ function MermaidDiagramContent({ diagram, theme }: MermaidDiagramContentProps) {
             htmlLabels: false,
           },
         });
-        const result = await mermaid.render(renderId, diagram);
+        const result = await mermaid.render(renderId, source);
         if (!cancelled) {
           setState({ kind: "rendered", svg: result.svg });
         }
@@ -104,7 +106,7 @@ function MermaidDiagramContent({ diagram, theme }: MermaidDiagramContentProps) {
     return () => {
       cancelled = true;
     };
-  }, [diagram, renderId, themePayload]);
+  }, [renderId, source, themePayload]);
 
   useEffect(() => {
     if (!isWeb || !isPreviewOpen) {
