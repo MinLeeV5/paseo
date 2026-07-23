@@ -1014,7 +1014,7 @@ describe("Codex app-server provider", () => {
     await session.close();
   });
 
-  test("rewinds the conversation using a client-presented Codex user message id", async () => {
+  test("correlates a Codex user message with the submitting client message", async () => {
     const appServer = createFakeCodexAppServer();
     const session = new CodexAppServerAgentSession(
       createConfig({ cwd: "/workspace/project" }),
@@ -1023,17 +1023,18 @@ describe("Codex app-server provider", () => {
       async () => appServer.child,
     );
 
-    await session.startTurn("remember first", { messageId: "client-first" });
-    emitCodexUserMessage(appServer, { id: "codex-first", text: "remember first" });
-    appServer.completeTurn();
-    await session.startTurn("remember second", { messageId: "client-second" });
-    emitCodexUserMessage(appServer, { id: "codex-second", text: "remember second" });
-    appServer.completeTurn();
+    await session.startTurn("remember this", { clientMessageId: "client-message" });
+    const userMessage = waitForNextTimelineItem(session, "user_message");
+    emitCodexUserMessage(appServer, { id: "codex-message", text: "remember this" });
 
-    await session.revertConversation({ messageId: "client-first" });
-
-    expect(appServer.recordedRollbacks).toEqual([{ threadId: "forked-thread", numTurns: 2 }]);
-    appServer.assertNoErrors();
+    await expect(userMessage).resolves.toMatchObject({
+      item: {
+        type: "user_message",
+        messageId: "codex-message",
+        clientMessageId: "client-message",
+      },
+    });
+    appServer.completeTurn();
     await session.close();
   });
 
@@ -3666,7 +3667,7 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("presents a live Codex user message with the client message id", async () => {
+  test("correlates a live Codex user message with the client message id", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     const request = vi.fn(async (method: string) => {
@@ -3682,7 +3683,9 @@ describe("Codex app-server provider", () => {
     session.client = createStub<CodexClientLike>({ request });
     session.subscribe((event) => events.push(event));
 
-    await session.startTurn("Keep this prompt anchored.", { messageId: "client-user-1" });
+    await session.startTurn("Keep this prompt anchored.", {
+      clientMessageId: "client-user-1",
+    });
 
     const userMessageItem = {
       type: "userMessage",
@@ -3706,7 +3709,8 @@ describe("Codex app-server provider", () => {
         item: {
           type: "user_message",
           text: "Keep this prompt anchored.",
-          messageId: "client-user-1",
+          messageId: "codex-user-1",
+          clientMessageId: "client-user-1",
         },
       },
     ]);
@@ -3731,7 +3735,7 @@ describe("Codex app-server provider", () => {
 
     await expect(
       session.startTurn("The provider may already have accepted this.", {
-        messageId: "client-user-after-timeout",
+        clientMessageId: "client-user-after-timeout",
       }),
     ).rejects.toThrow("turn/start timed out");
 
@@ -3751,7 +3755,8 @@ describe("Codex app-server provider", () => {
         item: {
           type: "user_message",
           text: "The provider may already have accepted this.",
-          messageId: "client-user-after-timeout",
+          messageId: "codex-user-after-timeout",
+          clientMessageId: "client-user-after-timeout",
         },
       },
     ]);

@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ReactElement, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import type { PressableStateCallbackType } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
@@ -88,7 +88,7 @@ import type { MessagePayload } from "@/composer/types";
 import type { AgentAttachment, ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type { CreatePaseoWorktreeInput } from "@getpaseo/client/internal/daemon-client";
 import type { AgentProvider } from "@getpaseo/protocol/agent-types";
-import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import {
   isEmptyWorkspaceSubmission,
   runCreateEmptyWorkspace,
@@ -106,6 +106,8 @@ import {
 import {
   clearPickerPrAttachmentForTargetChange,
   findCheckoutHintPrAttachment,
+  initialPickerSelectionState,
+  reducePickerSelection,
   syncPickerPrAttachment,
 } from "./new-workspace-picker-state";
 import {
@@ -190,10 +192,6 @@ interface NewWorkspaceScreenProps {
 interface PickerOptionData {
   options: ComboboxOptionType[];
   itemById: Map<string, PickerItem>;
-}
-
-interface PickerSelection {
-  item: PickerItem;
 }
 
 const BRANCH_OPTION_PREFIX = "branch:";
@@ -807,11 +805,6 @@ function getContentStyle(input: { isCompact: boolean; insetBottom: number }) {
     return [styles.content, styles.contentCompact, { paddingBottom: input.insetBottom }];
   }
   return [styles.content, styles.contentCentered];
-}
-
-function getSelectedPickerItem(selection: PickerSelection | null): PickerItem | null {
-  if (!selection) return null;
-  return selection.item;
 }
 
 function normalizeBranchDetails(
@@ -1656,7 +1649,6 @@ export function NewWorkspaceScreen({
     typeof normalizeWorkspaceDescriptor
   > | null>(null);
   const [pendingAction, setPendingAction] = useState<"chat" | "empty" | "setup" | null>(null);
-  const [manualPickerSelection, setManualPickerSelection] = useState<PickerSelection | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const openAddProjectPicker = useOpenAddProject();
@@ -1729,8 +1721,22 @@ export function NewWorkspaceScreen({
   const composerState = chatDraft.composerState;
   const [dismissedCheckoutHintPrNumbers, setDismissedCheckoutHintPrNumbers] =
     useCheckoutHintDismissals(chatDraft.attachments);
+  const [pickerSelection, dispatchPickerSelection] = useReducer(
+    reducePickerSelection,
+    initialPickerSelectionState,
+  );
+  const selectedItem = pickerSelection.selectedItem;
 
-  const selectedItem = getSelectedPickerItem(manualPickerSelection);
+  const handleGithubPrDetected = useCallback(() => {
+    dispatchPickerSelection({ type: "pr-detected" });
+  }, []);
+
+  const handleGithubPrAutoAttach = useCallback((item: ForgeSearchItem) => {
+    dispatchPickerSelection({
+      type: "pr-added",
+      item: { kind: "github-pr", item },
+    });
+  }, []);
 
   const withConnectedClient = useCallback(() => {
     if (!client || !isConnected) {
@@ -1831,7 +1837,7 @@ export function NewWorkspaceScreen({
         item,
       });
 
-      setManualPickerSelection({ item });
+      dispatchPickerSelection({ type: "picker-selected", item });
       chatDraft.setAttachments(nextAttachments);
       setPickerOpen(false);
     },
@@ -1847,7 +1853,7 @@ export function NewWorkspaceScreen({
     [itemById, selectPickerItem],
   );
 
-  const clearManualPickerSelectionForTargetChange = useCallback(
+  const clearPickerSelectionForTargetChange = useCallback(
     (currentTargetId: string, nextTargetId: string) => {
       const nextAttachments = clearPickerPrAttachmentForTargetChange({
         attachments: chatDraft.attachments,
@@ -1856,7 +1862,7 @@ export function NewWorkspaceScreen({
       });
       if (nextAttachments === chatDraft.attachments) return;
       chatDraft.setAttachments(nextAttachments);
-      setManualPickerSelection(null);
+      dispatchPickerSelection({ type: "target-changed" });
     },
     [chatDraft],
   );
@@ -1868,17 +1874,17 @@ export function NewWorkspaceScreen({
       // canCreateWorktree or non-git projects become unselectable.
       selectProjectOption(id);
       setProjectPickerOpen(false);
-      clearManualPickerSelectionForTargetChange(selectedProjectOptionId, id);
+      clearPickerSelectionForTargetChange(selectedProjectOptionId, id);
     },
-    [clearManualPickerSelectionForTargetChange, selectProjectOption, selectedProjectOptionId],
+    [clearPickerSelectionForTargetChange, selectProjectOption, selectedProjectOptionId],
   );
 
   const handleSelectWorkspaceHost = useCallback(
     (id: string) => {
       handleSelectHost(id);
-      clearManualPickerSelectionForTargetChange(selectedServerId, id);
+      clearPickerSelectionForTargetChange(selectedServerId, id);
     },
-    [clearManualPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
+    [clearPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
   );
 
   const handleAddProject = useCallback(() => {
@@ -2203,7 +2209,7 @@ export function NewWorkspaceScreen({
   });
 
   const centeredStyle = useMemo(
-    () => [styles.centered, composerKeyboardStyle],
+    () => [animatedStaticStyles.centered, composerKeyboardStyle],
     [composerKeyboardStyle],
   );
 
@@ -2357,6 +2363,7 @@ export function NewWorkspaceScreen({
             submitButtonTestID="workspace-create-submit"
             submitIcon="return"
             isSubmitLoading={isPending}
+            waitForGithubAutoAttachOnSubmit
             submitBehavior="preserve-and-lock"
             blurOnSubmit={true}
             value={chatDraft.text}
@@ -2364,6 +2371,8 @@ export function NewWorkspaceScreen({
             attachments={chatDraft.attachments}
             attachmentScopeKeys={visibleDraftContextScopeKeys}
             onChangeAttachments={chatDraft.setAttachments}
+            onGithubPrDetected={handleGithubPrDetected}
+            onGithubPrAutoAttach={handleGithubPrAutoAttach}
             cwd={selectedSourceDirectory ?? ""}
             clearDraft={handleClearDraft}
             autoFocus
@@ -2377,6 +2386,13 @@ export function NewWorkspaceScreen({
     </FileDropZone>
   );
 }
+
+const animatedStaticStyles = RNStyleSheet.create({
+  centered: {
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+  },
+});
 
 const styles = StyleSheet.create((theme) => ({
   container: {
@@ -2395,10 +2411,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   contentCompact: {
     justifyContent: "flex-end",
-  },
-  centered: {
-    width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
   },
   composerTitleContainer: {
     marginBottom: theme.spacing[8],

@@ -188,7 +188,7 @@ export interface SubscribeOptions {
 
 interface HydrateTimelineOptions {
   force?: boolean;
-  broadcast?: boolean;
+  broadcast?: boolean | (() => boolean);
 }
 
 export type ImportablePersistedAgentQueryOptions = ListImportableSessionsOptions & {
@@ -1623,6 +1623,7 @@ export class AgentManager {
   async setAgentMode(agentId: string, modeId: string): Promise<AgentProviderNotice | null> {
     const agent = this.requireSessionAgent(agentId);
     const notice = (await agent.session.setMode(modeId)) ?? null;
+    await this.drainSessionEvents(agentId);
     const currentMode = (await agent.session.getCurrentMode()) ?? modeId;
     agent.config.modeId = currentMode ?? undefined;
     agent.currentModeId = currentMode;
@@ -1643,6 +1644,7 @@ export class AgentManager {
     if (agent.session.setModel) {
       await agent.session.setModel(normalizedModelId);
     }
+    await this.drainSessionEvents(agentId);
 
     agent.config.model = normalizedModelId ?? undefined;
     if (agent.runtimeInfo) {
@@ -1666,6 +1668,7 @@ export class AgentManager {
     if (agent.session.setThinkingOption) {
       notice = (await agent.session.setThinkingOption(normalizedThinkingOptionId)) ?? null;
     }
+    await this.drainSessionEvents(agentId);
 
     agent.config.thinkingOptionId = normalizedThinkingOptionId ?? undefined;
     if (agent.runtimeInfo) {
@@ -1687,6 +1690,7 @@ export class AgentManager {
     }
 
     await agent.session.setFeature(featureId, value);
+    await this.drainSessionEvents(agentId);
     agent.config.featureValues = { ...agent.config.featureValues, [featureId]: value };
     this.touchUpdatedAt(agent);
     this.emitState(agent);
@@ -3104,6 +3108,24 @@ export class AgentManager {
     });
   }
 
+  /**
+   * Provider mutations may synchronously emit config events that are processed through the
+   * asynchronous session queue. Apply those events before committing the mutation's explicit
+   * manager state so call order remains authoritative.
+   */
+  private async drainSessionEvents(agentId: string): Promise<void> {
+    while (true) {
+      const tail = this.sessionEventTails.get(agentId);
+      if (!tail) {
+        return;
+      }
+      await tail;
+      if (this.sessionEventTails.get(agentId) === tail) {
+        return;
+      }
+    }
+  }
+
   private async dispatchSessionEvent(
     agent: ActiveManagedAgent,
     event: AgentStreamEvent,
@@ -3264,12 +3286,17 @@ export class AgentManager {
       return;
     }
 
+    const broadcast = options?.broadcast ?? false;
+
     if (options?.force) {
-      await this.forceHydrateTimelineFromLegacyProviderHistory(agent, options.broadcast === true);
+      await this.forceHydrateTimelineFromLegacyProviderHistory(
+        agent,
+        typeof broadcast === "function" ? broadcast() : broadcast,
+      );
       return;
     }
 
-    await this.primeTimelineFromLegacyProviderHistory(agent, options?.broadcast === true);
+    await this.primeTimelineFromLegacyProviderHistory(agent, broadcast);
   }
 
   private async forceHydrateTimelineFromLegacyProviderHistory(
@@ -3326,15 +3353,24 @@ export class AgentManager {
 
   private async primeTimelineFromLegacyProviderHistory(
     agent: ActiveManagedAgent,
-    broadcast: boolean,
+    broadcast: boolean | (() => boolean),
   ): Promise<void> {
+    const deferredBroadcast = typeof broadcast === "function";
+    const timelineEvents: Array<{
+      event: Extract<AgentStreamEvent, { type: "timeline" }>;
+      row: AgentTimelineRow;
+    }> = [];
+    const providerSubagentEvents: AgentManagerEvent[] = [];
     agent.historyPrimed = true;
     try {
       for await (const event of agent.session.streamHistory()) {
         if (event.type === "provider_subagent") {
           const update = this.providerSubagents.apply(agent.id, event.provider, event.event);
-          if (broadcast) {
-            this.dispatch({ type: "provider_subagent", event: update });
+          const managerEvent: AgentManagerEvent = { type: "provider_subagent", event: update };
+          if (deferredBroadcast) {
+            providerSubagentEvents.push(managerEvent);
+          } else if (broadcast) {
+            this.dispatch(managerEvent);
           }
           continue;
         }
@@ -3344,14 +3380,37 @@ export class AgentManager {
         if (event.item.type === "user_message" && isSystemInjectedEnvelope(event.item.text)) {
           continue;
         }
-        this.recordTimeline(
+        const row = this.recordTimeline(
           agent.id,
           event.item,
           event.timestamp ? { timestamp: event.timestamp } : undefined,
         );
+        if (deferredBroadcast) {
+          timelineEvents.push({ event, row });
+        } else if (broadcast) {
+          this.dispatchStream(agent.id, event, {
+            seq: row.seq,
+            epoch: this.timelineStore.getEpoch(agent.id),
+            timestamp: row.timestamp,
+          });
+        }
       }
     } catch {
       // ignore history failures
+    }
+
+    if (typeof broadcast !== "function" || !broadcast()) {
+      return;
+    }
+    for (const event of providerSubagentEvents) {
+      this.dispatch(event);
+    }
+    for (const { event, row } of timelineEvents) {
+      this.dispatchStream(agent.id, event, {
+        seq: row.seq,
+        epoch: this.timelineStore.getEpoch(agent.id),
+        timestamp: row.timestamp,
+      });
     }
   }
 
@@ -3519,6 +3578,38 @@ export class AgentManager {
         return undefined;
       case "usage_updated":
         agent.lastUsage = event.usage;
+        this.emitState(agent);
+        return undefined;
+      case "mode_changed":
+        agent.currentModeId = event.currentModeId;
+        agent.availableModes = event.availableModes;
+        if (agent.runtimeInfo) {
+          agent.runtimeInfo = { ...agent.runtimeInfo, modeId: event.currentModeId };
+        }
+        flags.shouldDispatchEvent = false;
+        this.emitState(agent);
+        return undefined;
+      case "model_changed":
+        agent.runtimeInfo = event.runtimeInfo;
+        if (!agent.persistence && event.runtimeInfo.sessionId) {
+          agent.persistence = attachPersistenceCwd(
+            { provider: agent.provider, sessionId: event.runtimeInfo.sessionId },
+            agent.cwd,
+          );
+        }
+        agent.currentModeId = event.runtimeInfo.modeId ?? agent.currentModeId;
+        flags.shouldDispatchEvent = false;
+        this.emitState(agent);
+        return undefined;
+      case "thinking_option_changed":
+        agent.config.thinkingOptionId = event.thinkingOptionId ?? undefined;
+        if (agent.runtimeInfo) {
+          agent.runtimeInfo = {
+            ...agent.runtimeInfo,
+            thinkingOptionId: event.thinkingOptionId,
+          };
+        }
+        flags.shouldDispatchEvent = false;
         this.emitState(agent);
         return undefined;
       case "timeline":

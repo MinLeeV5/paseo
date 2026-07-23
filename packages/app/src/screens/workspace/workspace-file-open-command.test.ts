@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { openWorkspaceFileFromExplorer } from "./workspace-file-open-command";
 
 describe("openWorkspaceFileFromExplorer", () => {

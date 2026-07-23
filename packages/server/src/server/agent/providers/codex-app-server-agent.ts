@@ -3312,6 +3312,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private nextTurnOrdinal = 0;
   private activeForegroundTurnId: string | null = null;
+  private activeClientMessageId: string | null = null;
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private serviceTier: "fast" | null = null;
   private planModeEnabled = false;
@@ -3358,8 +3359,6 @@ export class CodexAppServerAgentSession implements AgentSession {
   private latestPlanResult: { callId: string; text: string; turnId: string | null } | null = null;
   private readonly userMessageTurnIndexes = new Map<string, number>();
   private readonly userMessageTurnIds: string[] = [];
-  private readonly presentedUserMessageIdByCodexId = new Map<string, string>();
-  private pendingClientUserMessageId: string | null = null;
   private pendingManualCompactionStarts = 0;
   private compactionTriggerByItemId = new Map<string, "auto" | "manual">();
   // Codex can report one completed compaction through both channels:
@@ -4066,9 +4065,8 @@ export class CodexAppServerAgentSession implements AgentSession {
 
     const turnId = this.createTurnId();
     this.activeForegroundTurnId = turnId;
+    this.activeClientMessageId = options?.clientMessageId ?? null;
     this.currentTurnId = null;
-    const clientUserMessageId = nonEmptyString(options?.messageId) ?? null;
-    this.pendingClientUserMessageId = clientUserMessageId;
 
     try {
       this.logTurnStartSummary({
@@ -4106,22 +4104,6 @@ export class CodexAppServerAgentSession implements AgentSession {
   private resetCodexUserMessageTurns(): void {
     this.userMessageTurnIndexes.clear();
     this.userMessageTurnIds.length = 0;
-    this.presentedUserMessageIdByCodexId.clear();
-    this.pendingClientUserMessageId = null;
-  }
-
-  private presentedCodexUserMessageId(messageId: string | undefined): string | undefined {
-    if (!messageId) {
-      return undefined;
-    }
-    const existing = this.presentedUserMessageIdByCodexId.get(messageId);
-    if (existing) {
-      return existing;
-    }
-    const presentedMessageId = this.pendingClientUserMessageId ?? messageId;
-    this.pendingClientUserMessageId = null;
-    this.presentedUserMessageIdByCodexId.set(messageId, presentedMessageId);
-    return presentedMessageId;
   }
 
   private truncateCodexUserMessageTurns(numTurns: number): void {
@@ -4504,6 +4486,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.pendingSubAgentNotificationsByThreadId.clear();
     this.subscribers.clear();
     this.activeForegroundTurnId = null;
+    this.activeClientMessageId = null;
     if (this.client) {
       await this.client.dispose();
     }
@@ -5651,6 +5634,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       });
     }
     this.activeForegroundTurnId = null;
+    this.activeClientMessageId = null;
     this.pendingSubAgentNotificationsByThreadId.clear();
     this.resetTurnTrackingState();
   }
@@ -6186,15 +6170,15 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emitSubAgentActivityUpdate(childSubAgentCallId, "running");
       return;
     }
-    const messageId = this.presentedCodexUserMessageId(timelineItem.messageId);
+    const messageId = timelineItem.messageId;
     if (!this.rememberCodexUserMessageTurn(messageId)) {
       return;
     }
-    this.emitEvent({
-      type: "timeline",
-      provider: CODEX_PROVIDER,
-      item: { ...timelineItem, messageId },
-    });
+    const item = this.activeClientMessageId
+      ? { ...timelineItem, messageId, clientMessageId: this.activeClientMessageId }
+      : timelineItem;
+    this.activeClientMessageId = null;
+    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item });
   }
 
   private warnUnknownNotificationMethod(method: string, params: unknown): void {
