@@ -1,0 +1,744 @@
+packages/server/src/server/agent/agent-manager.test.ts
+  9e6de639c3b8f11d 3206-3252,3321,7862-7931,8343-8348,8374-8376,8382-8383
+packages/app/src/components/file-explorer-pane.tsx
+  9e6de639c3b8f11d 18-19,21-25,29-30,37,56-57,66-67,86-87,96-97,101-106,115,118,129-154,158,160,164,174-182,192,205,225-234,330-336,398-399,407,417-419,561-568,579,598,810-811,819,821-822,830,841-842,851-852,1080-1081
+packages/app/src/git/query-keys.test.ts
+  9e6de639c3b8f11d 5,28-29,68-73,114-115,142-147
+packages/desktop/src/preload.ts
+  9e6de639c3b8f11d 26-32
+packages/protocol/src/agent-deep-link.test.ts
+  9e6de639c3b8f11d 1-25
+packages/app/e2e/helpers/timeline-delivery.ts
+  9e6de639c3b8f11d 10-13,43-46,49-51
+packages/server/src/server/file-explorer/observer.test.ts
+  9e6de639c3b8f11d 1-139
+packages/app/src/screens/workspace/workspace-tab-menu.test.ts
+  9e6de639c3b8f11d 2-5,259-287
+packages/app/src/attachments/use-workspace-file-drag-source.ts
+  9e6de639c3b8f11d 1-9
+packages/app/src/components/sidebar-workspace-list.tsx
+  9e6de639c3b8f11d 97-98,1637-1642,1795-1816,2093-2098,2356-2367,2435-2437
+packages/server/src/server/agent/providers/omp/history-hooks.ts
+  9e6de639c3b8f11d 2,9-12
+packages/server/src/server/agent/providers/pi/rpc-types.ts
+  9e6de639c3b8f11d 1
+packages/cli/src/commands/open.ts
+  9e6de639c3b8f11d 5,71-74,76-81,83-92,94-96,103-105
+packages/app/src/components/file-drop/use-drop-listeners.ts
+  9e6de639c3b8f11d 14-17,192-196,208-212,240-246
+packages/app/src/hooks/use-settings/storage.ts
+  9e6de639c3b8f11d 46,70,238-239
+packages/app/src/workspace-tabs/identity.ts
+  9e6de639c3b8f11d 2,32-34,108-114,121-123,188-190,226-241
+packages/app/src/components/ui/control-geometry.test.ts
+  9e6de639c3b8f11d 13,106,109-141
+packages/app/e2e/helpers/desktop-updates.ts
+  9e6de639c3b8f11d 68-69,106,135,152,164-170,227,293-301
+packages/server/src/server/agent/providers/claude/model-manifest.ts
+  9e6de639c3b8f11d 12,29,46,56,65,73,82,91,100,109,117,129,135-141,154,165-170,175-196
+packages/server/src/services/quota-fetcher/providers/codex.ts
+  9e6de639c3b8f11d 17,166,177,188
+packages/app/e2e/archived-codex-agent.real.spec.ts
+  9e6de639c3b8f11d 1-115
+packages/server/src/server/agent/providers/claude/models.test.ts
+  9e6de639c3b8f11d 9,13,92,106,109,118,124-126,130-141
+packages/protocol/src/messages.file-editing.test.ts
+  9e6de639c3b8f11d 1-97
+packages/app/src/screens/workspace/visible-agent-ids.test.ts
+  9e6de639c3b8f11d 3
+packages/server/src/server/workspace-service-port-registry.test.ts
+  9e6de639c3b8f11d 6,13,18,20,33,126-170,188-266
+packages/server/src/server/agent/agent-loading.ts
+  9e6de639c3b8f11d 14-19,35,67-73,85-88,91-93,131-133,137-138,144
+packages/app/src/hooks/use-file-download.ts
+  9e6de639c3b8f11d 1-56
+packages/app/src/git/commits-section/shared.ts
+  9e6de639c3b8f11d 16-17
+packages/app/src/agent-stream/strategy-native.tsx
+  9e6de639c3b8f11d 14,193-198,424
+packages/app/src/browser-automation/handler.test.ts
+  9e6de639c3b8f11d 7-8
+packages/server/src/utils/checkout-git.commit-file-diff.test.ts
+  9e6de639c3b8f11d 91-108
+packages/server/src/server/session.workspaces.test.ts
+  9e6de639c3b8f11d 16,184,7315-7346
+packages/server/src/server/agent/providers/codex-app-server-agent.test.ts
+  9e6de639c3b8f11d 1017,1026-1028,1030-1037,3670,3686-3688,3712-3713,3738,3758-3759
+packages/app/src/file-pane/editor/view.tsx
+  9e6de639c3b8f11d 1-36
+packages/app/e2e/helpers/settings.ts
+  9e6de639c3b8f11d 25
+packages/app/src/components/agent-list.tsx
+  9e6de639c3b8f11d 398
+packages/app/src/workspace/use-workspace-archive.ts
+  9e6de639c3b8f11d 11-12
+packages/highlight/src/parsers.ts
+  9e6de639c3b8f11d 1,21-25,27-32,34-42,44,46-47,49-50,52,54,56,58,60,62-63,65,67,69,71,73-74,76-77,80,83-87,95
+packages/desktop/bin/paseo.cmd
+  9e6de639c3b8f11d 17
+packages/app/src/panels/panel-instance-attributes.test.ts
+  9e6de639c3b8f11d 1-35
+packages/server/src/server/agent/agent-sdk-types.ts
+  9e6de639c3b8f11d 202,371
+packages/app/src/navigation/agent-route-resolution.test.ts
+  9e6de639c3b8f11d 1-85
+packages/app/src/panels/file-panel.tsx
+  9e6de639c3b8f11d 2,5,9,20,24,26,33,43-50
+packages/app/src/stores/workspace-subagents-integration.test.ts
+  9e6de639c3b8f11d 8,10
+packages/server/src/server/agent/providers/opencode-agent.ts
+  9e6de639c3b8f11d 950,1711,2375-2380,2760-2764,2901,2915,2965-2968,3010-3014,3021,3039-3040,3054-3055,3059-3062,3064,3066-3109,3116-3121,3135,3152,3579-3592,3602-3603,3651,3655,3658,3661-3664,3667-3678,3681,3683,3688,3714-3715,3720-3744,3991-3994,4140
+packages/server/src/server/session.test.ts
+  9e6de639c3b8f11d 807
+packages/app/package.json
+  9e6de639c3b8f11d 36-40,55
+packages/app/src/i18n/resources/ru.ts
+  9e6de639c3b8f11d 392-398,498,565-571,621-624,626-627,631,634-637,640-644,648,803-804,845,850,983-984,1535-1553,1559-1560,1651,1658-1661
+packages/app/src/components/sidebar/sidebar-status-list.tsx
+  9e6de639c3b8f11d 45-46,98-103,111-113,130-138,208-220,226-293,796-797
+packages/app/src/panels/terminal-panel.tsx
+  9e6de639c3b8f11d 65-67,70,72
+packages/server/src/server/file-explorer/observer.ts
+  9e6de639c3b8f11d 1-173
+scripts/trace-daemon.mjs
+  9e6de639c3b8f11d 3,18,22-33,38,58-61,68-70,73
+packages/app/src/data/acp-provider-catalog.ts
+  9e6de639c3b8f11d 40,43,62,65,125,128,143,146,153,156,162,165,176,179,195,198,287,290,305,308,314,317
+packages/app/src/hooks/use-settings/index.ts
+  9e6de639c3b8f11d 194-196
+packages/app/src/stores/session-store-hooks/index.ts
+  9e6de639c3b8f11d 7,74-78
+packages/desktop/src/desktop-startup.test.ts
+  9e6de639c3b8f11d 8,25,42,62
+packages/desktop/src/desktop-startup.ts
+  9e6de639c3b8f11d 2,10
+packages/server/src/services/quota-fetcher/usage.ts
+  9e6de639c3b8f11d 5,71-90,99-105
+packages/app/src/components/ui/dropdown-menu.tsx
+  9e6de639c3b8f11d 14,37,221-230,505-515,633-660,670,906-909
+packages/app/src/components/ui/segmented-control.tsx
+  9e6de639c3b8f11d 44,56-63,169-174,189-191,199,202,205,218-220,228
+packages/app/src/workspace-tabs/model.ts
+  9e6de639c3b8f11d 2,13-18,26,40-41
+packages/app/src/screens/workspace/workspace-scripts-button.test.tsx
+  9e6de639c3b8f11d 6,15-24,44-50,54-63,97-115,123,131-135,148-163,182-189,200-201,205-206,224-225,324-330,368,384,451-618
+packages/server/src/server/agent/providers/pi/session-descriptor.test.ts
+  9e6de639c3b8f11d 1,16-60
+packages/desktop/src/daemon/desktop-packaging.test.ts
+  9e6de639c3b8f11d 55,100-106,132
+packages/app/src/i18n/resources/es.ts
+  9e6de639c3b8f11d 393-399,498,566-572,622-625,627-628,632,635-638,641-645,649,812-813,854,859,992-993,1544-1562,1568-1569,1660,1667-1670
+packages/app/e2e/diff-row-alignment.spec.ts
+  9e6de639c3b8f11d 1,13-17,226-318,344-348,356-402,552-559,569-571,578,596-608
+packages/app/src/workspace-tabs/identity.test.ts
+  9e6de639c3b8f11d 47-82
+packages/server/src/server/agent/agent-prompt.test.ts
+  9e6de639c3b8f11d 193
+packages/app/src/components/ui/control-geometry.ts
+  9e6de639c3b8f11d 6,25,28,40,53,131,195-198,201,205-210,214-215,219-223,229
+packages/app/e2e/global-setup.ts
+  9e6de639c3b8f11d 331-336,358-420
+packages/app/src/screens/workspace/workspace-file-open-command.ts
+  9e6de639c3b8f11d 6
+packages/app/src/screens/workspace/workspace-source-of-truth.test.ts
+  9e6de639c3b8f11d 98,104-111
+packages/app/src/utils/workspace-navigation.test.ts
+  9e6de639c3b8f11d 2
+packages/app/src/i18n/resources/ja.ts
+  9e6de639c3b8f11d 393-399,498,566-570,618-621,623-624,628,631-634,637-641,645,792-793,834,839,972-973,1517-1535,1541-1542,1633,1640-1643
+packages/app/src/components/file-drop/types.ts
+  9e6de639c3b8f11d 2,22
+packages/server/src/server/agent/create-agent/create.ts
+  9e6de639c3b8f11d 274
+packages/server/src/server/agent/providers/mock-load-test-agent.ts
+  9e6de639c3b8f11d 609,651
+packages/desktop/src/main.ts
+  9e6de639c3b8f11d 93-98,107-116,335,361-364,677,719-723,726,790-793,797,805-870,886-891,993-999,1004,1007-1012,1021
+packages/app/src/components/sidebar/sidebar-group-toggle-row.tsx
+  9e6de639c3b8f11d 1-106
+packages/app/e2e/helpers/github-fixtures.ts
+  9e6de639c3b8f11d 2,62-67,290-340
+packages/app/src/desktop/agent-navigation.tsx
+  9e6de639c3b8f11d 1-69
+packages/server/src/server/agent/agent-manager.ts
+  9e6de639c3b8f11d 191,1626,1647,1671,1693,3111-3128,3289-3290,3292-3295,3299,3356,3358-3363,3369-3373,3383,3388-3396,3401-3414,3583-3612
+packages/app/src/attachments/types.ts
+  9e6de639c3b8f11d 95-104,108
+packages/app/src/file-pane/editor/model.ts
+  9e6de639c3b8f11d 1-302
+packages/app/src/panels/pane-context.tsx
+  9e6de639c3b8f11d 3,11
+packages/app/src/runtime/daemon-start-service.test.ts
+  9e6de639c3b8f11d 167-213,238,245-249,251-258
+packages/server/src/server/file-explorer/service.test.ts
+  9e6de639c3b8f11d 1,5,16-129
+packages/app/src/attachments/workspace-file-drag-source.types.ts
+  9e6de639c3b8f11d 1-10
+packages/server/src/server/file-explorer/service.ts
+  9e6de639c3b8f11d 1,4,21-43,65,76,85,90-103,195,207,219,231,240,242,256,278-417,558-565
+packages/server/src/server/agent/create-agent/create.test.ts
+  9e6de639c3b8f11d 78
+packages/app/src/types/host-connection.test.ts
+  9e6de639c3b8f11d 5,118-187
+packages/app/e2e/sidebar-workspace.spec.ts
+  9e6de639c3b8f11d 222
+packages/server/src/services/quota-fetcher/providers/kimi.ts
+  9e6de639c3b8f11d 8-13,89
+packages/app/src/file-pane/editor/view.web.tsx
+  9e6de639c3b8f11d 1-142
+packages/app/src/git/checkout-status-cache.ts
+  9e6de639c3b8f11d 5,53-55
+packages/app/src/utils/os-notifications.test.ts
+  9e6de639c3b8f11d 199-203,210-212
+packages/app/src/navigation/agent-route-resolution.ts
+  9e6de639c3b8f11d 1-53
+packages/app/src/components/sidebar/pinned-section-header.tsx
+  9e6de639c3b8f11d 50
+packages/app/src/components/tree-primitives.tsx
+  9e6de639c3b8f11d 14
+packages/highlight/src/index.ts
+  9e6de639c3b8f11d 2-8
+packages/app/src/composer/draft/input-draft.live.test.tsx
+  9e6de639c3b8f11d 8,163-167,432-461
+packages/app/src/screens/workspace/workspace-pane-content.tsx
+  9e6de639c3b8f11d 26,38,56,91,104
+packages/server/src/server/agent/providers/claude/agent.ts
+  9e6de639c3b8f11d 37-41,382-385,433-452,1538-1541,1545-1547,1979,2077,2143,2237,2251-2270,2280,2955-2958,3746,3756-3760,5477,5479,5481,5485-5503
+packages/server/src/server/agent/providers/omp/session-descriptor.test.ts
+  9e6de639c3b8f11d 16-51
+packages/server/src/server/daemon-e2e/agent-configs.ts
+  9e6de639c3b8f11d 65
+docs/floating-panels.md
+  9e6de639c3b8f11d 60,73-79
+packages/app/src/screens/new-workspace-picker-state.ts
+  9e6de639c3b8f11d 7-46,71,96
+packages/server/src/utils/checkout-git.commits.test.ts
+  9e6de639c3b8f11d 55,68,71,75,90,94,106,110-158
+packages/server/src/utils/checkout-git.test.ts
+  9e6de639c3b8f11d 395,398-406,408-409,416,429,435-456,1587-1625,1801-1814,1820-1828,1931,2828-2845
+packages/server/src/server/agent/providers/omp/test-utils/omp-harness.ts
+  9e6de639c3b8f11d 4,15-21,68-73,78,170-203,266-380,487
+packages/app/e2e/workspace-navigation-regression.spec.ts
+  9e6de639c3b8f11d 1-5,38,41,44-84,166-202,325-327,342,350,353,359,465,471,480
+packages/app/src/runtime/host-runtime.test.ts
+  9e6de639c3b8f11d 1533,1563-1565,1575,1943
+packages/app/src/browser-automation/handler.ts
+  9e6de639c3b8f11d 9-10
+packages/server/src/server/daemon-e2e/timeline-window.e2e.test.ts
+  9e6de639c3b8f11d 365-433
+packages/app/src/composer/draft/input-draft.ts
+  9e6de639c3b8f11d 1,24,60,81-103,105-108,110-115,117-125,127-129,137-139,261
+packages/app/src/git/checkout-status-cache.test.ts
+  9e6de639c3b8f11d 6-9,139-155
+packages/app/src/composer/input/state.ts
+  9e6de639c3b8f11d 3,49-60,92-134
+packages/app/src/runtime/daemon-start-service.ts
+  9e6de639c3b8f11d 6-10,58-63,66-78
+packages/app/src/workspace-recovery/use-workspace-recovery.ts
+  9e6de639c3b8f11d 7-11,35,64-68
+packages/app/src/composer/index.tsx
+  9e6de639c3b8f11d 6,103,124-132,425-436,749-785,830,845-846,856-857,862-863,1055,1065,1074-1075,1079,1158-1159,1275-1289,2028,2070-2074,2080-2084,2145,2193,2198-2200
+packages/server/src/server/agent/providers/codex-app-server-agent.ts
+  9e6de639c3b8f11d 3315,4068,4489,5637,6173,6177-6181
+packages/app/src/utils/notification-routing.test.ts
+  9e6de639c3b8f11d 59,62-63,99,102
+packages/server/src/server/agent/providers/omp/message-history.ts
+  9e6de639c3b8f11d 20,121
+packages/app/e2e/commit-diff-panel.spec.ts
+  9e6de639c3b8f11d 31-32,35-36,43-44
+packages/app/src/timeline/viewed-timeline-sync.test.ts
+  9e6de639c3b8f11d 177-180,190,216,378,384,667
+packages/server/src/server/agent/providers/pi/runtime.ts
+  9e6de639c3b8f11d 86
+packages/app/src/navigation/host-runtime-bootstrap.test.ts
+  9e6de639c3b8f11d 1,10-13,16,18,20,22,24,26-28,36,39-40
+packages/cli/src/commands/agent/index.ts
+  9e6de639c3b8f11d 17,43-45
+packages/app/src/screens/workspace/use-mounted-tab-set.test.ts
+  9e6de639c3b8f11d 52-70
+docs/design.md
+  9e6de639c3b8f11d 67-68
+packages/app/src/app/_layout.tsx
+  9e6de639c3b8f11d 69,150,152-153,379,913
+packages/server/src/server/agent/providers/omp/test-utils/fake-omp.ts
+  9e6de639c3b8f11d 416-421
+packages/app/src/hooks/use-agent-screen-state-machine.test.ts
+  9e6de639c3b8f11d 60,213,229,389-402
+packages/app/src/screens/settings/editor-section.tsx
+  9e6de639c3b8f11d 1-34
+packages/app/src/screens/workspace/workspace-pane-state.ts
+  9e6de639c3b8f11d 6
+packages/protocol/tests/validation/ws-outbound.test.ts
+  9e6de639c3b8f11d 141-199
+packages/app/src/components/ui/tooltip.tsx
+  9e6de639c3b8f11d 15,32,518-533,571
+packages/app/src/utils/file-mention-autocomplete.test.ts
+  9e6de639c3b8f11d 2-6,53-57
+packages/server/src/server/session/files/workspace-files-session.ts
+  9e6de639c3b8f11d 12-14,25,27,47,62-63,70-136,193
+packages/app/src/screens/settings-screen.tsx
+  9e6de639c3b8f11d 36,59-63,73,144,1158,1161-1167,1409-1410
+packages/app/src/git/query-keys.ts
+  9e6de639c3b8f11d 66-67,87
+packages/app/src/components/message.tsx
+  9e6de639c3b8f11d 1694-1716
+packages/app/src/stores/workspace-draft-submission-store.ts
+  9e6de639c3b8f11d 4
+packages/app/e2e/helpers/seed-client.ts
+  9e6de639c3b8f11d 147
+packages/app/src/attachments/use-workspace-file-drag-source.web.ts
+  9e6de639c3b8f11d 1-54
+packages/cli/src/commands/agent/run.test.ts
+  9e6de639c3b8f11d 75,77-78,82-83,87,91-106
+packages/server/src/server/agent/providers/claude/agent.test.ts
+  9e6de639c3b8f11d 16,587-592,694-783,1085-1153,1308
+packages/app/src/stores/workspace-layout-store.ts
+  9e6de639c3b8f11d 5,73,88,229,468,485-503,783-788,805-809,834-838,850-854,913,925-926,935
+packages/app/src/utils/notification-routing.ts
+  9e6de639c3b8f11d 2,32-33
+packages/server/src/server/agent/providers/pi/session-descriptor.ts
+  9e6de639c3b8f11d 81,84
+packages/app/src/subagents/track.tsx
+  9e6de639c3b8f11d 44,46-48
+packages/app/src/lib/overlay-root.ts
+  9e6de639c3b8f11d 8,26
+packages/cli/src/commands/agent/open.ts
+  9e6de639c3b8f11d 1-82
+packages/protocol/src/agent-types.ts
+  9e6de639c3b8f11d 341
+packages/server/src/server/workspace-service-port-registry.ts
+  9e6de639c3b8f11d 6-10,14,20-24,29-35,47,52,55,72-84,88-89,93,97-101,104-106,109,114,116,118-126,129-142,153-173,179-185,187-189,193-244
+packages/client/src/daemon-client.ts
+  9e6de639c3b8f11d 29-30,422,882,1003,1107-1110,1391,2283-2298,4107-4152,5399,5424,5604,5615-5618
+packages/app/src/composer/github/auto-attach.ts
+  9e6de639c3b8f11d 7,30-31,35,46-50,55-63,73-81,89,94,117,120-156,158-192,245-251,255-260,262,264-266,327-334
+packages/app/src/navigation/agent-route-resolution-view.tsx
+  9e6de639c3b8f11d 1-147
+nix/package.nix
+  9e6de639c3b8f11d 8,63-64,69,78-80,95
+packages/server/src/services/quota-fetcher/providers/claude.ts
+  9e6de639c3b8f11d 17,160,171,182,193
+packages/app/src/workspace-service-routes/store.test.ts
+  9e6de639c3b8f11d 1-47
+packages/app/src/desktop/host.ts
+  9e6de639c3b8f11d 126-129,176
+packages/app/src/file-pane/pane.tsx
+  9e6de639c3b8f11d 1-27,29-1025,1027-1089
+  8fac7d247b9b2c3d 28,1026
+packages/app/src/screens/workspace/workspace-desktop-tabs-row.tsx
+  9e6de639c3b8f11d 447,461-463,559,566,638-642,648,650,683,694-716,718-719,724-730,842,1188,1358-1362
+packages/protocol/src/binary-frames/file-transfer.ts
+  9e6de639c3b8f11d 17
+packages/server/src/server/agent/providers/omp/session-descriptor.ts
+  9e6de639c3b8f11d 83,86
+packages/app/src/screens/workspace/workspace-scripts-button.tsx
+  9e6de639c3b8f11d 1,4,6-15,24,29,32-36,38,40,58-61,83-89,92,95-98,100-113,116,122-123,133-134,138-155,159-164,167-180,183-206,209-215,218-227,234-244,246,248-286,288,290-304,307-330,354,356-360,386,388-392,401-405,412-418,428-435,441-443,448,450,452-488,505-519,521,523-529,551-556,558,587-626,642-667,717,719-723,826,830-837,862-867,869,871-873,875-884
+packages/app/src/utils/workspace-script-links.ts
+  9e6de639c3b8f11d 5-12,14-15,26,28,35-46,48-54,57,61-69,76,79-82,86-89,91
+packages/protocol/src/provider-manifest.ts
+  9e6de639c3b8f11d 155-160
+packages/app/e2e/helpers/new-workspace.ts
+  9e6de639c3b8f11d 1,293-299,361-370
+packages/app/src/components/material-file-icon.tsx
+  9e6de639c3b8f11d 1-15
+packages/server/src/server/agent/providers/pi/agent.ts
+  9e6de639c3b8f11d 95,177-178,328-329,624,651-655,659,678-709,714-725,727,1225,1285,1293,1324,1440,1622,1820-1823,1825-1840,1878-1882,2007,2250,2322-2324,2381-2385
+packages/app/src/hooks/use-agent-screen-state-machine.ts
+  9e6de639c3b8f11d 44,65,159,169-171
+packages/desktop/electron-builder.yml
+  9e6de639c3b8f11d 5-8
+packages/highlight/src/highlighter.ts
+  9e6de639c3b8f11d 1,5,25
+packages/cli/src/cli-surface.test.ts
+  9e6de639c3b8f11d 13,15-29,37-43
+packages/server/src/server/persisted-config.ts
+  9e6de639c3b8f11d 13,81
+packages/server/src/server/session/checkout/checkout-session.ts
+  9e6de639c3b8f11d 21-22,111,113,404-436,440,442
+packages/app/src/panels/panel-registry.ts
+  9e6de639c3b8f11d 2,13,22
+packages/app/src/screens/workspace/visible-agent-ids.ts
+  9e6de639c3b8f11d 2
+packages/app/src/stores/workspace-setup-store.ts
+  9e6de639c3b8f11d 3
+packages/app/src/screens/settings/appearance/apply-root-font.web.ts
+  9e6de639c3b8f11d 11-12
+packages/app/src/components/split-container.tsx
+  9e6de639c3b8f11d 58,79,938-942,948
+packages/app/e2e/viewed-agent-timelines.spec.ts
+  9e6de639c3b8f11d 6,75,81-84,86,89-90,92-94,101-103,108,121
+packages/server/src/server/agent/providers/opencode/test-utils/test-opencode-harness.ts
+  9e6de639c3b8f11d 92,106-108,112,126,171-173,217-219,261-263
+packages/app/e2e/workspace-agent-title-handoff.spec.ts
+  9e6de639c3b8f11d 3,47-89
+packages/protocol/src/agent-attention-notification.ts
+  9e6de639c3b8f11d 8,23,222
+packages/server/src/services/quota-fetcher/providers/grok.ts
+  9e6de639c3b8f11d 10-11,93
+packages/server/src/utils/worktree.ts
+  9e6de639c3b8f11d 158-161,920,928-936,1522-1548
+packages/app/src/stores/session-store-hooks/selectors.ts
+  9e6de639c3b8f11d 134-140
+packages/app/e2e/add-changed-file-to-chat.spec.ts
+  9e6de639c3b8f11d 1-49
+packages/app/src/attachments/workspace-file-drag.test.ts
+  9e6de639c3b8f11d 1-62
+packages/app/src/hooks/use-dictation.ts
+  9e6de639c3b8f11d 62,457
+packages/app/src/utils/file-mention-autocomplete.ts
+  9e6de639c3b8f11d 43-47,51
+packages/app/src/utils/workspace-script-links.test.ts
+  9e6de639c3b8f11d 20-24,28,32-44,48-49,51-54,56-73,77,85-94,96-101,105-106,108-124,127-143,145-146,149,151-162,164-167,169-170,174-179,181,183-186,188-190,194-201
+packages/app/e2e/worktree-restore.spec.ts
+  9e6de639c3b8f11d 47-50,59-71,81-92,95,265-310
+packages/app/src/file-pane/bar.tsx
+  9e6de639c3b8f11d 1-178
+packages/app/src/panels/draft-panel-descriptor.ts
+  9e6de639c3b8f11d 17,27
+packages/app/src/screens/workspace/workspace-tab-model.ts
+  9e6de639c3b8f11d 1
+packages/app/src/components/diff-stat.tsx
+  9e6de639c3b8f11d 7,19,21
+packages/protocol/src/messages.ts
+  9e6de639c3b8f11d 573,661,2150,2167-2212,2528-2530,2768-2769,3588,4629-4672,5220-5223,5618-5626
+packages/app/src/composer/focused-chat-target.ts
+  9e6de639c3b8f11d 1-48
+packages/app/src/hooks/use-dictation.shared.ts
+  9e6de639c3b8f11d 18
+packages/server/src/services/quota-fetcher/service.test.ts
+  9e6de639c3b8f11d 1202-1279
+packages/app/src/i18n/resources/ar.ts
+  9e6de639c3b8f11d 389-395,494,561-567,616-619,621-622,626,629-632,635-639,643,781-782,823,828,961-962,1501-1519,1525-1526,1617,1624-1627
+packages/server/src/server/websocket-server.ts
+  9e6de639c3b8f11d 1385-1386,2162-2164,2169,2172
+packages/app/src/screens/workspace/workspace-screen.tsx
+  9e6de639c3b8f11d 84-88,177-180,300,306,374,392-394,409,433-435,716,960,969,1765,1824-1834,1842,2396,2406,2445,2457,2571,2746-2747,2756-2777,2784-2786,2795,2797-2803,2947-2955,2958-2961,2994-2995,3182-3190,3199,3206,3292,3327,3343-3347,3352
+packages/app/src/panels/diff-panel.tsx
+  9e6de639c3b8f11d 1-409
+packages/app/src/styles/code-surface.ts
+  9e6de639c3b8f11d 3-6
+packages/app/src/timeline/viewed-timeline-sync.ts
+  9e6de639c3b8f11d 45
+packages/app/src/workspace-service-routes/store.ts
+  9e6de639c3b8f11d 1-50
+public-docs/cli.md
+  9e6de639c3b8f11d 34,40-42
+packages/app/src/git/use-working-diff.ts
+  9e6de639c3b8f11d 1-169
+packages/app/src/stores/workspace-layout-store.test.ts
+  9e6de639c3b8f11d 18,29,32,1179-1245,1709-1766
+packages/desktop/src/daemon/daemon-manager.ts
+  9e6de639c3b8f11d 22-25,420-424
+packages/app/src/file-pane/editor/extensions.web.ts
+  9e6de639c3b8f11d 1-87
+packages/app/src/stores/navigation-active-workspace-store/navigation.test.ts
+  9e6de639c3b8f11d 3
+packages/app/src/screens/workspace/workspace-tabs-types.ts
+  9e6de639c3b8f11d 1
+packages/desktop/src/agent-navigation.test.ts
+  9e6de639c3b8f11d 1-33
+packages/server/src/server/agent/providers/omp/history-mapper.test.ts
+  9e6de639c3b8f11d 159-211
+packages/server/src/server/agent/providers/omp/rpc-types.ts
+  9e6de639c3b8f11d 117,152
+packages/server/src/server/checkout-diff-manager.test.ts
+  9e6de639c3b8f11d 17-66,156-201
+packages/server/src/server/session/workspace-git-observer/workspace-git-observer-service.ts
+  9e6de639c3b8f11d 31-32,95-98,231-232
+packages/app/src/client-slash-commands/index.ts
+  9e6de639c3b8f11d 2
+packages/app/src/composer/actions.ts
+  9e6de639c3b8f11d 341
+docs/providers.md
+  9e6de639c3b8f11d 29,49
+packages/app/src/screens/workspace/use-mounted-tab-set.ts
+  9e6de639c3b8f11d 7,19,30,38-41,66,68
+packages/app/src/workspace-tabs/model.test.ts
+  9e6de639c3b8f11d 2,5,8,14-16
+packages/server/src/server/agent/providers/omp/provider-config.ts
+  9e6de639c3b8f11d 42-46
+packages/app/src/screens/new-workspace-screen.tsx
+  9e6de639c3b8f11d 1,5,91,109-110,1724-1728,1730-1739,1840,1856,1865,1877,1879,1885,1887,2212,2366,2374-2375,2390-2395
+packages/server/src/server/session/workspace-scripts/workspace-scripts-service.ts
+  9e6de639c3b8f11d 27,62,78,174
+packages/server/src/server/agent/timeline-projection.test.ts
+  9e6de639c3b8f11d 575-629
+packages/app/src/utils/host-routes.ts
+  9e6de639c3b8f11d 2,393-396,495
+packages/app/src/composer/github/auto-attach.test.tsx
+  9e6de639c3b8f11d 51,53,77-84,100-101,109,112,114,120-121,124,140-143,148-149,153,233-341
+packages/server/src/server/agent/providers/acp-agent.test.ts
+  9e6de639c3b8f11d 2332-2334,2348-2353,2372,2399,2414-2419,2443,2455,2470-2475,2481-2486,2504,2520-2525
+packages/app/src/hooks/sidebar-workspaces-view-model.test.ts
+  9e6de639c3b8f11d 474,488,493-511
+public-docs/claude-code.md
+  9e6de639c3b8f11d 3,11,13,15,17,19,21,23,25,27,32
+packages/server/src/server/workspace-service-port-allocator.test.ts
+  9e6de639c3b8f11d 1-174
+packages/app/src/git/use-diff-query.ts
+  9e6de639c3b8f11d 15,48,58-68
+packages/app/src/panels/agent-panel.tsx
+  9e6de639c3b8f11d 14,77,329,345,352,486,492,542,555,564,595-596,608-610,633-635,644-646,656-658,664-674,928,982-984,1050,1063,1164-1173,1182,1185-1194,1525-1529,1560,1572,1657-1663
+packages/desktop/scripts/smoke-packaged-desktop-app.js
+  9e6de639c3b8f11d 131-144,757-758,770
+packages/app/src/components/file-actions-menu.tsx
+  9e6de639c3b8f11d 1-185
+packages/app/src/composer/input/state.test.ts
+  9e6de639c3b8f11d 7,14-40,145-162
+packages/app/src/attachments/workspace-file-drag.ts
+  9e6de639c3b8f11d 1-55
+packages/app/src/timeline/timeline-fetch-policy.ts
+  9e6de639c3b8f11d 3
+packages/desktop/src/agent-navigation.ts
+  9e6de639c3b8f11d 1-40
+packages/server/src/server/agent/providers/omp/advisor-message.ts
+  9e6de639c3b8f11d 1-98
+packages/server/src/server/agent/providers/pi/test-utils/fake-pi.ts
+  9e6de639c3b8f11d 48-53,358-368
+packages/app/src/screens/workspace/workspace-pane-state.test.ts
+  9e6de639c3b8f11d 8
+packages/app/src/attachments/workspace-file.test.ts
+  9e6de639c3b8f11d 1-71
+packages/server/src/server/agent/timeline-projection.ts
+  9e6de639c3b8f11d 379-441,512-525
+packages/app/src/types/stream.test.ts
+  9e6de639c3b8f11d 1245,1461-1504
+packages/server/src/server/session/workspace-git-observer/workspace-git-observer-service.test.ts
+  9e6de639c3b8f11d 29,38-40,266-281,285-290,324-325
+packages/server/src/utils/checkout-git.ts
+  9e6de639c3b8f11d 1867-1870,1958-1963,2109-2114,2117,2125-2127,2135,2150,2576,2580,2590,2593-2596,2620-2630,2819-2821,3031,3036,3039-3040,3076-3077,3219-3228,3238-3239,3257-3264,3272-3273,3288,3296,3308-3313,3324-3330
+packages/app/src/stores/draft-store/index.ts
+  9e6de639c3b8f11d 4-5,43-46,52-56,246,354-379,412
+packages/app/src/contexts/session-context.tsx
+  9e6de639c3b8f11d 32,159-187,534,536-547
+packages/app/src/components/markdown/renderer.tsx
+  9e6de639c3b8f11d 574-593
+packages/app/src/stores/draft-store/state.test.ts
+  9e6de639c3b8f11d 74-113
+packages/server/src/server/agent/providers/pi/agent.test.ts
+  9e6de639c3b8f11d 16,59-87,606,611-614,624-655,778,781-815,817-828,849-854,898-900
+packages/app/src/hooks/use-sidebar-workspaces-list.ts
+  9e6de639c3b8f11d 3,91,93
+packages/highlight/src/syntax-roles.ts
+  9e6de639c3b8f11d 1-57
+packages/server/src/server/worktree-bootstrap.ts
+  9e6de639c3b8f11d 19-20,33,723,735,747,751,762,781-789,796-804,886,917,929
+packages/app/src/workspace-recovery/model.ts
+  9e6de639c3b8f11d 37-52
+packages/app/src/composer/draft/workspace-tab.tsx
+  9e6de639c3b8f11d 2,53,668-672,754,769,781-785
+docs/development.md
+  9e6de639c3b8f11d 281-289,386,393,404-407
+packages/server/src/services/quota-fetcher/providers/cursor.ts
+  9e6de639c3b8f11d 12-13,164
+packages/app/src/stores/workspace-layout-actions.ts
+  9e6de639c3b8f11d 2,197,288-290,292-295,1662,1666,1669,1794,1806,1813
+packages/server/src/server/agent/import-sessions.test.ts
+  9e6de639c3b8f11d 245,276-317
+packages/highlight/package.json
+  9e6de639c3b8f11d 30
+packages/server/src/services/quota-fetcher/usage.test.ts
+  9e6de639c3b8f11d 1-51
+docs/timeline-sync.md
+  9e6de639c3b8f11d 54-63,70,73-74,90-97
+packages/app/src/types/stream.ts
+  9e6de639c3b8f11d 89,243,252,267,358,360,370-375,381,849-858
+packages/app/src/components/sidebar/use-limited-sidebar-group.ts
+  9e6de639c3b8f11d 1-15
+package.json
+  9e6de639c3b8f11d 135-136
+packages/app/src/agent-stream/view.tsx
+  9e6de639c3b8f11d 102
+packages/app/src/stores/draft-store/state.ts
+  9e6de639c3b8f11d 6-11,91-96,127-131
+packages/app/src/panels/register-panels.ts
+  9e6de639c3b8f11d 3,25
+packages/app/src/timeline/session-stream-reducers.ts
+  9e6de639c3b8f11d 315,325-345,367,371-384,386-387,391,394-395,397-404,411,414-418,421,817-821,836-852,856,859-865,893-911,993-996
+  8fac7d247b9b2c3d 388-390,392-393,396
+packages/server/src/server/agent/providers/omp/agent.test.ts
+  9e6de639c3b8f11d 4,33-67,112-123,138-195,273-347,407
+packages/app/src/file-pane/conflict-alert.tsx
+  9e6de639c3b8f11d 1-34
+packages/app/src/stores/navigation-active-workspace-store/navigation.ts
+  9e6de639c3b8f11d 14
+packages/app/src/components/explorer-sidebar.tsx
+  9e6de639c3b8f11d 40-44,419,422-424,430,451-534
+packages/protocol/src/paseo-config-schema.test.ts
+  9e6de639c3b8f11d 36-57
+packages/server/src/server/agent/import-sessions.ts
+  9e6de639c3b8f11d 124-129,132,336,339-340,342,346-354,359,366,369
+packages/app/src/runtime/host-runtime.ts
+  9e6de639c3b8f11d 43,1354,1588,1595,1599,1601-1602,1901,1904,1933,1942-1945,1963-1977,1981,2016,2027-2031,2033-2039,2042,2044,2048
+packages/app/src/components/left-sidebar.tsx
+  9e6de639c3b8f11d 344-401,555-560,1064-1065,1076-1098
+packages/desktop/src/integrations/cli-install/index.ts
+  9e6de639c3b8f11d 2
+packages/server/src/server/session.ts
+  9e6de639c3b8f11d 33,55-56,936,1961-1967,2440,2444-2445,2458-2461,3196,3199-3207,4425,5719,5722-5724,5728-5737,5742-5743,5769,6350
+nix/npm-deps.hash
+  9e6de639c3b8f11d 1
+packages/server/src/server/agent/mcp-server.test.ts
+  9e6de639c3b8f11d 5635
+packages/server/src/server/session/checkout/checkout-session.test.ts
+  9e6de639c3b8f11d 39,48,53-64,66,70,467
+packages/app/src/types/host-connection.ts
+  9e6de639c3b8f11d 78-100
+packages/app/e2e/file-editing.spec.ts
+  9e6de639c3b8f11d 1-333
+packages/desktop/src/daemon/daemon-manager.test.ts
+  9e6de639c3b8f11d 6,455-458
+packages/app/src/i18n/resources/en.ts
+  9e6de639c3b8f11d 388-394,493,563-568,613-616,618-619,623,626-629,632-636,640,791-792,833,838,971-972,1512-1530,1536-1537,1628,1635-1638
+packages/protocol/src/agent-deep-link.ts
+  9e6de639c3b8f11d 1-62
+packages/app/e2e/new-workspace.spec.ts
+  9e6de639c3b8f11d 20,26-27,36,40,199,221-227,823-914
+packages/app/src/utils/prepare-workspace-tab.ts
+  9e6de639c3b8f11d 2
+packages/desktop/bin/paseo
+  9e6de639c3b8f11d 49
+packages/app/src/attachments/workspace-file.ts
+  9e6de639c3b8f11d 1-106
+docs/agent-lifecycle.md
+  9e6de639c3b8f11d 111-117
+docs/data-model.md
+  9e6de639c3b8f11d 193-196
+packages/server/src/server/agent/agent-prompt.ts
+  9e6de639c3b8f11d 201
+packages/server/src/server/agent/providers/omp/cli-runtime.test.ts
+  9e6de639c3b8f11d 99-115
+packages/server/src/server/workspace-service-port-allocator.ts
+  9e6de639c3b8f11d 1-129
+docs/expo-router.md
+  9e6de639c3b8f11d 76-88
+packages/app/src/composer/input/input.tsx
+  9e6de639c3b8f11d 73,1217-1222,1225-1228,1312
+packages/app/src/workspace-recovery/model.test.ts
+  9e6de639c3b8f11d 2,32-50
+packages/highlight/src/__tests__/parsers.test.ts
+  9e6de639c3b8f11d 2-7,68-74
+packages/app/src/composer/focused-chat-target.test.ts
+  9e6de639c3b8f11d 1-49
+packages/app/src/screens/workspace/workspace-tab-presentation.tsx
+  9e6de639c3b8f11d 15,22-23,78,80,88-89,97,103,220-222,318-322
+packages/app/src/screens/new-workspace-picker-state.test.ts
+  9e6de639c3b8f11d 5-6,32-38,40-46,50-53,102-110,139,142-143,147,151,155-158,160-163,166-171,174-176,178,181-186,189-191,193,196,198-200,202-215
+packages/app/src/hooks/sidebar-workspaces-view-model.ts
+  9e6de639c3b8f11d 480-496,520
+packages/app/src/stores/session-store-hooks/selectors.test.ts
+  9e6de639c3b8f11d 7,105-171
+packages/protocol/src/paseo-config-schema.ts
+  9e6de639c3b8f11d 3-23,51,117
+packages/server/src/server/persisted-config.test.ts
+  9e6de639c3b8f11d 128-137
+packages/app/src/screens/workspace/workspace-tab-menu.ts
+  9e6de639c3b8f11d 147-149
+packages/server/src/server/worktree-core.posix.test.ts
+  9e6de639c3b8f11d 624-669
+packages/protocol/src/agent-attention-notification.test.ts
+  9e6de639c3b8f11d 9-24,29,39,50,67,78,87
+packages/server/src/terminal/terminal.ts
+  9e6de639c3b8f11d 311-312,316-320
+packages/server/src/server/agent/providers/opencode-agent.test.ts
+  9e6de639c3b8f11d 94-127,160-182,1904-1930,1932-1933,1935-1937,1939-1949,1951-1972,1974-1976,1978-1979,1981-1988,2178,2293,2414,2559,2610-2787,2889-2895
+docs/terminal-activity.md
+  9e6de639c3b8f11d 110
+packages/cli/src/commands/agent/run.ts
+  9e6de639c3b8f11d 17,42,44-53,56,118,120-122,124-126,136-154,307-313,315-317,321,324-325,329-338,341-342,346-357,360-361,371,374-385,539,546-547,553,557,565-566
+packages/server/src/server/websocket-server.notifications.test.ts
+  9e6de639c3b8f11d 17-18,90,229,247,262
+packages/app/src/panels/panel-instance-attributes.ts
+  9e6de639c3b8f11d 1-118
+packages/server/src/server/agent/providers/acp-agent.ts
+  9e6de639c3b8f11d 1477,1483,2690,2702-2707
+packages/app/src/git/diff-folder-row.tsx
+  9e6de639c3b8f11d 11-17,89-94,108-109,127-130
+packages/app/src/git/diff-pane.tsx
+  8fac7d247b9b2c3d 960-961,2755-2756
+  9e6de639c3b8f11d 49,56,61-65,90-93,108-109,117,129,133-139,218,230-233,964,973-976,981-987,991,1000,1017-1041,1118,1160,1164-1182,1187-1209,1214,1418-1419,1438,1459-1460,1464-1474,1486,1488,1507-1598,1694-1695,1699,1702,1706,1718-1719,1744,1747-1750,1752,1757,1761,1763-1764,1771,1779-1784,1802-1803,1815,1819,1827,1832,1838,1841,1856-1859,1862-1868,1870,1872,1877-1887,1998-2003,2008-2015,2035-2043,2054-2067,2076-2077,2085-2102,2135,2145-2146,2159-2161,2181-2194,2196-2213,2229,2231,2263-2296,2299,2434,2440-2446,2480-2487,2518,2529,2619,2623-2626,2655-2661,2689-2752,2764-2765,2811,2814-2819,2839-2847,2849-2853,2855,2858-2865,2919-2924,2991,2993,2995,3028-3042,3056,3060-3061,3064-3067,3079-3083,3086,3089-3090,3172-3177,3179-3184,3201,3333-3344,3433-3434
+packages/cli/tests/05-agent-run.test.ts
+  9e6de639c3b8f11d 61-62,249-269
+packages/app/src/screens/workspace/workspace-tab-model.test.ts
+  9e6de639c3b8f11d 3
+packages/app/src/components/archived-agent-callout.tsx
+  9e6de639c3b8f11d 12,25,37,41,50-66,110-112,117-120
+packages/app/src/file-pane/live-file.ts
+  9e6de639c3b8f11d 1-93
+packages/app/src/timeline/session-stream-reducers.test.ts
+  9e6de639c3b8f11d 480-555,679,700,709-744,1064,1085,1088,1113,1117,1150,1159,1178-1185,1202,1205,1230-1239,1247,1250,1288-1347,1351,1390,1425,1429,1448,1461
+public-docs/worktrees.md
+  9e6de639c3b8f11d 164-206,274
+packages/app/src/navigation/host-runtime-bootstrap.ts
+  9e6de639c3b8f11d 2-6,19,25,30-31
+packages/server/src/server/agent/providers/omp/agent.ts
+  9e6de639c3b8f11d 4,95,152,159-168,199,217-224,536,921,923,929,931,943,957,1005,1014,1016,1033-1038,1047,1051,1182,1186,1215,1342-1366,1368-1375,1383,1386,1402,1800-1806,1839,1842,1927-1934,1936-1938,1943,1945,2061-2063,2069,2074,2092,2111,2176,2178,2204,2253,2275,2316,2357
+packages/app/src/panels/setup-panel.tsx
+  9e6de639c3b8f11d 16,40,51,61
+packages/server/src/server/checkout-diff-manager.ts
+  9e6de639c3b8f11d 10-14,46-57,61,67,73,75,78,80,82-89,91-109,178,186-188,271,290,292-296,298,301-305
+packages/app/src/composer/attachments/submit.ts
+  9e6de639c3b8f11d 12,53-54
+packages/app/src/i18n/resources/fr.ts
+  9e6de639c3b8f11d 393-399,498,566-572,622-625,627-628,632,635-638,641-645,649,811-812,853,858,991-992,1547-1565,1571-1572,1663,1670-1673
+packages/app/src/components/compact-explorer-sidebar-host-state.ts
+  9e6de639c3b8f11d 1
+packages/app/src/screens/workspace/workspace-file-open-command.test.ts
+  8fac7d247b9b2c3d 2
+packages/app/src/panels/provider-subagent-panel.tsx
+  9e6de639c3b8f11d 52
+packages/server/src/server/daemon-e2e/pi.real.e2e.test.ts
+  9e6de639c3b8f11d 15,110,123,142-186,648-709
+packages/app/src/panels/browser-panel.tsx
+  9e6de639c3b8f11d 45,48,50
+packages/app/src/file-pane/editor/model.test.ts
+  9e6de639c3b8f11d 1-252
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.0",
+  "base_commit_sha": "b98abc91664a318aad92062035f5f56f4f313b0a",
+  "prompts": {
+    "044fccf5de3e0367": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8cfb-8745-74e1-84ed-d60592b1a937",
+        "model": "unknown"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 4148,
+      "total_deletions": 386,
+      "accepted_lines": 12,
+      "overriden_lines": 10
+    },
+    "8fac7d247b9b2c3d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f892a-16da-7cc3-9d21-35874ec6f795",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 4619,
+      "total_deletions": 1317,
+      "accepted_lines": 4459,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/af058218f85819ce0bfc73288091c3d4ff5eb415f46cfe0145dbb0853ad39df9"
+    },
+    "9e6de639c3b8f11d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8de9-8a0b-7061-b906-ec93583348b6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 35144,
+      "total_deletions": 10730,
+      "accepted_lines": 20176,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/6c8fa8048337e351ca0520f68f3fa156298eeb858a4d7dec6bde8157f9798972"
+    }
+  }
+}
