@@ -3,7 +3,13 @@ import type { AgentAttentionNotificationPayload } from "@getpaseo/protocol/agent
 export function shouldShowAgentAttentionNotification(input: {
   reason: "finished" | "error" | "permission";
   notification?: AgentAttentionNotificationPayload;
+  goalArchivedAt?: Date | string | null;
 }): boolean {
+  const isGoalNotification =
+    input.reason === "finished" || input.notification?.data.goalStatus !== undefined;
+  if (input.goalArchivedAt && isGoalNotification) {
+    return false;
+  }
   if (input.reason !== "error") {
     return true;
   }

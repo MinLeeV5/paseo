@@ -375,6 +375,10 @@ type SubscribeCheckoutDiffPayload = Extract<
   { type: "subscribe_checkout_diff_response" }
 >["payload"];
 type CheckoutDiffPayload = Omit<SubscribeCheckoutDiffPayload, "subscriptionId">;
+type AgentSessionChangesSubscribePayload = Extract<
+  SessionOutboundMessage,
+  { type: "agent.session_changes.subscribe.response" }
+>["payload"];
 type CheckoutCommitPayload = CheckoutCommitResponse["payload"];
 type CheckoutMergePayload = CheckoutMergeResponse["payload"];
 type CheckoutMergeFromBasePayload = CheckoutMergeFromBaseResponse["payload"];
@@ -1101,6 +1105,15 @@ export class DaemonClient {
     {
       cwd: string;
       compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
+    }
+  >();
+  private agentSessionChangesSubscriptions = new Map<
+    string,
+    {
+      agentId: string;
+      mode: "working_tree" | "session";
+      turnId?: string | null;
+      ignoreWhitespace?: boolean;
     }
   >();
   private terminalDirectorySubscriptions = new Map<string, { cwd: string; workspaceId?: string }>();
@@ -2265,6 +2278,22 @@ export class DaemonClient {
     }
   }
 
+  private resubscribeAgentSessionChangesSubscriptions(): void {
+    for (const [subscriptionId, subscription] of this.agentSessionChangesSubscriptions) {
+      this.sendSessionMessage({
+        type: "agent.session_changes.subscribe.request",
+        subscriptionId,
+        agentId: subscription.agentId,
+        mode: subscription.mode,
+        ...(Object.prototype.hasOwnProperty.call(subscription, "turnId")
+          ? { turnId: subscription.turnId }
+          : null),
+        ignoreWhitespace: subscription.ignoreWhitespace,
+        requestId: this.createRequestId(),
+      });
+    }
+  }
+
   private resubscribeTerminalDirectorySubscriptions(): void {
     if (this.terminalDirectorySubscriptions.size === 0) {
       return;
@@ -2410,6 +2439,20 @@ export class DaemonClient {
     if (!payload.accepted) {
       throw new Error(payload.error ?? "detachAgent rejected");
     }
+  }
+
+  async archiveAgentGoal(agentId: string): Promise<{ archivedAt: string }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.goal.archive.response">({
+        message: {
+          type: "agent.goal.archive.request",
+          agentId,
+        },
+      });
+    if (!payload.accepted || !payload.archivedAt) {
+      throw new Error(payload.error ?? "archiveAgentGoal rejected");
+    }
+    return { archivedAt: payload.archivedAt };
   }
 
   async updateAgent(
@@ -3510,6 +3553,57 @@ export class DaemonClient {
     this.checkoutDiffSubscriptions.delete(subscriptionId);
     this.sendSessionMessage({
       type: "unsubscribe_checkout_diff_request",
+      subscriptionId,
+    });
+  }
+
+  async subscribeAgentSessionChanges(
+    input: {
+      agentId: string;
+      mode: "working_tree" | "session";
+      turnId?: string | null;
+      ignoreWhitespace?: boolean;
+    },
+    options?: { subscriptionId?: string; requestId?: string },
+  ): Promise<AgentSessionChangesSubscribePayload> {
+    const subscriptionId = options?.subscriptionId ?? crypto.randomUUID();
+    const normalized = {
+      agentId: input.agentId,
+      mode: input.mode,
+      ...(Object.prototype.hasOwnProperty.call(input, "turnId") ? { turnId: input.turnId } : null),
+      ...(input.ignoreWhitespace === true ? { ignoreWhitespace: true } : null),
+    };
+    const previousSubscription = this.agentSessionChangesSubscriptions.get(subscriptionId) ?? null;
+    this.agentSessionChangesSubscriptions.set(subscriptionId, normalized);
+    const resolvedRequestId = this.createRequestId(options?.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.session_changes.subscribe.request",
+      subscriptionId,
+      ...normalized,
+      requestId: resolvedRequestId,
+    });
+    try {
+      return await this.sendCorrelatedRequest({
+        requestId: resolvedRequestId,
+        message,
+        responseType: "agent.session_changes.subscribe.response",
+        options: { skipQueue: true },
+        selectPayload: (payload) => (payload.subscriptionId === subscriptionId ? payload : null),
+      });
+    } catch (error) {
+      if (previousSubscription) {
+        this.agentSessionChangesSubscriptions.set(subscriptionId, previousSubscription);
+      } else {
+        this.agentSessionChangesSubscriptions.delete(subscriptionId);
+      }
+      throw error;
+    }
+  }
+
+  unsubscribeAgentSessionChanges(subscriptionId: string): void {
+    this.agentSessionChangesSubscriptions.delete(subscriptionId);
+    this.sendSessionMessage({
+      type: "agent.session_changes.unsubscribe.request",
       subscriptionId,
     });
   }
@@ -5600,6 +5694,7 @@ export class DaemonClient {
           this.updateConnectionState({ status: "connected" }, { event: "HELLO_SERVER_INFO" });
           this.startLivenessHeartbeat();
           this.resubscribeCheckoutDiffSubscriptions();
+          this.resubscribeAgentSessionChangesSubscriptions();
           this.resubscribeTerminalDirectorySubscriptions();
           this.resubscribeFileSubscriptions();
           this.flushPendingSendQueue();

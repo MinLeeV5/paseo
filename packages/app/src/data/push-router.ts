@@ -18,16 +18,24 @@ type SubscribeCheckoutDiffResponseMessage = Extract<
   SessionOutboundMessage,
   { type: "subscribe_checkout_diff_response" }
 >;
+type AgentSessionChangesSubscribeResponseMessage = Extract<
+  SessionOutboundMessage,
+  { type: "agent.session_changes.subscribe.response" }
+>;
 type StatusMessage = Extract<SessionOutboundMessage, { type: "status" }>;
 type TerminalsChangedMessage = Extract<SessionOutboundMessage, { type: "terminals_changed" }>;
 type ServerDataEventType =
   | "providers_snapshot_update"
   | "checkout_diff_update"
   | "subscribe_checkout_diff_response"
+  | "agent.session_changes.update"
+  | "agent.session_changes.subscribe.response"
   | "status"
   | "terminals_changed";
 type CheckoutDiffResponsePayload = SubscribeCheckoutDiffResponseMessage["payload"];
 type CheckoutDiffCachePayload = Omit<CheckoutDiffResponsePayload, "subscriptionId">;
+type AgentSessionChangesResponsePayload = AgentSessionChangesSubscribeResponseMessage["payload"];
+type AgentSessionChangesCachePayload = Omit<AgentSessionChangesResponsePayload, "subscriptionId">;
 type ListTerminalsPayload = ListTerminalsResponse["payload"];
 
 interface CheckoutDiffCompare {
@@ -45,6 +53,17 @@ interface CheckoutDiffRoute {
   compare: CheckoutDiffCompare;
 }
 
+interface AgentSessionChangesRoute {
+  domain: "agentSessionChanges";
+  enabled: boolean;
+  serverId: string;
+  subscriptionId: string;
+  agentId: string;
+  mode: "working_tree" | "session";
+  turnId?: string | null;
+  ignoreWhitespace: boolean;
+}
+
 interface WorkspaceTerminalsRoute {
   domain: "workspaceTerminals";
   enabled: boolean;
@@ -53,7 +72,7 @@ interface WorkspaceTerminalsRoute {
   workspaceId?: string;
 }
 
-type ServerDataRoute = CheckoutDiffRoute | WorkspaceTerminalsRoute;
+type ServerDataRoute = CheckoutDiffRoute | AgentSessionChangesRoute | WorkspaceTerminalsRoute;
 
 export interface ServerDataQueryMeta extends Record<string, unknown> {
   serverData: ServerDataRoute;
@@ -72,6 +91,16 @@ interface ServerDataPushClient {
     options: { subscriptionId: string; requestId?: string },
   ): Promise<CheckoutDiffResponsePayload>;
   unsubscribeCheckoutDiff(subscriptionId: string): void;
+  subscribeAgentSessionChanges(
+    input: {
+      agentId: string;
+      mode: "working_tree" | "session";
+      turnId?: string | null;
+      ignoreWhitespace?: boolean;
+    },
+    options: { subscriptionId: string; requestId?: string },
+  ): Promise<AgentSessionChangesResponsePayload>;
+  unsubscribeAgentSessionChanges(subscriptionId: string): void;
   subscribeTerminals(input: { cwd: string; workspaceId?: string }): void;
   unsubscribeTerminals(input: { cwd: string; workspaceId?: string }): void;
 }
@@ -84,6 +113,7 @@ interface PushRouterInput {
 
 interface ActiveServerDataSubscriptions {
   checkoutDiff: Map<string, CheckoutDiffRoute>;
+  agentSessionChanges: Map<string, AgentSessionChangesRoute>;
   workspaceTerminals: Map<string, WorkspaceTerminalsRoute>;
 }
 
@@ -114,6 +144,14 @@ const RECONNECT_REPAIR_POLICIES: ReconnectRepairPolicy[] = [
     },
   },
   {
+    domain: "agentSessionChanges",
+    invalidate: ({ queryClient, serverId }) => {
+      void queryClient.invalidateQueries({
+        predicate: (query) => isQueryForServer(query.queryKey, "agentSessionChanges", serverId),
+      });
+    },
+  },
+  {
     domain: "workspaceTerminals",
     invalidate: ({ queryClient, serverId }) => {
       void queryClient.invalidateQueries({
@@ -139,6 +177,29 @@ export function checkoutDiffPushRoute(input: {
       subscriptionId: input.subscriptionId,
       cwd: input.cwd,
       compare: input.compare,
+    },
+  };
+}
+
+export function agentSessionChangesPushRoute(input: {
+  enabled: boolean;
+  serverId: string;
+  subscriptionId: string;
+  agentId: string;
+  mode: "working_tree" | "session";
+  turnId?: string | null;
+  ignoreWhitespace: boolean;
+}): ServerDataQueryMeta {
+  return {
+    serverData: {
+      domain: "agentSessionChanges",
+      enabled: input.enabled,
+      serverId: input.serverId,
+      subscriptionId: input.subscriptionId,
+      agentId: input.agentId,
+      mode: input.mode,
+      ...(Object.prototype.hasOwnProperty.call(input, "turnId") ? { turnId: input.turnId } : null),
+      ignoreWhitespace: input.ignoreWhitespace,
     },
   };
 }
@@ -195,12 +256,14 @@ export function applyProvidersSnapshotUpdate(input: {
 
 export function mountServerDataPushRouter(input: PushRouterInput): () => void {
   const activeCheckoutDiffSubscriptions = new Map<string, CheckoutDiffRoute>();
+  const activeAgentSessionChangesSubscriptions = new Map<string, AgentSessionChangesRoute>();
   const activeTerminalSubscriptions = new Map<string, WorkspaceTerminalsRoute>();
   let disposed = false;
 
   function reconcileSubscriptions(
     fallbackActive: ActiveServerDataSubscriptions = {
       checkoutDiff: activeCheckoutDiffSubscriptions,
+      agentSessionChanges: activeAgentSessionChangesSubscriptions,
       workspaceTerminals: activeTerminalSubscriptions,
     },
   ): void {
@@ -209,10 +272,12 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
     }
 
     const desiredCheckoutDiffSubscriptions = new Map<string, CheckoutDiffRoute>();
+    const desiredAgentSessionChangesSubscriptions = new Map<string, AgentSessionChangesRoute>();
     const desiredTerminalSubscriptions = new Map<string, WorkspaceTerminalsRoute>();
     for (const query of input.queryClient.getQueryCache().getAll()) {
       const route = getActiveServerDataRoute(query, input.serverId, {
         checkoutDiff: fallbackActive.checkoutDiff,
+        agentSessionChanges: fallbackActive.agentSessionChanges,
         workspaceTerminals: fallbackActive.workspaceTerminals,
       });
       if (!route) {
@@ -222,6 +287,10 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
         desiredCheckoutDiffSubscriptions.set(route.subscriptionId, route);
         continue;
       }
+      if (route.domain === "agentSessionChanges") {
+        desiredAgentSessionChangesSubscriptions.set(route.subscriptionId, route);
+        continue;
+      }
       desiredTerminalSubscriptions.set(workspaceTerminalSubscriptionKey(route), route);
     }
 
@@ -229,6 +298,12 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
       active: activeCheckoutDiffSubscriptions,
       client: input.client,
       desired: desiredCheckoutDiffSubscriptions,
+      serverId: input.serverId,
+    });
+    reconcileAgentSessionChangesSubscriptions({
+      active: activeAgentSessionChangesSubscriptions,
+      client: input.client,
+      desired: desiredAgentSessionChangesSubscriptions,
       serverId: input.serverId,
     });
     reconcileTerminalSubscriptions({
@@ -241,9 +316,11 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
   function resetSubscriptionsAfterReconnect(): void {
     const fallbackActive = {
       checkoutDiff: new Map(activeCheckoutDiffSubscriptions),
+      agentSessionChanges: new Map(activeAgentSessionChangesSubscriptions),
       workspaceTerminals: new Map(activeTerminalSubscriptions),
     };
     activeCheckoutDiffSubscriptions.clear();
+    activeAgentSessionChangesSubscriptions.clear();
     activeTerminalSubscriptions.clear();
     reconcileSubscriptions(fallbackActive);
   }
@@ -252,6 +329,7 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
     if (
       !shouldReconcileSubscriptionsForCacheEvent(event, input.serverId, {
         checkoutDiff: activeCheckoutDiffSubscriptions,
+        agentSessionChanges: activeAgentSessionChangesSubscriptions,
         workspaceTerminals: activeTerminalSubscriptions,
       })
     ) {
@@ -288,9 +366,54 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
       });
     },
   );
+  const unsubscribeAgentSessionChangesUpdate = input.client.on(
+    "agent.session_changes.update",
+    (message) => {
+      applyAgentSessionChangesPayload({
+        activeAgentSessionChangesSubscriptions,
+        queryClient: input.queryClient,
+        serverId: input.serverId,
+        subscriptionId: message.payload.subscriptionId,
+        payload: {
+          agentId: message.payload.agentId,
+          cwd: message.payload.cwd,
+          mode: message.payload.mode,
+          baselineAvailable: message.payload.baselineAvailable,
+          turns: message.payload.turns ?? [],
+          selectedTurnId: message.payload.selectedTurnId ?? null,
+          files: orderCheckoutDiffFiles(message.payload.files),
+          error: message.payload.error,
+          requestId: `subscription:${message.payload.subscriptionId}`,
+        },
+      });
+    },
+  );
+  const unsubscribeAgentSessionChangesResponse = input.client.on(
+    "agent.session_changes.subscribe.response",
+    (message) => {
+      applyAgentSessionChangesPayload({
+        activeAgentSessionChangesSubscriptions,
+        queryClient: input.queryClient,
+        serverId: input.serverId,
+        subscriptionId: message.payload.subscriptionId,
+        payload: {
+          agentId: message.payload.agentId,
+          cwd: message.payload.cwd,
+          mode: message.payload.mode,
+          baselineAvailable: message.payload.baselineAvailable,
+          turns: message.payload.turns ?? [],
+          selectedTurnId: message.payload.selectedTurnId ?? null,
+          files: orderCheckoutDiffFiles(message.payload.files),
+          error: message.payload.error,
+          requestId: message.payload.requestId,
+        },
+      });
+    },
+  );
   const unsubscribeTerminalsChanged = input.client.on("terminals_changed", (message) => {
     applyTerminalsChanged({
       activeCheckoutDiffSubscriptions,
+      activeAgentSessionChangesSubscriptions,
       activeTerminalSubscriptions,
       queryClient: input.queryClient,
       serverId: input.serverId,
@@ -317,11 +440,17 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
     unsubscribeDaemonConfig();
     unsubscribeCheckoutDiffUpdate();
     unsubscribeCheckoutDiffResponse();
+    unsubscribeAgentSessionChangesUpdate();
+    unsubscribeAgentSessionChangesResponse();
     unsubscribeTerminalsChanged();
     for (const subscriptionId of activeCheckoutDiffSubscriptions.keys()) {
       unsubscribeCheckoutDiff(input.client, subscriptionId);
     }
     activeCheckoutDiffSubscriptions.clear();
+    for (const subscriptionId of activeAgentSessionChangesSubscriptions.keys()) {
+      unsubscribeAgentSessionChanges(input.client, subscriptionId);
+    }
+    activeAgentSessionChangesSubscriptions.clear();
     for (const route of activeTerminalSubscriptions.values()) {
       input.client.unsubscribeTerminals(workspaceTerminalSubscriptionInput(route));
     }
@@ -361,6 +490,54 @@ function reconcileCheckoutDiffSubscriptions(input: {
         console.error("[server-data] subscribeCheckoutDiff failed", {
           serverId: input.serverId,
           cwd: desired.cwd,
+          error,
+        });
+      });
+  }
+}
+
+function reconcileAgentSessionChangesSubscriptions(input: {
+  active: Map<string, AgentSessionChangesRoute>;
+  client: ServerDataPushClient;
+  desired: Map<string, AgentSessionChangesRoute>;
+  serverId: string;
+}): void {
+  for (const [subscriptionId, current] of input.active) {
+    const desired = input.desired.get(subscriptionId);
+    if (desired && areAgentSessionChangesRoutesEqual(current, desired)) {
+      continue;
+    }
+    unsubscribeAgentSessionChanges(input.client, subscriptionId);
+    input.active.delete(subscriptionId);
+  }
+
+  for (const [subscriptionId, desired] of input.desired) {
+    if (input.active.has(subscriptionId)) {
+      continue;
+    }
+    input.active.set(subscriptionId, desired);
+    void input.client
+      .subscribeAgentSessionChanges(
+        {
+          agentId: desired.agentId,
+          mode: desired.mode,
+          ...(Object.prototype.hasOwnProperty.call(desired, "turnId")
+            ? { turnId: desired.turnId }
+            : null),
+          ignoreWhitespace: desired.ignoreWhitespace,
+        },
+        {
+          subscriptionId,
+          requestId: `push-router:${input.serverId}:${subscriptionId}`,
+        },
+      )
+      .catch((error) => {
+        if (areAgentSessionChangesRoutesEqual(input.active.get(subscriptionId), desired)) {
+          input.active.delete(subscriptionId);
+        }
+        console.error("[server-data] subscribeAgentSessionChanges failed", {
+          serverId: input.serverId,
+          agentId: desired.agentId,
           error,
         });
       });
@@ -472,8 +649,36 @@ function setCheckoutDiffPayload(input: {
   }
 }
 
+function applyAgentSessionChangesPayload(input: {
+  activeAgentSessionChangesSubscriptions: Map<string, AgentSessionChangesRoute>;
+  queryClient: QueryClient;
+  serverId: string;
+  subscriptionId: string;
+  payload: AgentSessionChangesCachePayload;
+}): void {
+  for (const query of input.queryClient.getQueryCache().getAll()) {
+    const route =
+      getServerDataRoute(query) ??
+      getActiveAgentSessionChangesRouteForQueryKey({
+        active: input.activeAgentSessionChangesSubscriptions,
+        queryKey: query.queryKey,
+        serverId: input.serverId,
+      });
+    if (
+      !route ||
+      route.domain !== "agentSessionChanges" ||
+      route.serverId !== input.serverId ||
+      route.subscriptionId !== input.subscriptionId
+    ) {
+      continue;
+    }
+    input.queryClient.setQueryData<AgentSessionChangesCachePayload>(query.queryKey, input.payload);
+  }
+}
+
 function applyTerminalsChanged(input: {
   activeCheckoutDiffSubscriptions: Map<string, CheckoutDiffRoute>;
+  activeAgentSessionChangesSubscriptions: Map<string, AgentSessionChangesRoute>;
   activeTerminalSubscriptions: Map<string, WorkspaceTerminalsRoute>;
   queryClient: QueryClient;
   serverId: string;
@@ -482,6 +687,7 @@ function applyTerminalsChanged(input: {
   for (const query of input.queryClient.getQueryCache().getAll()) {
     const route = getActiveServerDataRoute(query, input.serverId, {
       checkoutDiff: input.activeCheckoutDiffSubscriptions,
+      agentSessionChanges: input.activeAgentSessionChangesSubscriptions,
       workspaceTerminals: input.activeTerminalSubscriptions,
     });
     if (
@@ -538,6 +744,11 @@ function getActiveRouteForQueryKey(input: {
       active: input.active.checkoutDiff,
       queryKey: input.queryKey,
       serverId: input.serverId,
+    }) ??
+    getActiveAgentSessionChangesRouteForQueryKey({
+      active: input.active.agentSessionChanges,
+      queryKey: input.queryKey,
+      serverId: input.serverId,
     })
   );
 }
@@ -571,6 +782,22 @@ function getActiveCheckoutDiffRouteForQueryKey(input: {
   }
   for (const route of input.active.values()) {
     if (isCheckoutDiffQueryKeyForRoute(input.queryKey, route)) {
+      return route;
+    }
+  }
+  return null;
+}
+
+function getActiveAgentSessionChangesRouteForQueryKey(input: {
+  active: Map<string, AgentSessionChangesRoute>;
+  queryKey: QueryKey;
+  serverId: string;
+}): AgentSessionChangesRoute | null {
+  if (!isQueryForServer(input.queryKey, "agentSessionChanges", input.serverId)) {
+    return null;
+  }
+  for (const route of input.active.values()) {
+    if (isAgentSessionChangesQueryKeyForRoute(input.queryKey, route)) {
       return route;
     }
   }
@@ -621,14 +848,14 @@ function readServerDataRoute(value: Record<string, unknown>): ServerDataRoute | 
   const enabled = value.enabled;
   const serverId = value.serverId;
   const cwd = value.cwd;
-  if (typeof enabled !== "boolean" || typeof serverId !== "string" || typeof cwd !== "string") {
+  if (typeof enabled !== "boolean" || typeof serverId !== "string") {
     return null;
   }
 
   if (domain === "checkoutDiff") {
     const subscriptionId = value.subscriptionId;
     const compare = readCheckoutDiffCompare(value.compare);
-    if (typeof subscriptionId !== "string" || !compare) {
+    if (typeof subscriptionId !== "string" || typeof cwd !== "string" || !compare) {
       return null;
     }
     return {
@@ -641,9 +868,13 @@ function readServerDataRoute(value: Record<string, unknown>): ServerDataRoute | 
     };
   }
 
+  if (domain === "agentSessionChanges") {
+    return readAgentSessionChangesRoute(value, enabled, serverId);
+  }
+
   if (domain === "workspaceTerminals") {
     const workspaceId = value.workspaceId;
-    if (workspaceId !== undefined && typeof workspaceId !== "string") {
+    if (typeof cwd !== "string" || (workspaceId !== undefined && typeof workspaceId !== "string")) {
       return null;
     }
     return {
@@ -656,6 +887,37 @@ function readServerDataRoute(value: Record<string, unknown>): ServerDataRoute | 
   }
 
   return null;
+}
+
+function readAgentSessionChangesRoute(
+  value: Record<string, unknown>,
+  enabled: boolean,
+  serverId: string,
+): AgentSessionChangesRoute | null {
+  const subscriptionId = value.subscriptionId;
+  const agentId = value.agentId;
+  const mode = value.mode;
+  const turnId = value.turnId;
+  const ignoreWhitespace = value.ignoreWhitespace;
+  if (
+    typeof subscriptionId !== "string" ||
+    typeof agentId !== "string" ||
+    (mode !== "working_tree" && mode !== "session") ||
+    (turnId !== undefined && turnId !== null && typeof turnId !== "string") ||
+    typeof ignoreWhitespace !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    domain: "agentSessionChanges",
+    enabled,
+    serverId,
+    subscriptionId,
+    agentId,
+    mode,
+    ...(Object.prototype.hasOwnProperty.call(value, "turnId") ? { turnId } : null),
+    ignoreWhitespace,
+  };
 }
 
 function readCheckoutDiffCompare(value: unknown): CheckoutDiffCompare | null {
@@ -706,6 +968,34 @@ function isCheckoutDiffQueryKeyForRoute(queryKey: QueryKey, route: CheckoutDiffR
   );
 }
 
+function areAgentSessionChangesRoutesEqual(
+  left: AgentSessionChangesRoute | undefined,
+  right: AgentSessionChangesRoute,
+): boolean {
+  return (
+    left?.serverId === right.serverId &&
+    left.subscriptionId === right.subscriptionId &&
+    left.agentId === right.agentId &&
+    left.mode === right.mode &&
+    left.turnId === right.turnId &&
+    left.ignoreWhitespace === right.ignoreWhitespace
+  );
+}
+
+function isAgentSessionChangesQueryKeyForRoute(
+  queryKey: QueryKey,
+  route: AgentSessionChangesRoute,
+): boolean {
+  return (
+    queryKey[0] === "agentSessionChanges" &&
+    queryKey[1] === route.serverId &&
+    queryKey[2] === route.agentId &&
+    queryKey[3] === route.mode &&
+    queryKey[4] === (route.turnId === undefined ? "__legacy__" : (route.turnId ?? "__latest__")) &&
+    queryKey[5] === route.ignoreWhitespace
+  );
+}
+
 function areWorkspaceTerminalsRoutesEqual(
   left: WorkspaceTerminalsRoute,
   right: WorkspaceTerminalsRoute,
@@ -734,6 +1024,17 @@ function workspaceTerminalSubscriptionInput(route: WorkspaceTerminalsRoute): {
 function unsubscribeCheckoutDiff(client: ServerDataPushClient, subscriptionId: string): void {
   try {
     client.unsubscribeCheckoutDiff(subscriptionId);
+  } catch {
+    // Disconnect cleanup can race with explicit subscription teardown.
+  }
+}
+
+function unsubscribeAgentSessionChanges(
+  client: ServerDataPushClient,
+  subscriptionId: string,
+): void {
+  try {
+    client.unsubscribeAgentSessionChanges(subscriptionId);
   } catch {
     // Disconnect cleanup can race with explicit subscription teardown.
   }

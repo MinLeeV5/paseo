@@ -64,20 +64,21 @@ not retain non-Git directories.
 
 **Key modules:**
 
-| Module                          | Responsibility                                                                |
-| ------------------------------- | ----------------------------------------------------------------------------- |
-| `server/bootstrap.ts`           | Daemon initialization: HTTP server, WS server, agent manager, storage, relay  |
-| `server/websocket-server.ts`    | WebSocket connection management, hello handshake, binary frame routing        |
-| `server/session.ts`             | Per-client session state, timeline subscriptions, terminal operations         |
-| `server/agent/agent-manager.ts` | Agent lifecycle state machine, timeline tracking, subscriber management       |
-| `server/agent/agent-storage.ts` | File-backed JSON persistence at `$PASEO_HOME/agents/`                         |
-| `server/agent/tools/`           | Transport-neutral catalog for workspaces, agents, permissions, and automation |
-| `server/agent/mcp-server.ts`    | Thin MCP adapter that registers the Paseo tool catalog with the MCP SDK       |
-| `server/agent/providers/`       | Provider adapters (see "Agent providers" below)                               |
-| `server/relay-transport.ts`     | Outbound relay connection with E2E encryption                                 |
-| `server/schedule/`              | Cron-based scheduled agents                                                   |
-| `server/loop-service.ts`        | Looping agent runs that retry until an exit condition                         |
-| `server/chat/`                  | Chat rooms for agent-to-agent and human-to-agent messaging                    |
+| Module                                    | Responsibility                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------- |
+| `server/bootstrap.ts`                     | Daemon initialization: HTTP server, WS server, agent manager, storage, relay  |
+| `server/websocket-server.ts`              | WebSocket connection management, hello handshake, binary frame routing        |
+| `server/session.ts`                       | Per-client session state, timeline subscriptions, terminal operations         |
+| `server/agent/agent-manager.ts`           | Agent lifecycle state machine, timeline tracking, subscriber management       |
+| `server/agent/agent-storage.ts`           | File-backed JSON persistence at `$PASEO_HOME/agents/`                         |
+| `server/agent-session-changes-manager.ts` | Per-Prompt Git snapshots and live turn-change diff subscriptions              |
+| `server/agent/tools/`                     | Transport-neutral catalog for workspaces, agents, permissions, and automation |
+| `server/agent/mcp-server.ts`              | Thin MCP adapter that registers the Paseo tool catalog with the MCP SDK       |
+| `server/agent/providers/`                 | Provider adapters (see "Agent providers" below)                               |
+| `server/relay-transport.ts`               | Outbound relay connection with E2E encryption                                 |
+| `server/schedule/`                        | Cron-based scheduled agents                                                   |
+| `server/loop-service.ts`                  | Looping agent runs that retry until an exit condition                         |
+| `server/chat/`                            | Chat rooms for agent-to-agent and human-to-agent messaging                    |
 
 ### `packages/protocol` — Wire schemas and shared protocol types
 
@@ -316,6 +317,8 @@ Two workspaces can share the same `cwd` (e.g. a `directory` workspace and a `loc
 | File explorer expanded paths | `expandedPathsByWorkspace[workspaceStateKey]`      | `packages/app/src/stores/panel-store/state.ts`                |
 
 `diff-pane.tsx` is the canonical wiring site: it passes `{ serverId, cwd }` to the git queries and `{ serverId, workspaceId, cwd }` to the draft/override/attachment scope keys.
+
+**Agent-Prompt-owned:** the Changes panel's “Current session” source is keyed by `(serverId, agentId, turnId, mode, ignoreWhitespace)`. `turnId: null` follows the latest user Prompt; a concrete Paseo turn-record ID selects history. `AgentSessionChangesManager` captures start/end commits under `refs/paseo/turn-snapshots/{agentId}/{recordId}/{start|end}` and streams summaries plus the selected diff through `agent.session_changes.subscribe.request` / `.response` and `agent.session_changes.update`. Running turns compare start-to-working-tree; terminal turns compare start-to-end and remain stable. Live snapshot comparisons use a temporary index seeded from the start snapshot—not the user's current index—so an unchanged file that was untracked at capture does not appear deleted. These are net time-window snapshots, not process attribution: shell commands and external writers are included, and unrelated concurrent edits in the same checkout during the turn are also observable. Isolated worktrees are required when strict agent-only ownership matters. An omitted `turnId` retains the legacy whole-Agent session view for old clients.
 
 **Do not "fix" the sharing away.** Re-keying a directory-backed query by `workspaceId` makes same-`cwd` workspaces diverge (two windows onto the same git tree showing different diffs). Re-keying owned state (drafts, expanded paths) by `cwd` makes them leak between distinct workspaces on the same folder. The `workspaceId`-keyed builders carry a `// workspaceId is opaque; do not parse this key back into a path.` comment — the opaque-id fallback to `cwd` exists only for old payloads without a `workspaceId`, not as a content-sharing mechanism.
 

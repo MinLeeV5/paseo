@@ -127,7 +127,7 @@ test("cancel_agent_request reports refusal only through its response", async () 
     agentManager: {
       getAgent,
       hasInFlightRun: vi.fn(() => true),
-      cancelAgentRun: vi.fn(async () => ({ status: "refused" as const })),
+      stopAgent: vi.fn(async () => ({ status: "refused" as const })),
     },
   });
 
@@ -159,7 +159,7 @@ test("legacy cancel_agent_request reports refusal through the activity log", asy
     agentManager: {
       getAgent: vi.fn(() => ({ id: agentId, provider: "codex", lifecycle: "running" })),
       hasInFlightRun: vi.fn(() => true),
-      cancelAgentRun: vi.fn(async () => ({ status: "refused" as const })),
+      stopAgent: vi.fn(async () => ({ status: "refused" as const })),
     },
   });
 
@@ -1029,6 +1029,8 @@ function createStoredAgentRecord(
     title: overrides.title ?? null,
     labels: overrides.labels ?? {},
     lastStatus: overrides.lastStatus ?? "idle",
+    goal: overrides.goal,
+    archivedGoal: overrides.archivedGoal,
     lastModeId: overrides.lastModeId ?? null,
     config: overrides.config ?? null,
     runtimeInfo: overrides.runtimeInfo,
@@ -1147,6 +1149,76 @@ describe("agent detach RPC", () => {
         agentId: "child-agent",
         accepted: true,
         error: null,
+      },
+    });
+  });
+});
+
+describe("agent Goal archive RPC", () => {
+  test("archives the Goal without invoking the Agent archive lifecycle", async () => {
+    const messages: unknown[] = [];
+    const archiveAgentGoal = vi.fn().mockResolvedValue({
+      archivedAt: "2026-07-22T08:00:00.000Z",
+      record: createStoredAgentRecord({
+        id: "agent-1",
+        cwd: "/tmp/agent-1",
+        goal: { objective: "Ship it", status: "active" },
+        archivedGoal: {
+          objective: "Ship it",
+          archivedAt: "2026-07-22T08:00:00.000Z",
+        },
+      }),
+      live: true,
+    });
+    const archiveAgent = vi.fn();
+    const session = createSessionForTest({
+      messages,
+      agentManager: { archiveAgentGoal, archiveAgent },
+    });
+
+    await session.handleMessage({
+      type: "agent.goal.archive.request",
+      agentId: "agent-1",
+      requestId: "goal-archive-1",
+    });
+
+    expect(archiveAgentGoal).toHaveBeenCalledWith("agent-1");
+    expect(archiveAgent).not.toHaveBeenCalled();
+    expect(messages).toContainEqual({
+      type: "agent.goal.archive.response",
+      payload: {
+        requestId: "goal-archive-1",
+        agentId: "agent-1",
+        accepted: true,
+        archivedAt: "2026-07-22T08:00:00.000Z",
+        error: null,
+      },
+    });
+  });
+
+  test("returns an actionable error when Goal persistence fails", async () => {
+    const messages: unknown[] = [];
+    const session = createSessionForTest({
+      messages,
+      agentManager: {
+        archiveAgentGoal: vi.fn().mockRejectedValue(new Error("disk full")),
+      },
+    });
+
+    await session.handleMessage({
+      type: "agent.goal.archive.request",
+      agentId: "agent-1",
+      requestId: "goal-archive-2",
+    });
+
+    expect(messages).toContainEqual({
+      type: "agent.goal.archive.response",
+      payload: {
+        requestId: "goal-archive-2",
+        agentId: "agent-1",
+        accepted: false,
+        archivedAt: null,
+        error: "disk full",
       },
     });
   });

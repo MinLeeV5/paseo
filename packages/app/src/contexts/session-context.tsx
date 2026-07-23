@@ -510,7 +510,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       const appState = appStateRef.current;
       const session = useSessionStore.getState().sessions[serverId];
       const attentionFocusedAgentId = session?.focusedAgentId ?? null;
-      if (!shouldShowAgentAttentionNotification(params)) {
+      const goalArchivedAt = session?.agents.get(params.agentId)?.goalArchivedAt ?? null;
+      if (!shouldShowAgentAttentionNotification({ ...params, goalArchivedAt })) {
         return;
       }
       const isActivelyVisible = getIsAppActivelyVisible(appState);

@@ -296,6 +296,81 @@ describe("AgentStorage", () => {
     expect(recordAfterSnapshot?.archivedAt).toBe(archivedAt);
   });
 
+  test("applySnapshot preserves the write-once session diff baseline", async () => {
+    const agentId = "agent-session-baseline";
+    await storage.applySnapshot(createManagedAgent({ id: agentId }));
+    const baseline = {
+      ref: `refs/paseo/session-baselines/${agentId}`,
+      commit: "0123456789012345678901234567890123456789",
+      repoRoot: "/tmp/project",
+      capturedAt: "2026-07-22T00:00:00.000Z",
+    };
+    await storage.setSessionDiffBaseline(agentId, baseline);
+
+    await storage.applySnapshot(
+      createManagedAgent({
+        id: agentId,
+        lifecycle: "running",
+        updatedAt: new Date("2026-07-22T00:01:00.000Z"),
+      }),
+    );
+
+    expect((await storage.get(agentId))?.sessionDiffBaseline).toEqual(baseline);
+  });
+
+  test("persists Prompt diff records across normal snapshots and terminal updates", async () => {
+    const agentId = "agent-turn-diffs";
+    await storage.applySnapshot(createManagedAgent({ id: agentId }));
+    const startSnapshot = {
+      ref: `refs/paseo/turn-snapshots/${agentId}/turn-record-1/start`,
+      commit: "1123456789012345678901234567890123456789",
+      repoRoot: "/tmp/project",
+      capturedAt: "2026-07-22T00:00:00.000Z",
+    };
+    await storage.appendTurnDiffRecord(agentId, {
+      id: "turn-record-1",
+      messageId: "message-1",
+      prompt: "Fix the bug",
+      status: "running",
+      startSnapshot,
+      startedAt: startSnapshot.capturedAt,
+    });
+
+    await storage.applySnapshot(
+      createManagedAgent({
+        id: agentId,
+        lifecycle: "running",
+        updatedAt: new Date("2026-07-22T00:01:00.000Z"),
+      }),
+    );
+    const endSnapshot = {
+      ref: `refs/paseo/turn-snapshots/${agentId}/turn-record-1/end`,
+      commit: "2123456789012345678901234567890123456789",
+      repoRoot: "/tmp/project",
+      capturedAt: "2026-07-22T00:02:00.000Z",
+    };
+    await storage.updateTurnDiffRecord(agentId, "turn-record-1", {
+      providerTurnId: "provider-turn-1",
+      status: "completed",
+      endSnapshot,
+      endedAt: endSnapshot.capturedAt,
+    });
+
+    expect((await storage.get(agentId))?.turnDiffRecords).toEqual([
+      {
+        id: "turn-record-1",
+        messageId: "message-1",
+        providerTurnId: "provider-turn-1",
+        prompt: "Fix the bug",
+        status: "completed",
+        startSnapshot,
+        endSnapshot,
+        startedAt: startSnapshot.capturedAt,
+        endedAt: endSnapshot.capturedAt,
+      },
+    ]);
+  });
+
   test("stores titles independently of snapshots", async () => {
     await storage.applySnapshot(
       createManagedAgent({

@@ -2634,6 +2634,7 @@ describe("HostRuntimeStore", () => {
         updatedAt: new Date(stale.updatedAt),
         lastUserMessageAt: null,
         lastActivityAt: new Date(stale.updatedAt),
+        goalArchivedAt: stale.goalArchivedAt ? new Date(stale.goalArchivedAt) : null,
         archivedAt: stale.archivedAt ? new Date(stale.archivedAt) : null,
         attentionTimestamp: stale.attentionTimestamp ? new Date(stale.attentionTimestamp) : null,
         parentAgentId: null,

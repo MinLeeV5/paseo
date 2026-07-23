@@ -135,6 +135,8 @@ import { wrapSpokenInput } from "./voice-config.js";
 import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
 import { VoiceSession } from "./session/voice/voice-session.js";
 import { CheckoutSession } from "./session/checkout/checkout-session.js";
+import { AgentSessionChangesSession } from "./session/agent-session-changes/agent-session-changes-session.js";
+import type { AgentSessionChangesManager } from "./agent-session-changes-manager.js";
 import {
   createWorkspaceGitObserverService,
   type WorkspaceGitObserverService,
@@ -415,6 +417,7 @@ export interface SessionOptions {
   scheduleService: ScheduleService;
   loopService: LoopService;
   checkoutDiffManager: CheckoutDiffManager;
+  agentSessionChangesManager?: AgentSessionChangesManager;
   github?: ForgeService;
   createAgentMcpTransport?: AgentMcpTransportFactory;
   // Injected so tests can substitute the git branch rename without module mocks;
@@ -545,6 +548,19 @@ function describeRegistryTransition(record: ArchivedRecordSnapshot | null): Regi
   return record.archivedAt ? "unarchived" : "existing";
 }
 
+function createAgentSessionChangesSession(
+  manager: AgentSessionChangesManager | null | undefined,
+  emit: (message: SessionOutboundMessage) => void,
+): AgentSessionChangesSession | null {
+  if (!manager) {
+    return null;
+  }
+  return new AgentSessionChangesSession({
+    host: { emit },
+    manager,
+  });
+}
+
 /**
  * Session represents a single connected client session.
  * It owns all state management, orchestration logic, and message processing.
@@ -616,6 +632,8 @@ export class Session {
   private readonly workspaceDirectory: WorkspaceDirectory;
   private readonly voiceSession: VoiceSession;
   private readonly checkoutSession: CheckoutSession;
+  private readonly agentSessionChangesManager: AgentSessionChangesManager | null;
+  private readonly agentSessionChangesSession: AgentSessionChangesSession | null;
   private readonly chatScheduleLoopSession: ChatScheduleLoopSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
@@ -652,6 +670,7 @@ export class Session {
       scheduleService,
       loopService,
       checkoutDiffManager,
+      agentSessionChangesManager,
       github,
       renameCurrentBranch,
       workspaceGitService,
@@ -762,6 +781,11 @@ export class Session {
       worktreesRoot: this.worktreesRoot,
       logger: this.sessionLogger,
     });
+    this.agentSessionChangesManager = agentSessionChangesManager ?? null;
+    this.agentSessionChangesSession = createAgentSessionChangesSession(
+      agentSessionChangesManager,
+      (message) => this.emit(message),
+    );
     this.workspaceGitObserver = createWorkspaceGitObserverService({
       workspaceGitService: this.workspaceGitService,
       describeWorkspaceRecordWithGitData: (workspace) =>
@@ -1709,6 +1733,8 @@ export class Session {
     switch (msg.type) {
       case "agent.detach.request":
         return this.handleDetachAgentRequest(msg.agentId, msg.requestId);
+      case "agent.goal.archive.request":
+        return this.handleArchiveAgentGoalRequest(msg.agentId, msg.requestId);
       default:
         return undefined;
     }
@@ -1744,6 +1770,11 @@ export class Session {
       }
       case "agent.fork_context.request":
         return this.handleAgentForkContextRequest(msg);
+      case "agent.session_changes.subscribe.request":
+        return this.agentSessionChangesSession?.handleSubscribeRequest(msg);
+      case "agent.session_changes.unsubscribe.request":
+        this.agentSessionChangesSession?.handleUnsubscribeRequest(msg);
+        return undefined;
       default:
         return undefined;
     }
@@ -2154,10 +2185,9 @@ export class Session {
   private async handleDeleteAgentRequest(agentId: string, requestId: string): Promise<void> {
     this.sessionLogger.info({ agentId }, `Deleting agent ${agentId} from registry`);
 
+    const storedAgent = await this.agentStorage.get(agentId);
     const knownWorkspaceId =
-      this.agentManager.getAgent(agentId)?.workspaceId ??
-      (await this.agentStorage.get(agentId))?.workspaceId ??
-      null;
+      this.agentManager.getAgent(agentId)?.workspaceId ?? storedAgent?.workspaceId ?? null;
 
     // File-backed storage still needs an early delete fence before closeAgent().
     beginAgentDeleteIfSupported(this.agentStorage, agentId);
@@ -2177,6 +2207,11 @@ export class Session {
 
     try {
       await this.agentStorage.remove(agentId);
+      await this.agentSessionChangesManager?.removeBaselineForAgent({
+        agentId,
+        ...(storedAgent?.sessionDiffBaseline ? { baseline: storedAgent.sessionDiffBaseline } : {}),
+        ...(storedAgent?.turnDiffRecords ? { turnDiffRecords: storedAgent.turnDiffRecords } : {}),
+      });
       await this.agentManager.deleteAgentState(agentId);
     } catch (error) {
       this.sessionLogger.error({ err: error, agentId }, `Failed to fully delete agent ${agentId}`);
@@ -2282,6 +2317,38 @@ export class Session {
           agentId,
           accepted: false,
           error: message,
+        },
+      });
+    }
+  }
+
+  private async handleArchiveAgentGoalRequest(agentId: string, requestId: string): Promise<void> {
+    this.sessionLogger.info({ agentId, requestId }, "Archiving agent Goal display");
+
+    try {
+      const result = await this.agentManager.archiveAgentGoal(agentId);
+      if (!result.live && this.agentUpdates.hasSubscription()) {
+        await this.agentUpdates.emitStoredRecord(result.record);
+      }
+      this.emit({
+        type: "agent.goal.archive.response",
+        payload: {
+          requestId,
+          agentId,
+          accepted: true,
+          archivedAt: result.archivedAt,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.goal.archive.response",
+        payload: {
+          requestId,
+          agentId,
+          accepted: false,
+          archivedAt: null,
+          error: getErrorMessage(error),
         },
       });
     }
@@ -6345,6 +6412,7 @@ export class Session {
     this.terminalController.dispose();
 
     this.checkoutSession.cleanup();
+    this.agentSessionChangesSession?.cleanup();
 
     this.workspaceGitObserver.dispose();
     this.workspaceFilesSession.dispose();

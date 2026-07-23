@@ -294,12 +294,13 @@ describe("agent detach RPC", () => {
     expect(parsed.features?.agentDetach).toBe(true);
   });
 
-  test("parses the agentGoalState server feature gate", () => {
+  test("parses the Goal state and archive server feature gates", () => {
     const parsed = parseServerInfoStatusPayload({
       status: "server_info",
       serverId: "srv-test",
       features: {
         agentGoalState: true,
+        agentGoalArchive: true,
       },
     });
 
@@ -307,6 +308,43 @@ describe("agent detach RPC", () => {
       throw new Error("Expected server info payload to parse");
     }
     expect(parsed.features?.agentGoalState).toBe(true);
+    expect(parsed.features?.agentGoalArchive).toBe(true);
+  });
+
+  test("parses the namespaced Goal archive request and response", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.goal.archive.request",
+        agentId: "agent-1",
+        requestId: "req-goal-archive",
+      }),
+    ).toEqual({
+      type: "agent.goal.archive.request",
+      agentId: "agent-1",
+      requestId: "req-goal-archive",
+    });
+
+    expect(
+      SessionOutboundMessageSchema.parse({
+        type: "agent.goal.archive.response",
+        payload: {
+          requestId: "req-goal-archive",
+          agentId: "agent-1",
+          accepted: true,
+          archivedAt: "2026-07-22T08:00:00.000Z",
+          error: null,
+        },
+      }),
+    ).toEqual({
+      type: "agent.goal.archive.response",
+      payload: {
+        requestId: "req-goal-archive",
+        agentId: "agent-1",
+        accepted: true,
+        archivedAt: "2026-07-22T08:00:00.000Z",
+        error: null,
+      },
+    });
   });
 
   test("parses the workspace-targeted session import feature gate", () => {

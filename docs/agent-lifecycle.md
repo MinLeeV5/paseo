@@ -12,6 +12,8 @@ initializing → idle → running → idle (or error → closed)
 
 Each live agent in `AgentManager` carries a `lastStatus` of `initializing`, `idle`, `running`, or `error`. `closed` is the persisted, resumable state for an agent record that has no live provider runtime. State transitions persist to disk and stream to subscribed clients via WebSocket.
 
+Every accepted foreground user Prompt is bracketed by diff lifecycle hooks. Immediately before `startTurn`, the daemon freezes a start snapshot and stores the Prompt record; after the provider returns a turn ID, that ID is attached to the record. A completed, failed, or canceled terminal event freezes the end snapshot before the foreground run lock is released. Running records therefore compare start-to-working-tree, while finished records compare immutable start-to-end snapshots and cannot be contaminated by later turns. Snapshot failures are logged but never prevent provider lifecycle handling.
+
 ## Runtime residency
 
 An unarchived agent may be `closed` without being deleted or archived. Closing releases its provider
@@ -56,7 +58,7 @@ Permission and lifecycle-error presentation still outrank an active Goal. Otherw
 
 Stop is Goal-aware: it pauses an active Goal first, then interrupts a current turn if one exists. `cancelAgentRun` remains a lower-level, turn-only operation for internal flows that explicitly want that behavior. A pause failure does not prevent Paseo from attempting the turn interrupt, but the Stop request still reports the failure so callers do not mistake the Goal for stopped.
 
-The Goal status strip above the composer also exposes an explicit archive action. It confirms before archiving, warns when the agent is still ongoing, and uses the normal global agent archive lifecycle (including stopping the Goal, closing the runtime, and cascading to managed children).
+The Goal status strip above the composer also exposes an explicit archive action. Goal archive is presentation-only: it persistently hides the current Goal strip without pausing the Goal, closing the runtime, setting the agent's `archivedAt`, or cascading to children. The daemon stores the archived Goal objective and timestamp so the hidden state survives reconnects and restarts. Status changes for that same objective remain hidden and do not set attention or produce system notifications. Agent lifecycle errors and permission requests remain visible. Clearing the Goal or receiving a different objective clears the marker so a later Goal appears normally.
 
 ### Cancellation
 

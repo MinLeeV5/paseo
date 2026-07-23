@@ -32,6 +32,7 @@ describe("loadChangesPreferencesFromStorage", () => {
       wrapLines: true,
       hideWhitespace: false,
       commitsCollapsed: true,
+      sessionDiffMode: "working_tree",
     });
     expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(JSON.stringify(result));
   });
@@ -55,6 +56,7 @@ describe("loadChangesPreferencesFromStorage", () => {
       hideWhitespace: true,
       wrapLines: false,
       commitsCollapsed: true,
+      sessionDiffMode: "working_tree",
     });
     expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(persisted);
     expect(storage.entries.size).toBe(1);
@@ -78,6 +80,7 @@ describe("loadChangesPreferencesFromStorage", () => {
       hideWhitespace: false,
       wrapLines: true,
       commitsCollapsed: true,
+      sessionDiffMode: "working_tree",
     });
     expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(JSON.stringify(result));
   });
@@ -106,6 +109,22 @@ describe("changes preferences commitsCollapsed", () => {
     const prefs = await loadChangesPreferencesFromStorage(storage);
 
     expect(prefs.commitsCollapsed).toBe(true);
+  });
+});
+
+describe("changes preferences sessionDiffMode", () => {
+  it("defaults to the complete current Git diff", () => {
+    expect(DEFAULT_CHANGES_PREFERENCES.sessionDiffMode).toBe("working_tree");
+  });
+
+  it("loads the session-only diff preference", async () => {
+    const storage = createInMemoryKeyValueStorage({
+      [CHANGES_PREFERENCES_STORAGE_KEY]: JSON.stringify({ sessionDiffMode: "session" }),
+    });
+
+    const prefs = await loadChangesPreferencesFromStorage(storage);
+
+    expect(prefs.sessionDiffMode).toBe("session");
   });
 });
 

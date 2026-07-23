@@ -12,6 +12,16 @@ describe("buildAgentGoalStatusModel", () => {
     expect(buildAgentGoalStatusModel({ supported: true, goal: null })).toBeNull();
   });
 
+  it("hides an archived Goal status bar", () => {
+    expect(
+      buildAgentGoalStatusModel({
+        supported: true,
+        goal: { objective: "Ship it", status: "complete" },
+        goalArchivedAt: "2026-07-22T08:00:00.000Z",
+      }),
+    ).toBeNull();
+  });
+
   it.each([
     ["active", "active", "agentPanel.goal.status.active"],
     ["paused", "muted", "agentPanel.goal.status.paused"],

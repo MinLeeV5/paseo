@@ -3539,6 +3539,75 @@ test("runAgent persists finished attention and idle status without an external s
   expect(persisted?.attentionTimestamp).toEqual(expect.any(String));
 });
 
+test("runAgent brackets every user prompt with turn diff lifecycle hooks", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-session-baseline-hook-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const storedAgentIdsAtTurn: string[] = [];
+  let preparationCount = 0;
+  const onBeforeAgentTurn = vi.fn(async ({ agentId }: { agentId: string }) => {
+    if (await storage.get(agentId)) {
+      storedAgentIdsAtTurn.push(agentId);
+    }
+    preparationCount += 1;
+    return `preparation-${preparationCount}`;
+  });
+  const onAgentTurnStarted = vi.fn();
+  const onAfterAgentTurn = vi.fn();
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    onBeforeAgentTurn,
+    onAgentTurnStarted,
+    onAfterAgentTurn,
+  });
+  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+
+  await manager.runAgent(snapshot.id, "first turn", { clientMessageId: "message-1" });
+  await manager.runAgent(snapshot.id, "second turn");
+
+  expect(onBeforeAgentTurn).toHaveBeenNthCalledWith(1, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    prompt: "first turn",
+    messageId: "message-1",
+  });
+  expect(onBeforeAgentTurn).toHaveBeenNthCalledWith(2, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    prompt: "second turn",
+  });
+  expect(storedAgentIdsAtTurn).toEqual([snapshot.id, snapshot.id]);
+  expect(onAgentTurnStarted).toHaveBeenNthCalledWith(1, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    preparationId: "preparation-1",
+    turnId: "turn-1",
+  });
+  expect(onAgentTurnStarted).toHaveBeenNthCalledWith(2, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    preparationId: "preparation-2",
+    turnId: "turn-2",
+  });
+  expect(onAfterAgentTurn).toHaveBeenNthCalledWith(1, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    preparationId: "preparation-1",
+    turnId: "turn-1",
+    status: "completed",
+  });
+  expect(onAfterAgentTurn).toHaveBeenNthCalledWith(2, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    preparationId: "preparation-2",
+    turnId: "turn-2",
+    status: "completed",
+  });
+});
+
 test("archiveSnapshot clears persisted attention and normalizes running status", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-archive-attention-"));
   const storagePath = join(workdir, "agents");
@@ -4593,6 +4662,139 @@ test("active goals persist in snapshots and keep wait pending between turns", as
       },
     },
   ]);
+});
+
+test("archiveAgentGoal persistently hides only the current Goal", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-archive-current-goal-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new GoalAwareTestClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000208",
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+
+  const result = await manager.archiveAgentGoal(agent.id);
+  const live = manager.getAgent(agent.id);
+  const stored = await storage.get(agent.id);
+
+  expect(client.session?.pauseCalls).toBe(0);
+  expect(client.session?.interruptCalls).toBe(0);
+  expect(live?.lifecycle).toBe("idle");
+  expect(live?.goal).toEqual({
+    objective: "Ship Goal state support",
+    status: "active",
+  });
+  expect(toAgentPayload(live!).goalArchivedAt).toBe(result.archivedAt);
+  expect(stored?.archivedAt).toBeFalsy();
+  expect(stored).toMatchObject({
+    lastStatus: "idle",
+    goal: {
+      objective: "Ship Goal state support",
+      status: "active",
+    },
+    archivedGoal: {
+      objective: "Ship Goal state support",
+      archivedAt: result.archivedAt,
+    },
+  });
+
+  client.session?.setGoal({ objective: "Ship the next Goal", status: "active" });
+  await vi.waitFor(() =>
+    expect(toAgentPayload(manager.getAgent(agent.id)!).goalArchivedAt).toBeNull(),
+  );
+});
+
+test.each(["complete", "blocked"] as const)(
+  "archived Goal status %s does not trigger attention or a system notification",
+  async (status) => {
+    const workdir = mkdtempSync(join(tmpdir(), `agent-manager-archived-goal-${status}-`));
+    const storage = new AgentStorage(join(workdir, "agents"), logger);
+    const client = new GoalAwareTestClient();
+    const attention: Array<{ reason: string; goal?: AgentGoal }> = [];
+    const manager = new AgentManager({
+      clients: { codex: client },
+      registry: storage,
+      logger,
+      idFactory: () => randomUUID(),
+      onAgentAttention: ({ reason, goal }) => attention.push({ reason, goal }),
+    });
+    const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    await manager.archiveAgentGoal(agent.id);
+
+    client.session?.setGoal({ objective: "Ship Goal state support", status });
+
+    await vi.waitFor(() => expect(manager.getAgent(agent.id)?.goal?.status).toBe(status));
+    expect(manager.getAgent(agent.id)?.attention).toEqual({ requiresAttention: false });
+    expect(attention).toEqual([]);
+  },
+);
+
+test("archiving a Goal does not suppress Agent lifecycle error notifications", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-archived-goal-error-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new GoalAwareTestClient();
+  const attention: Array<{ reason: string; goal?: AgentGoal }> = [];
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+    idFactory: () => randomUUID(),
+    onAgentAttention: ({ reason, goal }) => attention.push({ reason, goal }),
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  await manager.archiveAgentGoal(agent.id);
+
+  client.session?.pushEvent({
+    type: "turn_failed",
+    provider: "codex",
+    error: "provider failed",
+  });
+
+  await vi.waitFor(() => expect(manager.getAgent(agent.id)?.lifecycle).toBe("error"));
+  expect(manager.getAgent(agent.id)?.attention.attentionReason).toBe("error");
+  expect(attention).toEqual([{ reason: "error", goal: undefined }]);
+});
+
+test("archiveAgentGoal keeps the Goal visible when persistence fails", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-archive-goal-failure-"));
+  class FailingGoalArchiveStorage extends AgentStorage {
+    rejectSnapshots = false;
+
+    override async applySnapshot(
+      agent: ManagedAgent,
+      options?: { title?: string | null; internal?: boolean },
+    ): Promise<void> {
+      if (this.rejectSnapshots) {
+        throw new Error("disk full");
+      }
+      await super.applySnapshot(agent, options);
+    }
+  }
+  const storage = new FailingGoalArchiveStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new GoalAwareTestClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000209",
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  storage.rejectSnapshots = true;
+
+  await expect(manager.archiveAgentGoal(agent.id)).rejects.toThrow("disk full");
+
+  expect(toAgentPayload(manager.getAgent(agent.id)!).goalArchivedAt).toBeNull();
+  expect((await storage.get(agent.id))?.archivedGoal).toBeFalsy();
 });
 
 test("an active goal suppresses intermediate turn-finished attention", async () => {

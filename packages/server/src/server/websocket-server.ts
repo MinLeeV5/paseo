@@ -4,7 +4,11 @@ import { join } from "path";
 import { hostname as getHostname } from "node:os";
 import { randomUUID } from "node:crypto";
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import type { AgentManager, AgentMetricsSnapshot } from "./agent/agent-manager.js";
+import {
+  isCurrentGoalArchived,
+  type AgentManager,
+  type AgentMetricsSnapshot,
+} from "./agent/agent-manager.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
@@ -15,6 +19,7 @@ import type { FileBackedChatService } from "./chat/chat-service.js";
 import type { LoopService } from "./loop-service.js";
 import type { ScheduleService } from "./schedule/service.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
+import type { AgentSessionChangesManager } from "./agent-session-changes-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
   type ServerInfoStatusPayload,
@@ -462,6 +467,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly loopService: LoopService;
   private readonly scheduleService: ScheduleService;
   private readonly checkoutDiffManager: CheckoutDiffManager;
+  private readonly agentSessionChangesManager: AgentSessionChangesManager | null;
   private readonly github: ForgeService;
   private readonly workspaceGitService: WorkspaceGitService;
   private readonly workspaceAutoName: WorkspaceAutoName;
@@ -549,6 +555,7 @@ export class VoiceAssistantWebSocketServer {
     serviceProxyPublicBaseUrl?: string | null,
     browserToolsBroker?: BrowserToolsBroker | null,
     hubRelationships?: HubRelationshipManagement | null,
+    agentSessionChangesManager?: AgentSessionChangesManager,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.serverId = serverId;
@@ -573,6 +580,7 @@ export class VoiceAssistantWebSocketServer {
     this.loopService = requiredServices.loopService;
     this.scheduleService = requiredServices.scheduleService;
     this.checkoutDiffManager = requiredServices.checkoutDiffManager;
+    this.agentSessionChangesManager = agentSessionChangesManager ?? null;
     this.github = github ?? createGitHubService();
     this.workspaceGitService = workspaceGitService ?? createFallbackWorkspaceGitService();
     this.workspaceAutoName = workspaceAutoName;
@@ -957,6 +965,7 @@ export class VoiceAssistantWebSocketServer {
     await Promise.all(cleanupPromises);
     this.providerSnapshotManager.destroy();
     this.checkoutDiffManager.dispose();
+    this.agentSessionChangesManager?.dispose();
     this.workspaceGitService.dispose();
     this.pendingConnections.clear();
     this.sessions.clear();
@@ -1168,6 +1177,7 @@ export class VoiceAssistantWebSocketServer {
       loopService: this.loopService,
       scheduleService: this.scheduleService,
       checkoutDiffManager: this.checkoutDiffManager,
+      agentSessionChangesManager: this.agentSessionChangesManager ?? undefined,
       github: this.github,
       workspaceGitService: this.workspaceGitService,
       workspaceAutoName: this.workspaceAutoName,
@@ -1372,6 +1382,9 @@ export class VoiceAssistantWebSocketServer {
         checkoutRefresh: true,
         // COMPAT(checkoutDiffSubmodulePaths): added in v0.1.103, remove gate after 2027-01-08.
         checkoutDiffSubmodulePaths: true,
+        // COMPAT(agentSessionChanges): added in v1.1.114, remove gate after 2027-01-22.
+        agentSessionChanges: true,
+        agentTurnChanges: true,
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: true,
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
@@ -1404,6 +1417,8 @@ export class VoiceAssistantWebSocketServer {
         workspaceGithubClone: true,
         // COMPAT(agentGoalState): added in v1.1.111, remove gate after 2027-01-14.
         agentGoalState: true,
+        // COMPAT(agentGoalArchive): added in v1.1.114, remove gate after 2027-01-22.
+        agentGoalArchive: true,
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: true,
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
@@ -2162,7 +2177,16 @@ export class VoiceAssistantWebSocketServer {
     if (!agent?.workspaceId) {
       return;
     }
+    const isGoalNotification = params.reason === "finished" || params.goal !== undefined;
+    if (isGoalNotification && isCurrentGoalArchived(agent)) {
+      return;
+    }
     const assistantMessage = await this.agentManager.getLastAssistantMessage(params.agentId);
+    // Goal archive may race with the async assistant preview lookup. Re-check immediately before
+    // delivery so an already queued completion cannot notify after the Goal has been dismissed.
+    if (isGoalNotification && isCurrentGoalArchived(agent)) {
+      return;
+    }
     const notification = buildAgentAttentionNotificationPayload({
       reason: params.reason,
       serverId: this.serverId,

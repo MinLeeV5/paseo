@@ -708,6 +708,8 @@ export const AgentSnapshotPayloadSchema = z.object({
   lastUserMessageAt: z.string().nullable(),
   status: AgentStatusSchema,
   goal: AgentGoalPayloadSchema.nullable().optional(),
+  // COMPAT(agentGoalArchive): added in v1.1.114, remove optional parsing after 2027-01-22.
+  goalArchivedAt: z.string().nullable().optional(),
   capabilities: AgentCapabilityFlagsSchema,
   currentModeId: z.string().nullable(),
   availableModes: z.array(AgentModeSchema),
@@ -1482,6 +1484,23 @@ export const AgentDetachResponseMessageSchema = z.object({
   payload: AgentActionResponsePayloadSchema,
 });
 
+export const AgentGoalArchiveRequestMessageSchema = z.object({
+  type: z.literal("agent.goal.archive.request"),
+  agentId: z.string(),
+  requestId: z.string(),
+});
+
+export const AgentGoalArchiveResponseMessageSchema = z.object({
+  type: z.literal("agent.goal.archive.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    accepted: z.boolean(),
+    archivedAt: z.string().nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const AgentRewindModeSchema = z.enum(["conversation", "files", "both"]);
 
 export const AgentRewindRequestMessageSchema = z.object({
@@ -1648,6 +1667,23 @@ export const SubscribeCheckoutDiffRequestSchema = z.object({
 
 export const UnsubscribeCheckoutDiffRequestSchema = z.object({
   type: z.literal("unsubscribe_checkout_diff_request"),
+  subscriptionId: z.string(),
+});
+
+const AgentSessionChangesModeSchema = z.enum(["working_tree", "session"]);
+
+export const AgentSessionChangesSubscribeRequestSchema = z.object({
+  type: z.literal("agent.session_changes.subscribe.request"),
+  subscriptionId: z.string(),
+  agentId: z.string(),
+  mode: AgentSessionChangesModeSchema,
+  turnId: z.string().nullable().optional(),
+  ignoreWhitespace: z.boolean().optional(),
+  requestId: z.string(),
+});
+
+export const AgentSessionChangesUnsubscribeRequestSchema = z.object({
+  type: z.literal("agent.session_changes.unsubscribe.request"),
   subscriptionId: z.string(),
 });
 
@@ -2479,11 +2515,14 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentThinkingRequestMessageSchema,
   SetAgentFeatureRequestMessageSchema,
   AgentDetachRequestMessageSchema,
+  AgentGoalArchiveRequestMessageSchema,
   AgentRewindRequestMessageSchema,
   AgentPermissionResponseMessageSchema,
   CheckoutStatusRequestSchema,
   SubscribeCheckoutDiffRequestSchema,
   UnsubscribeCheckoutDiffRequestSchema,
+  AgentSessionChangesSubscribeRequestSchema,
+  AgentSessionChangesUnsubscribeRequestSchema,
   CheckoutCommitRequestSchema,
   CheckoutMergeRequestSchema,
   CheckoutMergeFromBaseRequestSchema,
@@ -2755,6 +2794,10 @@ export const ServerInfoStatusPayloadSchema = z
         checkoutRefresh: z.boolean().optional(),
         // COMPAT(checkoutDiffSubmodulePaths): added in v0.1.103, remove gate after 2027-01-08.
         checkoutDiffSubmodulePaths: z.boolean().optional(),
+        // COMPAT(agentSessionChanges): added in v1.1.114, remove gate after 2027-01-22.
+        agentSessionChanges: z.boolean().optional(),
+        // COMPAT(agentTurnChanges): added in v1.1.114, remove gate after 2027-01-22.
+        agentTurnChanges: z.boolean().optional(),
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: z.boolean().optional(),
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
@@ -2787,6 +2830,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceGithubClone: z.boolean().optional(),
         // COMPAT(agentGoalState): added in v1.1.111, remove gate after 2027-01-14.
         agentGoalState: z.boolean().optional(),
+        // COMPAT(agentGoalArchive): added in v1.1.114, remove gate after 2027-01-22.
+        agentGoalArchive: z.boolean().optional(),
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: z.boolean().optional(),
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
@@ -4095,6 +4140,41 @@ export const CheckoutDiffUpdateSchema = z.object({
   payload: CheckoutDiffSubscriptionPayloadSchema,
 });
 
+const AgentTurnChangesSummarySchema = z.object({
+  id: z.string(),
+  messageId: z.string().optional(),
+  prompt: z.string(),
+  status: z.enum(["running", "completed", "failed", "canceled"]),
+  hasChanges: z.boolean().optional(),
+  startedAt: z.string(),
+  endedAt: z.string().optional(),
+});
+
+const AgentSessionChangesSubscriptionPayloadSchema = z.object({
+  subscriptionId: z.string(),
+  agentId: z.string(),
+  cwd: z.string(),
+  mode: AgentSessionChangesModeSchema,
+  baselineAvailable: z.boolean(),
+  // COMPAT(agentTurnChanges): old clients ignore these; old daemons omit them.
+  turns: z.array(AgentTurnChangesSummarySchema).optional(),
+  selectedTurnId: z.string().nullable().optional(),
+  files: z.array(ParsedDiffFileSchema),
+  error: CheckoutErrorSchema.nullable(),
+});
+
+export const AgentSessionChangesSubscribeResponseSchema = z.object({
+  type: z.literal("agent.session_changes.subscribe.response"),
+  payload: AgentSessionChangesSubscriptionPayloadSchema.extend({
+    requestId: z.string(),
+  }),
+});
+
+export const AgentSessionChangesUpdateSchema = z.object({
+  type: z.literal("agent.session_changes.update"),
+  payload: AgentSessionChangesSubscriptionPayloadSchema,
+});
+
 export const CheckoutCommitResponseSchema = z.object({
   type: z.literal("checkout_commit_response"),
   payload: z.object({
@@ -5169,6 +5249,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentThinkingResponseMessageSchema,
   SetAgentFeatureResponseMessageSchema,
   AgentDetachResponseMessageSchema,
+  AgentGoalArchiveResponseMessageSchema,
   AgentRewindResponseMessageSchema,
   UpdateAgentResponseMessageSchema,
   ProjectRenameResponseSchema,
@@ -5187,6 +5268,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutStatusUpdateSchema,
   SubscribeCheckoutDiffResponseSchema,
   CheckoutDiffUpdateSchema,
+  AgentSessionChangesSubscribeResponseSchema,
+  AgentSessionChangesUpdateSchema,
   CheckoutCommitResponseSchema,
   CheckoutMergeResponseSchema,
   CheckoutMergeFromBaseResponseSchema,
@@ -5340,6 +5423,7 @@ export type SetAgentModelResponseMessage = z.infer<typeof SetAgentModelResponseM
 export type SetAgentThinkingResponseMessage = z.infer<typeof SetAgentThinkingResponseMessageSchema>;
 export type SetAgentFeatureResponseMessage = z.infer<typeof SetAgentFeatureResponseMessageSchema>;
 export type AgentDetachResponseMessage = z.infer<typeof AgentDetachResponseMessageSchema>;
+export type AgentGoalArchiveResponseMessage = z.infer<typeof AgentGoalArchiveResponseMessageSchema>;
 export type AgentRewindResponseMessage = z.infer<typeof AgentRewindResponseMessageSchema>;
 export type UpdateAgentResponseMessage = z.infer<typeof UpdateAgentResponseMessageSchema>;
 export type ProjectRenameResponse = z.infer<typeof ProjectRenameResponseSchema>;
@@ -5499,6 +5583,7 @@ export type SetAgentModelRequestMessage = z.infer<typeof SetAgentModelRequestMes
 export type SetAgentThinkingRequestMessage = z.infer<typeof SetAgentThinkingRequestMessageSchema>;
 export type SetAgentFeatureRequestMessage = z.infer<typeof SetAgentFeatureRequestMessageSchema>;
 export type AgentDetachRequestMessage = z.infer<typeof AgentDetachRequestMessageSchema>;
+export type AgentGoalArchiveRequestMessage = z.infer<typeof AgentGoalArchiveRequestMessageSchema>;
 export type AgentPermissionResponseMessage = z.infer<typeof AgentPermissionResponseMessageSchema>;
 export type CheckoutStatusRequest = z.infer<typeof CheckoutStatusRequestSchema>;
 export type CheckoutStatusResponse = z.infer<typeof CheckoutStatusResponseSchema>;
@@ -5507,6 +5592,18 @@ export type SubscribeCheckoutDiffRequest = z.infer<typeof SubscribeCheckoutDiffR
 export type UnsubscribeCheckoutDiffRequest = z.infer<typeof UnsubscribeCheckoutDiffRequestSchema>;
 export type SubscribeCheckoutDiffResponse = z.infer<typeof SubscribeCheckoutDiffResponseSchema>;
 export type CheckoutDiffUpdate = z.infer<typeof CheckoutDiffUpdateSchema>;
+export type AgentSessionChangesMode = z.infer<typeof AgentSessionChangesModeSchema>;
+export type AgentTurnChangesSummary = z.infer<typeof AgentTurnChangesSummarySchema>;
+export type AgentSessionChangesSubscribeRequest = z.infer<
+  typeof AgentSessionChangesSubscribeRequestSchema
+>;
+export type AgentSessionChangesUnsubscribeRequest = z.infer<
+  typeof AgentSessionChangesUnsubscribeRequestSchema
+>;
+export type AgentSessionChangesSubscribeResponse = z.infer<
+  typeof AgentSessionChangesSubscribeResponseSchema
+>;
+export type AgentSessionChangesUpdate = z.infer<typeof AgentSessionChangesUpdateSchema>;
 export type CheckoutCommitRequest = z.infer<typeof CheckoutCommitRequestSchema>;
 export type CheckoutCommitResponse = z.infer<typeof CheckoutCommitResponseSchema>;
 export type CheckoutMergeRequest = z.infer<typeof CheckoutMergeRequestSchema>;

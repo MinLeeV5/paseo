@@ -13,6 +13,7 @@ const changesPreferencesSchema = z.object({
   wrapLines: z.boolean().optional(),
   hideWhitespace: z.boolean().optional(),
   commitsCollapsed: z.boolean().optional(),
+  sessionDiffMode: z.enum(["working_tree", "session"]).optional(),
 });
 
 export interface ChangesPreferences {
@@ -21,6 +22,7 @@ export interface ChangesPreferences {
   wrapLines: boolean;
   hideWhitespace: boolean;
   commitsCollapsed: boolean;
+  sessionDiffMode: "working_tree" | "session";
 }
 
 export const DEFAULT_CHANGES_PREFERENCES: ChangesPreferences = {
@@ -29,6 +31,7 @@ export const DEFAULT_CHANGES_PREFERENCES: ChangesPreferences = {
   wrapLines: false,
   hideWhitespace: false,
   commitsCollapsed: true,
+  sessionDiffMode: "working_tree",
 };
 
 export interface KeyValueStorage {

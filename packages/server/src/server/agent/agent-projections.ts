@@ -49,6 +49,22 @@ function normalizeLabels(labels: Record<string, unknown> | undefined): Record<st
   );
 }
 
+function resolveGoalArchivedAt(
+  goal: { objective: string } | null | undefined,
+  archivedGoal:
+    | { objective: string; archivedAt: Date }
+    | { objective: string; archivedAt: string }
+    | null
+    | undefined,
+): string | null {
+  if (!goal || !archivedGoal || archivedGoal.objective !== goal.objective) {
+    return null;
+  }
+  return archivedGoal.archivedAt instanceof Date
+    ? archivedGoal.archivedAt.toISOString()
+    : archivedGoal.archivedAt;
+}
+
 export function resolveEffectiveThinkingOptionId(options: {
   runtimeInfo?: AgentRuntimeInfo | null;
   configuredThinkingOptionId?: string | null;
@@ -82,6 +98,12 @@ export function toStoredAgentRecord(
     labels: agent.labels,
     lastStatus: agent.lifecycle,
     goal: agent.goal,
+    archivedGoal: agent.archivedGoal
+      ? {
+          objective: agent.archivedGoal.objective,
+          archivedAt: agent.archivedGoal.archivedAt.toISOString(),
+        }
+      : null,
     lastModeId: agent.currentModeId ?? config?.modeId ?? null,
     config: config ?? null,
     runtimeInfo,
@@ -123,6 +145,7 @@ export function toAgentPayload(
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     status: agent.lifecycle,
     goal: agent.goal,
+    goalArchivedAt: resolveGoalArchivedAt(agent.goal, agent.archivedGoal),
     capabilities: cloneCapabilities(agent.capabilities),
     currentModeId: agent.currentModeId,
     availableModes: cloneAvailableModes(agent.availableModes),
@@ -228,6 +251,7 @@ export function buildStoredAgentPayload(
     lastUserMessageAt: lastUserMessageAt ? lastUserMessageAt.toISOString() : null,
     status: record.lastStatus,
     goal: record.goal ?? null,
+    goalArchivedAt: resolveGoalArchivedAt(record.goal, record.archivedGoal),
     capabilities: defaultCapabilities,
     currentModeId: record.lastModeId ?? null,
     availableModes: [],

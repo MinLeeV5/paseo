@@ -3147,6 +3147,72 @@ test("subscribes to checkout diff updates via RPC handshake", async () => {
   });
 });
 
+test("subscribes to agent session changes via the namespaced RPC", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.subscribeAgentSessionChanges(
+    { agentId: "agent-1", mode: "session", turnId: null, ignoreWhitespace: true },
+    { subscriptionId: "agent-session-sub-1" },
+  );
+
+  expect(mock.sent).toHaveLength(1);
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "agent.session_changes.subscribe.request",
+    subscriptionId: "agent-session-sub-1",
+    agentId: "agent-1",
+    mode: "session",
+    turnId: null,
+    ignoreWhitespace: true,
+  });
+
+  mock.triggerMessage(
+    JSON.stringify({
+      type: "session",
+      message: {
+        type: "agent.session_changes.subscribe.response",
+        payload: {
+          subscriptionId: "agent-session-sub-1",
+          agentId: "agent-1",
+          cwd: "/tmp/project",
+          mode: "session",
+          baselineAvailable: true,
+          files: [],
+          error: null,
+          requestId: request.requestId,
+        },
+      },
+    }),
+  );
+
+  await expect(promise).resolves.toMatchObject({
+    subscriptionId: "agent-session-sub-1",
+    agentId: "agent-1",
+    mode: "session",
+    baselineAvailable: true,
+  });
+
+  client.unsubscribeAgentSessionChanges("agent-session-sub-1");
+  expect(parseSentFrame(mock.sent[1])).toEqual({
+    type: "agent.session_changes.unsubscribe.request",
+    subscriptionId: "agent-session-sub-1",
+  });
+});
+
 test("getCheckoutDiff uses one-shot subscription protocol", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -3981,6 +4047,49 @@ test("detaches an agent through the namespaced detach RPC", async () => {
   );
 
   await expect(promise).resolves.toBeUndefined();
+});
+
+test("archives only an agent Goal through the namespaced Goal archive RPC", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.archiveAgentGoal("agent-1");
+
+  expect(mock.sent).toHaveLength(1);
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "agent.goal.archive.request",
+    agentId: "agent-1",
+  });
+  expect(typeof request.requestId).toBe("string");
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.goal.archive.response",
+      payload: {
+        requestId: request.requestId,
+        agentId: "agent-1",
+        accepted: true,
+        archivedAt: "2026-07-22T08:00:00.000Z",
+        error: null,
+      },
+    }),
+  );
+
+  await expect(promise).resolves.toEqual({ archivedAt: "2026-07-22T08:00:00.000Z" });
 });
 
 test("sends active-scoped fetch_agents_request", async () => {

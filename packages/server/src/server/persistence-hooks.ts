@@ -111,6 +111,7 @@ export function extractTimestamps(record: StoredAgentRecord): {
   labels?: Record<string, string>;
   workspaceId?: string;
   owner?: StoredAgentRecord["owner"];
+  archivedGoal?: { objective: string; archivedAt: Date } | null;
 } {
   return {
     createdAt: new Date(record.createdAt),
@@ -119,6 +120,12 @@ export function extractTimestamps(record: StoredAgentRecord): {
     labels: record.labels,
     workspaceId: record.workspaceId,
     owner: record.owner,
+    archivedGoal: record.archivedGoal
+      ? {
+          objective: record.archivedGoal.objective,
+          archivedAt: new Date(record.archivedGoal.archivedAt),
+        }
+      : null,
   };
 }
 

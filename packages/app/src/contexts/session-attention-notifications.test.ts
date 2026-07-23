@@ -29,4 +29,31 @@ describe("shouldShowAgentAttentionNotification", () => {
     expect(shouldShowAgentAttentionNotification({ reason: "finished" })).toBe(true);
     expect(shouldShowAgentAttentionNotification({ reason: "permission" })).toBe(true);
   });
+
+  it("suppresses archived Goal notifications while preserving permission notifications", () => {
+    const goalArchivedAt = new Date("2026-07-22T10:16:40.738Z");
+    expect(shouldShowAgentAttentionNotification({ reason: "finished", goalArchivedAt })).toBe(
+      false,
+    );
+    expect(
+      shouldShowAgentAttentionNotification({
+        reason: "error",
+        goalArchivedAt,
+        notification: {
+          title: "Goal needs attention",
+          body: "Ship it",
+          data: {
+            type: "agent_attention",
+            serverId: "server-a",
+            agentId: "agent-a",
+            reason: "error",
+            goalStatus: "blocked",
+          },
+        },
+      }),
+    ).toBe(false);
+    expect(shouldShowAgentAttentionNotification({ reason: "permission", goalArchivedAt })).toBe(
+      true,
+    );
+  });
 });

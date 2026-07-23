@@ -99,6 +99,7 @@ export interface Agent {
   provider: AgentProvider;
   status: AgentLifecycleStatus;
   goal?: AgentGoalPayload | null;
+  goalArchivedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   lastUserMessageAt: Date | null;

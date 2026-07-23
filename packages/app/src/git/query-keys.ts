@@ -31,6 +31,23 @@ export function checkoutDiffQueryKey(
   return ["checkoutDiff", serverId, cwd, mode, baseRef ?? "", ignoreWhitespace === true] as const;
 }
 
+export function agentSessionChangesQueryKey(
+  serverId: string,
+  agentId: string,
+  mode: "working_tree" | "session",
+  turnId: string | null | undefined,
+  ignoreWhitespace?: boolean,
+) {
+  return [
+    "agentSessionChanges",
+    serverId,
+    agentId,
+    mode,
+    turnId === undefined ? "__legacy__" : (turnId ?? "__latest__"),
+    ignoreWhitespace === true,
+  ] as const;
+}
+
 export function checkoutPrStatusQueryKey(serverId: string, cwd: string) {
   return ["checkoutPrStatus", serverId, cwd] as const;
 }

@@ -1,42 +1,25 @@
-import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
-import type { Agent } from "@/stores/session-store";
 import type { ConfirmDialogInput } from "@/utils/confirm-dialog";
 
 export interface ArchiveGoalAgentCopy {
   title: string;
   message: string;
-  runningTitle: string;
-  runningMessage: string;
   confirmLabel: string;
   cancelLabel: string;
 }
 
-export interface ResolveArchiveGoalAgentDialogInput {
-  status: Agent["status"] | null | undefined;
-  goalStatus?: string | null;
-}
-
-export function resolveArchiveGoalAgentDialog(
-  input: ResolveArchiveGoalAgentDialogInput,
-  copy: ArchiveGoalAgentCopy,
-): ConfirmDialogInput {
-  const isRunning = input.status
-    ? isAgentOngoing({ status: input.status, goalStatus: input.goalStatus })
-    : false;
-
+export function resolveArchiveGoalAgentDialog(copy: ArchiveGoalAgentCopy): ConfirmDialogInput {
   return {
-    title: isRunning ? copy.runningTitle : copy.title,
-    message: isRunning ? copy.runningMessage : copy.message,
+    title: copy.title,
+    message: copy.message,
     confirmLabel: copy.confirmLabel,
     cancelLabel: copy.cancelLabel,
-    destructive: true,
+    destructive: false,
   };
 }
 
 export interface ArchiveGoalAgentDeps {
-  getAgent: (agentId: string) => ResolveArchiveGoalAgentDialogInput | undefined;
   confirm: (input: ConfirmDialogInput) => Promise<boolean>;
-  archiveAgent: (input: { serverId: string; agentId: string }) => Promise<void>;
+  archiveGoal: (input: { serverId: string; agentId: string }) => Promise<void>;
   reportError: (error: unknown) => void;
 }
 
@@ -50,22 +33,13 @@ export async function requestArchiveGoalAgent(
   input: RequestArchiveGoalAgentInput,
   deps: ArchiveGoalAgentDeps,
 ): Promise<void> {
-  const agent = deps.getAgent(input.agentId);
-  const confirmed = await deps.confirm(
-    resolveArchiveGoalAgentDialog(
-      {
-        status: agent?.status,
-        goalStatus: agent?.goalStatus,
-      },
-      input.copy,
-    ),
-  );
+  const confirmed = await deps.confirm(resolveArchiveGoalAgentDialog(input.copy));
   if (!confirmed) {
     return;
   }
 
   try {
-    await deps.archiveAgent({ serverId: input.serverId, agentId: input.agentId });
+    await deps.archiveGoal({ serverId: input.serverId, agentId: input.agentId });
   } catch (error) {
     deps.reportError(error);
   }

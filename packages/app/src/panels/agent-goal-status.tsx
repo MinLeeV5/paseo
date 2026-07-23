@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
@@ -17,13 +17,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useToast } from "@/contexts/toast-context";
-import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useSessionStore } from "@/stores/session-store";
 import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { toErrorMessage } from "@/utils/error-messages";
 import { buildAgentGoalStatusModel } from "@/panels/agent-goal-status-model";
 import { requestArchiveGoalAgent } from "@/panels/archive-goal-agent";
+import { useHostRuntimeClient } from "@/runtime/host-runtime";
 
 const ThemedArchive = withUnistyles(Archive);
 const ThemedTarget = withUnistyles(Target);
@@ -46,20 +46,23 @@ const iconColorMappings = {
 export function AgentGoalStatus({ serverId, agentId }: { serverId: string; agentId: string }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const { archiveAgent } = useArchiveAgent();
+  const client = useHostRuntimeClient(serverId);
+  const [isArchivingGoal, setIsArchivingGoal] = useState(false);
   const panelActive = useRetainedPanelActive();
   const reduceMotion = useReducedMotion();
-  const { supported, goal } = useSessionStore(
+  const { supported, archiveSupported, goal, goalArchivedAt } = useSessionStore(
     useShallow((state) => {
       const session = state.sessions[serverId];
       const agent = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId);
       return {
         supported: session?.serverInfo?.features?.agentGoalState === true,
+        archiveSupported: session?.serverInfo?.features?.agentGoalArchive === true,
         goal: agent?.goal ?? null,
+        goalArchivedAt: agent?.goalArchivedAt ?? null,
       };
     }),
   );
-  const model = buildAgentGoalStatusModel({ supported, goal });
+  const model = buildAgentGoalStatusModel({ supported, goal, goalArchivedAt });
   const pulseOpacity = useSharedValue(1);
   const shouldAnimate = model?.status === "active" && panelActive && !reduceMotion;
 
@@ -84,6 +87,10 @@ export function AgentGoalStatus({ serverId, agentId }: { serverId: string; agent
   const surfaceStyle = useMemo(() => [styles.surface, toneSurfaceStyles[tone]], [tone]);
   const statusStyle = useMemo(() => [styles.status, toneTextStyles[tone]], [tone]);
   const handleArchivePress = useCallback(() => {
+    if (isArchivingGoal) {
+      return;
+    }
+    setIsArchivingGoal(true);
     void requestArchiveGoalAgent(
       {
         serverId,
@@ -91,24 +98,22 @@ export function AgentGoalStatus({ serverId, agentId }: { serverId: string; agent
         copy: {
           title: t("agentPanel.goal.archive.title"),
           message: t("agentPanel.goal.archive.message"),
-          runningTitle: t("agentPanel.goal.archive.runningTitle"),
-          runningMessage: t("agentPanel.goal.archive.runningMessage"),
           confirmLabel: t("workspace.tabs.confirmations.archive"),
           cancelLabel: t("common.actions.cancel"),
         },
       },
       {
-        getAgent: (id) => {
-          const session = useSessionStore.getState().sessions[serverId];
-          const agent = session?.agents.get(id) ?? session?.agentDetails.get(id);
-          return agent ? { status: agent.status, goalStatus: agent.goal?.status } : undefined;
-        },
         confirm: confirmDialog,
-        archiveAgent,
+        archiveGoal: async () => {
+          if (!client) {
+            throw new Error(t("common.errors.daemonClientUnavailable"));
+          }
+          await client.archiveAgentGoal(agentId);
+        },
         reportError: (error) => toast.error(toErrorMessage(error)),
       },
-    );
-  }, [agentId, archiveAgent, serverId, t, toast]);
+    ).finally(() => setIsArchivingGoal(false));
+  }, [agentId, client, isArchivingGoal, serverId, t, toast]);
 
   if (!model) {
     return null;
@@ -131,28 +136,31 @@ export function AgentGoalStatus({ serverId, agentId }: { serverId: string; agent
         <Text style={styles.objective} numberOfLines={1} ellipsizeMode="tail">
           {model.objective}
         </Text>
-        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-          <TooltipTrigger asChild>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("agentPanel.goal.archive.action")}
-              testID="agent-goal-archive"
-              onPress={handleArchivePress}
-              style={styles.archiveButton}
-              hitSlop={8}
-            >
-              {({ hovered, pressed }) => (
-                <ThemedArchive
-                  size={14}
-                  uniProps={hovered || pressed ? foregroundColorMapping : mutedColorMapping}
-                />
-              )}
-            </Pressable>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center" offset={8}>
-            <Text style={styles.tooltipText}>{t("agentPanel.goal.archive.action")}</Text>
-          </TooltipContent>
-        </Tooltip>
+        {archiveSupported ? (
+          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+            <TooltipTrigger asChild>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("agentPanel.goal.archive.action")}
+                testID="agent-goal-archive"
+                onPress={handleArchivePress}
+                disabled={isArchivingGoal}
+                style={styles.archiveButton}
+                hitSlop={8}
+              >
+                {({ hovered, pressed }) => (
+                  <ThemedArchive
+                    size={14}
+                    uniProps={hovered || pressed ? foregroundColorMapping : mutedColorMapping}
+                  />
+                )}
+              </Pressable>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" offset={8}>
+              <Text style={styles.tooltipText}>{t("agentPanel.goal.archive.action")}</Text>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
       </View>
     </View>
   );

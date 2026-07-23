@@ -18,6 +18,7 @@ function createSnapshot(
     lastUserMessageAt: input.lastUserMessageAt ?? null,
     status: input.status ?? "idle",
     goal: input.goal ?? null,
+    goalArchivedAt: input.goalArchivedAt ?? null,
     capabilities: input.capabilities ?? {
       supportsStreaming: true,
       supportsSessionPersistence: true,
@@ -79,5 +80,14 @@ describe("normalizeAgentSnapshot", () => {
     const agent = normalizeAgentSnapshot(createSnapshot({ goal }), "server-1");
 
     expect(agent.goal).toEqual(goal);
+  });
+
+  it("normalizes the persisted Goal archive timestamp", () => {
+    const agent = normalizeAgentSnapshot(
+      createSnapshot({ goalArchivedAt: "2026-07-22T08:00:00.000Z" }),
+      "server-1",
+    );
+
+    expect(agent.goalArchivedAt).toEqual(new Date("2026-07-22T08:00:00.000Z"));
   });
 });

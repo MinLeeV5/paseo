@@ -54,6 +54,7 @@ import {
   WrapText,
 } from "lucide-react-native";
 import { type ParsedDiffFile, type DiffLine, type HighlightToken } from "@/git/use-diff-query";
+import { useAgentSessionChangesQuery } from "@/git/use-agent-session-changes-query";
 import { buildDiffFlatItems, sumHeightsBefore, type DiffFlatItem } from "@/git/diff-flat-items";
 import type { CheckoutDiffFileGrouping } from "@/git/diff-order";
 import { buildDiffTree, collectDirPaths, compressSingleChildChains } from "@/git/diff-tree";
@@ -98,7 +99,7 @@ import { BranchSwitcher } from "@/components/branch-switcher";
 import { useGitActions } from "@/git/use-actions";
 import { buildForgeSignInCommand, getForgePresentation, type Forge } from "@/git/forge";
 import { parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
-import type { ForgeAuthState } from "@getpaseo/protocol/messages";
+import type { AgentTurnChangesSummary, ForgeAuthState } from "@getpaseo/protocol/messages";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { useToast } from "@/contexts/toast-context";
 import { useSessionStore } from "@/stores/session-store";
@@ -1419,6 +1420,8 @@ interface GitDiffPaneProps {
   onAddToChat?: (path: string) => void;
 }
 
+type ChangesSource = "checkout" | "session";
+
 type PressableStyleFn = (
   state: PressableStateCallbackType & { hovered?: boolean; open?: boolean },
 ) => StyleProp<ViewStyle>;
@@ -2645,6 +2648,14 @@ function buildDiffModeTriggerStyle(): PressableStyleFn {
   ];
 }
 
+function buildPromptTurnTriggerStyle(): PressableStyleFn {
+  return ({ hovered, pressed, open }) => [
+    styles.diffModeTrigger,
+    styles.promptTurnTrigger,
+    (Boolean(hovered) || pressed || Boolean(open)) && styles.diffModeTriggerHovered,
+  ];
+}
+
 function buildExpandAllButtonStyle(): PressableStyleFn {
   return ({ hovered, pressed }) => [
     styles.expandAllButton,
@@ -2752,6 +2763,297 @@ function useDiffTabNavigation({
   };
 }
 
+function resolveActiveChangesSource(
+  source: ChangesSource,
+  agentSessionChangesSupported: boolean,
+): ChangesSource {
+  if (source === "session" && agentSessionChangesSupported) {
+    return "session";
+  }
+  return "checkout";
+}
+
+function useFocusedWorkspaceAgentId(input: {
+  serverId: string;
+  workspaceId?: string | null;
+  cwd: string;
+}): string | null {
+  return useSessionStore((state) => {
+    const session = state.sessions[input.serverId];
+    const agentId = session?.focusedAgentId;
+    const agent = agentId ? session.agents.get(agentId) : null;
+    if (!agent) {
+      return null;
+    }
+    if (input.workspaceId && agent.workspaceId && agent.workspaceId !== input.workspaceId) {
+      return null;
+    }
+    if ((!input.workspaceId || !agent.workspaceId) && agent.cwd !== input.cwd) {
+      return null;
+    }
+    return agent.id;
+  });
+}
+
+function resolveDiffQueryEnablement(input: {
+  source: ChangesSource;
+  paneEnabled: boolean;
+  isGit: boolean;
+}): { checkout: boolean; session: boolean } {
+  const enabled = input.paneEnabled && input.isGit;
+  return {
+    checkout: enabled && input.source === "checkout",
+    session: enabled && input.source === "session",
+  };
+}
+
+interface SelectableDiffQueryState {
+  files: ParsedDiffFile[];
+  payloadError: { message: string } | null;
+  isLoading: boolean;
+}
+
+function selectDiffQueryState(input: {
+  source: ChangesSource;
+  checkout: SelectableDiffQueryState;
+  session: SelectableDiffQueryState;
+}): SelectableDiffQueryState {
+  return input.source === "session" ? input.session : input.checkout;
+}
+
+function checkoutOnlyValue<T>(source: ChangesSource, value: T): T | undefined {
+  return source === "checkout" ? value : undefined;
+}
+
+function computeChangesSourceLabel(input: {
+  source: ChangesSource;
+  diffMode: "uncommitted" | "base";
+  uncommitted: string;
+  committed: string;
+  session: string;
+}): string {
+  if (input.source === "session") {
+    return input.session;
+  }
+  if (input.diffMode === "uncommitted") {
+    return input.uncommitted;
+  }
+  return input.committed;
+}
+
+function computeChangesEmptyMessage(input: {
+  source: ChangesSource;
+  focusedAgentId: string | null;
+  baselineAvailable: boolean;
+  hasPromptTurns: boolean;
+  hideWhitespace: boolean;
+  diffMode: "uncommitted" | "base";
+  baseRefLabel: string;
+  t: TFunction;
+}): string {
+  if (input.source === "session") {
+    if (!input.focusedAgentId) {
+      return input.t("workspace.git.diff.sessionAgentRequired");
+    }
+    if (!input.hasPromptTurns || !input.baselineAvailable) {
+      return input.t("workspace.git.diff.sessionTrackingPending");
+    }
+    return input.hideWhitespace
+      ? input.t("workspace.git.diff.emptyHiddenWhitespace")
+      : input.t("workspace.git.diff.emptyPromptChanges");
+  }
+  return computeEmptyMessage(input.hideWhitespace, input.diffMode, input.baseRefLabel, {
+    hiddenWhitespace: input.t("workspace.git.diff.emptyHiddenWhitespace"),
+    uncommitted: input.t("workspace.git.diff.emptyUncommitted"),
+    againstBase: (label) => input.t("workspace.git.diff.emptyAgainstBase", { baseRef: label }),
+  });
+}
+
+function promptTurnLabel(prompt: string, fallback: string): string {
+  return prompt.replace(/\s+/g, " ").trim() || fallback;
+}
+
+function promptTurnStatusLabel(status: AgentTurnChangesSummary["status"], t: TFunction): string {
+  return t(`workspace.git.diff.promptTurnStatus.${status}`);
+}
+
+function promptTurnMetadata(
+  turn: AgentTurnChangesSummary,
+  turnNumber: number,
+  t: TFunction,
+): string {
+  const status = promptTurnStatusLabel(turn.status, t);
+  if (turn.hasChanges !== true) {
+    return t("workspace.git.diff.promptTurnMetadata", { number: turnNumber, status });
+  }
+  return t("workspace.git.diff.promptTurnMetadataWithChanges", {
+    number: turnNumber,
+    status,
+    changes: t("workspace.git.diff.promptTurnHasChanges"),
+  });
+}
+
+const PromptTurnMenuItem = memo(function PromptTurnMenuItem({
+  turn,
+  turnNumber,
+  selected,
+  latest,
+  emptyPromptLabel,
+  t,
+  onSelectPromptTurn,
+}: {
+  turn: AgentTurnChangesSummary;
+  turnNumber: number;
+  selected: boolean;
+  latest: boolean;
+  emptyPromptLabel: string;
+  t: TFunction;
+  onSelectPromptTurn: (turnId: string | null) => void;
+}) {
+  const handleSelect = useCallback(() => {
+    onSelectPromptTurn(latest ? null : turn.id);
+  }, [latest, onSelectPromptTurn, turn.id]);
+  return (
+    <DropdownMenuItem
+      testID={`changes-prompt-turn-${turn.id}`}
+      selected={selected}
+      description={promptTurnMetadata(turn, turnNumber, t)}
+      onSelect={handleSelect}
+    >
+      {promptTurnLabel(turn.prompt, emptyPromptLabel)}
+    </DropdownMenuItem>
+  );
+});
+
+function ChangesSourceControls({
+  source,
+  diffMode,
+  agentTurnChangesSupported,
+  promptTurns,
+  selectedPromptTurnId,
+  sourceLabel,
+  uncommittedLabel,
+  committedLabel,
+  sessionChangesLabel,
+  committedDiffDescription,
+  triggerStyle,
+  promptTriggerStyle,
+  t,
+  onSelectUncommitted,
+  onSelectBase,
+  onSelectSessionChanges,
+  onSelectPromptTurn,
+}: {
+  source: ChangesSource;
+  diffMode: "uncommitted" | "base";
+  agentTurnChangesSupported: boolean;
+  promptTurns: AgentTurnChangesSummary[];
+  selectedPromptTurnId: string | null;
+  sourceLabel: string;
+  uncommittedLabel: string;
+  committedLabel: string;
+  sessionChangesLabel: string;
+  committedDiffDescription: string | undefined;
+  triggerStyle: PressableStyleFn;
+  promptTriggerStyle: PressableStyleFn;
+  t: TFunction;
+  onSelectUncommitted: () => void;
+  onSelectBase: () => void;
+  onSelectSessionChanges: () => void;
+  onSelectPromptTurn: (turnId: string | null) => void;
+}) {
+  const selectedPromptTurnIndex = promptTurns.findIndex((turn) => turn.id === selectedPromptTurnId);
+  const selectedPromptTurn = promptTurns[selectedPromptTurnIndex] ?? null;
+  const latestPromptTurnId = promptTurns.at(-1)?.id ?? null;
+  const emptyPromptLabel = t("workspace.git.diff.promptWithAttachments");
+  return (
+    <View style={styles.diffSourceControls}>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          style={triggerStyle}
+          testID="changes-diff-status"
+          accessibilityRole="button"
+          accessibilityLabel={t("workspace.git.diff.diffMode")}
+        >
+          <Text style={styles.diffStatusText} numberOfLines={1}>
+            {sourceLabel}
+          </Text>
+          <ThemedChevronDown size={12} uniProps={foregroundMutedIconColorMapping} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" width={280} testID="changes-diff-status-menu">
+          <DropdownMenuItem
+            testID="changes-diff-mode-uncommitted"
+            selected={source === "checkout" && diffMode === "uncommitted"}
+            onSelect={onSelectUncommitted}
+          >
+            {uncommittedLabel}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            testID="changes-diff-mode-committed"
+            selected={source === "checkout" && diffMode === "base"}
+            description={committedDiffDescription}
+            onSelect={onSelectBase}
+          >
+            {committedLabel}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            testID="changes-source-session"
+            selected={source === "session"}
+            description={t(
+              agentTurnChangesSupported
+                ? "workspace.git.diff.sessionChangesDescription"
+                : "workspace.git.diff.sessionChangesUnavailable",
+            )}
+            disabled={!agentTurnChangesSupported}
+            onSelect={onSelectSessionChanges}
+          >
+            {sessionChangesLabel}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {source === "session" ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            style={promptTriggerStyle}
+            testID="changes-prompt-turn"
+            accessibilityRole="button"
+            accessibilityLabel={t("workspace.git.diff.promptTurnSelector")}
+            disabled={promptTurns.length === 0}
+          >
+            <Text style={[styles.diffStatusText, styles.promptTurnText]} numberOfLines={1}>
+              {selectedPromptTurn
+                ? `#${selectedPromptTurnIndex + 1} · ${promptTurnLabel(
+                    selectedPromptTurn.prompt,
+                    emptyPromptLabel,
+                  )}`
+                : t("workspace.git.diff.noPromptTurns")}
+            </Text>
+            <ThemedChevronDown size={12} uniProps={foregroundMutedIconColorMapping} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" width={300} maxHeight={360} scrollable>
+            {promptTurns.toReversed().map((turn, reverseIndex) => {
+              const turnNumber = promptTurns.length - reverseIndex;
+              return (
+                <PromptTurnMenuItem
+                  key={turn.id}
+                  turn={turn}
+                  turnNumber={turnNumber}
+                  selected={turn.id === selectedPromptTurnId}
+                  latest={turn.id === latestPromptTurnId}
+                  emptyPromptLabel={emptyPromptLabel}
+                  t={t}
+                  onSelectPromptTurn={onSelectPromptTurn}
+                />
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </View>
+  );
+}
+
 // This component coordinates persisted diff UI state with host capabilities and tab navigation.
 // oxlint-disable-next-line complexity
 export function GitDiffPane({
@@ -2770,11 +3072,23 @@ export function GitDiffPane({
   const canUseSplitLayout = isWeb && !isMobile;
   const { preferences: changesPreferences, updatePreferences: updateChangesPreferences } =
     useChangesPreferences();
+  const [changesSource, setChangesSource] = useState<ChangesSource>("checkout");
+  const [selectedPromptTurnId, setSelectedPromptTurnId] = useState<string | null>(null);
   const wrapLines = changesPreferences.wrapLines;
   // COMPAT(checkoutDiffSubmodulePaths): added in v0.1.103, remove gate after 2027-01-08.
   const submoduleGroupingSupported = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.checkoutDiffSubmodulePaths === true,
   );
+  // COMPAT(agentTurnChanges): added in v1.1.114, remove gate after 2027-01-22.
+  const agentTurnChangesSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.agentTurnChanges === true,
+  );
+  const focusedAgentId = useFocusedWorkspaceAgentId({
+    serverId,
+    workspaceId,
+    cwd,
+  });
+  const activeChangesSource = resolveActiveChangesSource(changesSource, agentTurnChangesSupported);
   const fileGrouping = resolveCheckoutDiffFileGrouping({
     preferred: changesPreferences.fileGrouping,
     submoduleGroupingSupported,
@@ -2799,6 +3113,9 @@ export function GitDiffPane({
   }, [changesPreferences.layout, updateChangesPreferences]);
 
   const codeFontSize = appSettings.codeFontSize;
+  const diffModeTriggerStyle = useMemo(() => buildDiffModeTriggerStyle(), []);
+  const promptTurnTriggerStyle = useMemo(() => buildPromptTurnTriggerStyle(), []);
+
   const layoutToggleStyle = useMemo(
     () => buildToggleButtonStyle(false, styles.expandAllButton),
     [],
@@ -2843,11 +3160,11 @@ export function GitDiffPane({
     baseRef,
     currentBranchName,
     diffMode,
-    selectUncommitted: handleSelectUncommitted,
-    selectBase: handleSelectBase,
-    files,
-    diffPayloadError,
-    isDiffLoading,
+    selectUncommitted: selectCheckoutUncommitted,
+    selectBase: selectCheckoutBase,
+    files: checkoutFiles,
+    diffPayloadError: checkoutDiffPayloadError,
+    isDiffLoading: isCheckoutDiffLoading,
     reviewActions,
     reviewAttachment,
   } = useWorkingDiff({
@@ -2855,17 +3172,50 @@ export function GitDiffPane({
     workspaceId: workspaceId ?? undefined,
     cwd,
     ignoreWhitespace: changesPreferences.hideWhitespace,
-    enabled: enabled !== false,
+    enabled: enabled !== false && activeChangesSource === "checkout",
+  });
+  const diffQueryEnablement = resolveDiffQueryEnablement({
+    source: activeChangesSource,
+    paneEnabled: enabled !== false,
+    isGit,
+  });
+  const agentSessionChangesQuery = useAgentSessionChangesQuery({
+    serverId,
+    agentId: focusedAgentId,
+    mode: "session",
+    turnId: selectedPromptTurnId,
+    ignoreWhitespace: changesPreferences.hideWhitespace,
+    enabled: diffQueryEnablement.session,
+  });
+  const {
+    files,
+    payloadError: diffPayloadError,
+    isLoading: isDiffLoading,
+  } = selectDiffQueryState({
+    source: activeChangesSource,
+    checkout: {
+      files: checkoutFiles,
+      payloadError: checkoutDiffPayloadError,
+      isLoading: isCheckoutDiffLoading,
+    },
+    session: agentSessionChangesQuery,
   });
   usePublishWorkingDiffAttachment({
     serverId,
     workspaceId: workspaceId ?? undefined,
     cwd,
     attachment: reviewAttachment,
-    enabled: !changesTabOpen,
+    enabled: activeChangesSource === "checkout" && !changesTabOpen,
   });
   const handleOpenDiffFile = useCallback(
     (file: ParsedDiffFile) => {
+      if (activeChangesSource === "session") {
+        onOpenWorkspaceFile?.({
+          disposition: "main",
+          location: { path: file.path },
+        });
+        return;
+      }
       const target = createDiffFileOpenTarget({
         filePath: file.path,
         diffContext: {
@@ -2877,7 +3227,14 @@ export function GitDiffPane({
       });
       onOpenWorkspaceFile?.(target.request);
     },
-    [baseRef, changesPreferences.hideWhitespace, cwd, diffMode, onOpenWorkspaceFile],
+    [
+      activeChangesSource,
+      baseRef,
+      changesPreferences.hideWhitespace,
+      cwd,
+      diffMode,
+      onOpenWorkspaceFile,
+    ],
   );
   const handlePreviewDiffFile = useCallback(
     (file: ParsedDiffFile) => {
@@ -2896,6 +3253,23 @@ export function GitDiffPane({
     },
     [cwd, onOpenExternalUrl, onOpenWorkspaceFile],
   );
+  const handleSelectUncommitted = useCallback(() => {
+    setChangesSource("checkout");
+    selectCheckoutUncommitted();
+  }, [selectCheckoutUncommitted]);
+
+  const handleSelectBase = useCallback(() => {
+    setChangesSource("checkout");
+    selectCheckoutBase();
+  }, [selectCheckoutBase]);
+
+  const handleSelectSessionChanges = useCallback(() => {
+    setChangesSource("session");
+  }, []);
+
+  useEffect(() => {
+    setSelectedPromptTurnId(null);
+  }, [focusedAgentId]);
   const {
     githubFeaturesEnabled,
     forge,
@@ -3056,8 +3430,8 @@ export function GitDiffPane({
       expandedPaths: visibleExpandedPathsArray,
       collapsedFolders: stableCollapsedFoldersArray,
       collapsedGroupKeys: stableCollapsedGroupKeysArray,
-      reviewActions,
-      onFilePress: onChangesFilePress,
+      reviewActions: checkoutOnlyValue(activeChangesSource, reviewActions),
+      onFilePress: checkoutOnlyValue(activeChangesSource, onChangesFilePress),
       workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
       onOpenFile: onOpenWorkspaceFile ? handleOpenDiffFile : undefined,
       onPreviewFile: onOpenWorkspaceFile ? handlePreviewDiffFile : undefined,
@@ -3070,6 +3444,7 @@ export function GitDiffPane({
       onCollapsedGroupKeysChange: handleCollapsedGroupKeysChange,
     }),
     [
+      activeChangesSource,
       fileGrouping,
       handleCollapsedFoldersChange,
       handleCollapsedGroupKeysChange,
@@ -3119,16 +3494,27 @@ export function GitDiffPane({
     () => computeCommittedDiffDescription(branchLabel, baseRefLabel),
     [baseRefLabel, branchLabel],
   );
-  const emptyMessage = computeEmptyMessage(
-    changesPreferences.hideWhitespace,
+  const uncommittedLabel = t("workspace.git.diff.uncommitted");
+  const committedLabel = t("workspace.git.diff.committed");
+  const sessionChangesLabel = t("workspace.git.diff.sessionChanges");
+  const sourceLabel = computeChangesSourceLabel({
+    source: activeChangesSource,
+    diffMode,
+    uncommitted: uncommittedLabel,
+    committed: committedLabel,
+    session: sessionChangesLabel,
+  });
+
+  const emptyMessage = computeChangesEmptyMessage({
+    source: activeChangesSource,
+    focusedAgentId,
+    baselineAvailable: agentSessionChangesQuery.baselineAvailable,
+    hasPromptTurns: agentSessionChangesQuery.turns.length > 0,
+    hideWhitespace: changesPreferences.hideWhitespace,
     diffMode,
     baseRefLabel,
-    {
-      hiddenWhitespace: t("workspace.git.diff.emptyHiddenWhitespace"),
-      uncommitted: t("workspace.git.diff.emptyUncommitted"),
-      againstBase: (label) => t("workspace.git.diff.emptyAgainstBase", { baseRef: label }),
-    },
-  );
+    t,
+  });
 
   const bodyContent: ReactElement = (
     <DiffBodyContent
@@ -3169,11 +3555,24 @@ export function GitDiffPane({
       {isGit ? (
         <View style={styles.diffStatusContainer}>
           <View style={styles.diffStatusInner}>
-            <DiffModeMenu
+            <ChangesSourceControls
+              source={activeChangesSource}
               diffMode={diffMode}
-              committedDescription={committedDiffDescription}
+              agentTurnChangesSupported={agentTurnChangesSupported}
+              promptTurns={agentSessionChangesQuery.turns}
+              selectedPromptTurnId={agentSessionChangesQuery.selectedTurnId}
+              sourceLabel={sourceLabel}
+              uncommittedLabel={uncommittedLabel}
+              committedLabel={committedLabel}
+              sessionChangesLabel={sessionChangesLabel}
+              committedDiffDescription={committedDiffDescription}
+              triggerStyle={diffModeTriggerStyle}
+              promptTriggerStyle={promptTurnTriggerStyle}
+              t={t}
               onSelectUncommitted={handleSelectUncommitted}
               onSelectBase={handleSelectBase}
+              onSelectSessionChanges={handleSelectSessionChanges}
+              onSelectPromptTurn={setSelectedPromptTurnId}
             />
             <View style={styles.diffStatusButtons}>
               <ChangesTabToggle
@@ -3265,6 +3664,11 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     paddingRight: theme.spacing[3],
   },
+  diffSourceControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+  },
   diffModeTrigger: {
     flexDirection: "row",
     alignItems: "center",
@@ -3284,6 +3688,11 @@ const styles = StyleSheet.create((theme) => ({
   diffModeTriggerHovered: {
     backgroundColor: theme.colors.surface2,
   },
+  promptTurnTrigger: {
+    marginLeft: 0,
+    maxWidth: 280,
+    flexShrink: 1,
+  },
   diffModeTriggerPressed: {
     backgroundColor: theme.colors.surface2,
   },
@@ -3294,6 +3703,9 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
     lineHeight: theme.fontSize.xs * 1.25,
     color: theme.colors.foregroundMuted,
+  },
+  promptTurnText: {
+    flexShrink: 1,
   },
   diffStatusIconHidden: {
     opacity: 0,

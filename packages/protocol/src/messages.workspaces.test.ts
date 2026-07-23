@@ -152,6 +152,7 @@ describe("workspace message schemas", () => {
             objective: "Ship Goal state support",
             status: "futureStatus",
           },
+          goalArchivedAt: "2026-07-22T08:00:00.000Z",
           capabilities: {
             supportsStreaming: true,
             supportsSessionPersistence: true,
@@ -178,6 +179,7 @@ describe("workspace message schemas", () => {
       objective: "Ship Goal state support",
       status: "futureStatus",
     });
+    expect(result.data.payload.agent?.goalArchivedAt).toBe("2026-07-22T08:00:00.000Z");
   });
 
   test("parses paginated fetch_agent_history_request and response", () => {

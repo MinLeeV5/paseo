@@ -1,6 +1,7 @@
 import { resolve, dirname, basename } from "path";
 import { existsSync, realpathSync } from "fs";
-import { open as openFile, readFile, stat as statFile } from "fs/promises";
+import { mkdtemp, open as openFile, readFile, rm, stat as statFile } from "fs/promises";
+import { tmpdir } from "os";
 import { TTLCache } from "@isaacs/ttlcache";
 import type { CheckoutCommit, CheckoutCommitFile } from "@getpaseo/protocol/messages";
 import type { Logger } from "pino";
@@ -188,6 +189,7 @@ interface CheckoutDiffRefs {
   baseRef: string;
   targetRef?: string;
   includeUntracked: boolean;
+  indexFile?: string;
 }
 
 interface SubmoduleTrackedFileChange {
@@ -258,6 +260,33 @@ function getCheckoutDiffDiscoveryArgs(refs: CheckoutDiffRefs): string[] {
 
 function getCheckoutDiffRenderingArgs(refs: CheckoutDiffRefs): string[] {
   return ["--ignore-submodules=none", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
+}
+
+function getCheckoutDiffGitEnv(refs: CheckoutDiffRefs) {
+  return refs.indexFile
+    ? { ...READ_ONLY_GIT_ENV, GIT_INDEX_FILE: refs.indexFile }
+    : READ_ONLY_GIT_ENV;
+}
+
+async function createSnapshotDiffIndex(
+  cwd: string,
+  baseRef: string,
+): Promise<{ directory: string; indexFile: string }> {
+  // A snapshot can contain files that are still untracked in the user's real index.
+  // Seed an alternate index from the snapshot so Git compares those paths to the
+  // working tree instead of treating them as deleted and re-added.
+  const directory = await mkdtemp(resolve(tmpdir(), "paseo-snapshot-diff-"));
+  const indexFile = resolve(directory, "index");
+  try {
+    await runGitCommand(["read-tree", baseRef], {
+      cwd,
+      envOverlay: { LC_ALL: "C", GIT_INDEX_FILE: indexFile },
+    });
+    return { directory, indexFile };
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 function normalizeBranchSuggestionName(raw: string): string | null {
@@ -525,7 +554,7 @@ async function listCheckoutFileChanges(
       ignoreWhitespace,
       extra: ["--name-status", ...getCheckoutDiffDiscoveryArgs(refs)],
     }),
-    { cwd, envOverlay: READ_ONLY_GIT_ENV },
+    { cwd, envOverlay: getCheckoutDiffGitEnv(refs) },
   );
   for (const line of nameStatusOut
     .split("\n")
@@ -567,7 +596,7 @@ async function listCheckoutFileChanges(
       ["ls-files", "--others", "--exclude-standard"],
       {
         cwd,
-        envOverlay: READ_ONLY_GIT_ENV,
+        envOverlay: getCheckoutDiffGitEnv(refs),
       },
     );
     for (const file of untrackedOut
@@ -687,7 +716,7 @@ async function getTrackedNumstatByPath(
     }),
     {
       cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
+      envOverlay: getCheckoutDiffGitEnv(refs),
       maxOutputBytes: TRACKED_DIFF_NUMSTAT_MAX_BYTES,
       acceptExitCodes: [0],
     },
@@ -750,7 +779,7 @@ async function getTrackedDiffTextForPath(input: {
     }),
     {
       cwd: input.cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
+      envOverlay: getCheckoutDiffGitEnv(input.refsForDiff),
       maxOutputBytes: PER_FILE_DIFF_MAX_BYTES,
     },
   );
@@ -1452,7 +1481,7 @@ async function getSubmoduleTrackedDiffTextForPath(input: {
     }),
     {
       cwd: trackedChange.cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
+      envOverlay: getCheckoutDiffGitEnv(trackedChange.refsForDiff),
       maxOutputBytes: PER_FILE_DIFF_MAX_BYTES,
     },
   );
@@ -1819,8 +1848,9 @@ export interface CheckoutDiffResult {
 }
 
 export interface CheckoutDiffCompare {
-  mode: "uncommitted" | "base";
+  mode: "uncommitted" | "base" | "snapshot";
   baseRef?: string;
+  targetRef?: string;
   ignoreWhitespace?: boolean;
   includeStructured?: boolean;
 }
@@ -3832,6 +3862,16 @@ async function resolveCheckoutDiffRefs(
   if (compare.mode === "uncommitted") {
     return { baseRef: "HEAD", includeUntracked: true };
   }
+  if (compare.mode === "snapshot") {
+    if (!compare.baseRef?.trim()) {
+      throw new Error("Snapshot diff requires a baseline ref");
+    }
+    return {
+      baseRef: compare.baseRef,
+      ...(compare.targetRef?.trim() ? { targetRef: compare.targetRef } : null),
+      includeUntracked: !compare.targetRef?.trim(),
+    };
+  }
   const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
   const baseRef = compare.baseRef ?? resolvedBaseRef;
   if (!baseRef) {
@@ -3855,153 +3895,165 @@ export async function getCheckoutDiff(
 ): Promise<CheckoutDiffResult> {
   await requireGitRepo(cwd);
 
-  const refsForDiff = await resolveCheckoutDiffRefs(cwd, compare, context);
+  let refsForDiff = await resolveCheckoutDiffRefs(cwd, compare, context);
   if (!refsForDiff) {
     return { diff: "" };
   }
 
-  const ignoreWhitespace = compare.ignoreWhitespace === true;
-  let effectiveRefsForDiff = refsForDiff;
-  let changes: CheckoutFileChange[];
-  try {
-    changes = await listCheckoutFileChanges(cwd, effectiveRefsForDiff, ignoreWhitespace);
-  } catch (error) {
-    if (!isUnbornHeadDiffError(error)) {
-      throw error;
-    }
-    effectiveRefsForDiff = { ...refsForDiff, baseRef: EMPTY_TREE_OBJECT_ID };
-    changes = await listCheckoutFileChanges(cwd, effectiveRefsForDiff, ignoreWhitespace);
+  let snapshotDiffIndexDirectory: string | null = null;
+  if (compare.mode === "snapshot" && !refsForDiff.targetRef) {
+    const snapshotIndex = await createSnapshotDiffIndex(cwd, refsForDiff.baseRef);
+    snapshotDiffIndexDirectory = snapshotIndex.directory;
+    refsForDiff = { ...refsForDiff, indexFile: snapshotIndex.indexFile };
   }
-  changes.sort((a, b) => {
-    if (a.path === b.path) return 0;
-    return a.path < b.path ? -1 : 1;
-  });
 
-  const structured: ParsedDiffFile[] = [];
-  // Live diffs refresh on every edit, while committed diffs can cover a long-lived
-  // branch. Give the stable committed snapshot enough room to remain reviewable.
-  const totalDiffMaxBytes =
-    compare.mode === "base"
+  try {
+    const ignoreWhitespace = compare.ignoreWhitespace === true;
+    let effectiveRefsForDiff = refsForDiff;
+    let changes: CheckoutFileChange[];
+    try {
+      changes = await listCheckoutFileChanges(cwd, effectiveRefsForDiff, ignoreWhitespace);
+    } catch (error) {
+      if (!isUnbornHeadDiffError(error)) {
+        throw error;
+      }
+      effectiveRefsForDiff = { ...refsForDiff, baseRef: EMPTY_TREE_OBJECT_ID };
+      changes = await listCheckoutFileChanges(cwd, effectiveRefsForDiff, ignoreWhitespace);
+    }
+    changes.sort((a, b) => {
+      if (a.path === b.path) return 0;
+      return a.path < b.path ? -1 : 1;
+    });
+
+    const structured: ParsedDiffFile[] = [];
+    // Live diffs refresh on every edit, while committed diffs can cover a long-lived
+    // branch. Give the stable committed snapshot enough room to remain reviewable.
+    const totalDiffMaxBytes = refsForDiff.targetRef
       ? (committedTotalDiffMaxBytesForTests ?? COMMITTED_TOTAL_DIFF_MAX_BYTES)
       : LIVE_TOTAL_DIFF_MAX_BYTES;
-  const output = createDiffOutputAccumulator(totalDiffMaxBytes);
-  const appendDiff = (text: string): void => {
-    output.tryAppend(text);
-  };
+    const output = createDiffOutputAccumulator(totalDiffMaxBytes);
+    const appendDiff = (text: string): void => {
+      output.tryAppend(text);
+    };
 
-  const submoduleScanCache = createSubmoduleScanCache();
-  const rootHead = await readHeadObjectIdCached(cwd, submoduleScanCache);
-  const rootComparison: SubmoduleDiffComparison = {
-    mode: compare.mode === "uncommitted" ? "uncommitted" : "committed",
-    oldEndpoint:
-      effectiveRefsForDiff.baseRef === EMPTY_TREE_OBJECT_ID
-        ? { kind: "absent" }
-        : {
+    const submoduleScanCache = createSubmoduleScanCache();
+    const rootHead = await readHeadObjectIdCached(cwd, submoduleScanCache);
+    const rootComparison: SubmoduleDiffComparison = {
+      mode: effectiveRefsForDiff.targetRef ? "committed" : "uncommitted",
+      oldEndpoint:
+        effectiveRefsForDiff.baseRef === EMPTY_TREE_OBJECT_ID
+          ? { kind: "absent" }
+          : {
+              kind: "commit",
+              ref: canonicalizeRootCommitRef(effectiveRefsForDiff.baseRef, rootHead),
+            },
+      newEndpoint: effectiveRefsForDiff.targetRef
+        ? {
             kind: "commit",
-            ref: canonicalizeRootCommitRef(effectiveRefsForDiff.baseRef, rootHead),
+            ref: canonicalizeRootCommitRef(effectiveRefsForDiff.targetRef, rootHead),
+          }
+        : {
+            kind: "worktree",
+            recordedCommit: rootHead,
+            headCommit: rootHead,
           },
-    newEndpoint: effectiveRefsForDiff.targetRef
-      ? {
-          kind: "commit",
-          ref: canonicalizeRootCommitRef(effectiveRefsForDiff.targetRef, rootHead),
-        }
-      : {
-          kind: "worktree",
-          recordedCommit: rootHead,
-          headCommit: rootHead,
-        },
-    includeUntracked: effectiveRefsForDiff.includeUntracked,
-  };
-  const submoduleFileChanges = await listSubmoduleFileChanges({
-    cwd,
-    ignoreWhitespace,
-    comparison: rootComparison,
-    cache: submoduleScanCache,
-  });
-  const trackedChanges = changes.filter(
-    (change) =>
-      !change.isUntracked && !submoduleFileChanges.expandedSubmodulePaths.has(change.path),
-  );
-  const untrackedChanges = changes.filter((change) => change.isUntracked === true);
-  if (effectiveRefsForDiff.includeUntracked) {
-    untrackedChanges.push(...submoduleFileChanges.untracked);
-    untrackedChanges.sort((a, b) => a.path.localeCompare(b.path));
-  }
-  const trackedDiff = await processTrackedChanges({
-    cwd,
-    refsForDiff: effectiveRefsForDiff,
-    trackedChanges,
-    ignoreWhitespace,
-    totalDiffMaxBytes,
-    appendDiff,
-  });
-
-  const appendTrackedPlaceholderComment = (
-    change: CheckoutFileChange,
-    status: "binary" | "too_large",
-  ) => {
-    if (status === "binary") {
-      appendDiff(`# ${change.path}: binary diff omitted\n`);
-      return;
-    }
-    appendDiff(`# ${change.path}: diff too large omitted\n`);
-  };
-
-  if (compare.includeStructured) {
-    await appendStructuredTrackedDiffs({
+      includeUntracked: effectiveRefsForDiff.includeUntracked,
+    };
+    const submoduleFileChanges = await listSubmoduleFileChanges({
       cwd,
-      trackedChanges,
-      trackedChangeByPath: trackedDiff.trackedChangeByPath,
-      trackedNumstatByPath: trackedDiff.trackedNumstatByPath,
-      trackedPlaceholderByPath: trackedDiff.trackedPlaceholderByPath,
-      trackedDiffText: trackedDiff.trackedDiffText,
-      refsForDiff: effectiveRefsForDiff,
       ignoreWhitespace,
-      structured,
-      appendDiff,
-      appendTrackedPlaceholderComment,
+      comparison: rootComparison,
+      cache: submoduleScanCache,
     });
-  } else {
-    for (const change of trackedChanges) {
-      const placeholder = trackedDiff.trackedPlaceholderByPath.get(change.path);
-      if (placeholder) {
-        appendTrackedPlaceholderComment(change, placeholder.status);
-      }
+    const trackedChanges = changes.filter(
+      (change) =>
+        !change.isUntracked && !submoduleFileChanges.expandedSubmodulePaths.has(change.path),
+    );
+    const untrackedChanges = changes.filter((change) => change.isUntracked === true);
+    if (effectiveRefsForDiff.includeUntracked) {
+      untrackedChanges.push(...submoduleFileChanges.untracked);
+      untrackedChanges.sort((a, b) => a.path.localeCompare(b.path));
     }
-  }
-
-  await processSubmoduleTrackedChanges({
-    cwd,
-    trackedChanges: submoduleFileChanges.tracked,
-    ignoreWhitespace,
-    includeStructured: compare.includeStructured === true,
-    structured,
-    output,
-  });
-
-  for (const change of untrackedChanges) {
-    if (output.remainingBytes() === 0) {
-      if (compare.includeStructured) {
-        structured.push(
-          buildPlaceholderParsedDiffFile(change, { status: "too_large", stat: null }),
-        );
-      }
-      continue;
-    }
-    await processUntrackedChange({
+    const trackedDiff = await processTrackedChanges({
       cwd,
-      change,
+      refsForDiff: effectiveRefsForDiff,
+      trackedChanges,
+      ignoreWhitespace,
+      totalDiffMaxBytes,
+      appendDiff,
+    });
+
+    const appendTrackedPlaceholderComment = (
+      change: CheckoutFileChange,
+      status: "binary" | "too_large",
+    ) => {
+      if (status === "binary") {
+        appendDiff(`# ${change.path}: binary diff omitted\n`);
+        return;
+      }
+      appendDiff(`# ${change.path}: diff too large omitted\n`);
+    };
+
+    if (compare.includeStructured) {
+      await appendStructuredTrackedDiffs({
+        cwd,
+        trackedChanges,
+        trackedChangeByPath: trackedDiff.trackedChangeByPath,
+        trackedNumstatByPath: trackedDiff.trackedNumstatByPath,
+        trackedPlaceholderByPath: trackedDiff.trackedPlaceholderByPath,
+        trackedDiffText: trackedDiff.trackedDiffText,
+        refsForDiff: effectiveRefsForDiff,
+        ignoreWhitespace,
+        structured,
+        appendDiff,
+        appendTrackedPlaceholderComment,
+      });
+    } else {
+      for (const change of trackedChanges) {
+        const placeholder = trackedDiff.trackedPlaceholderByPath.get(change.path);
+        if (placeholder) {
+          appendTrackedPlaceholderComment(change, placeholder.status);
+        }
+      }
+    }
+
+    await processSubmoduleTrackedChanges({
+      cwd,
+      trackedChanges: submoduleFileChanges.tracked,
       ignoreWhitespace,
       includeStructured: compare.includeStructured === true,
       structured,
       output,
     });
-  }
 
-  if (compare.includeStructured) {
-    return { diff: output.getText(), structured };
+    for (const change of untrackedChanges) {
+      if (output.remainingBytes() === 0) {
+        if (compare.includeStructured) {
+          structured.push(
+            buildPlaceholderParsedDiffFile(change, { status: "too_large", stat: null }),
+          );
+        }
+        continue;
+      }
+      await processUntrackedChange({
+        cwd,
+        change,
+        ignoreWhitespace,
+        includeStructured: compare.includeStructured === true,
+        structured,
+        output,
+      });
+    }
+
+    if (compare.includeStructured) {
+      return { diff: output.getText(), structured };
+    }
+    return { diff: output.getText() };
+  } finally {
+    if (snapshotDiffIndexDirectory) {
+      await rm(snapshotDiffIndexDirectory, { recursive: true, force: true });
+    }
   }
-  return { diff: output.getText() };
 }
 
 export async function commitChanges(

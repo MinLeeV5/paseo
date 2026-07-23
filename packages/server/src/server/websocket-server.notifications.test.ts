@@ -276,6 +276,90 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
     expect(getLastAssistantMessage).toHaveBeenCalledWith("agent-2");
   });
 
+  it("drops a completed Goal notification when that Goal is already archived", async () => {
+    const archivedAt = new Date("2026-07-22T10:16:40.738Z");
+    const agent = {
+      goal: { objective: "Ship Goal state support", status: "complete" },
+      archivedGoal: { objective: "Ship Goal state support", archivedAt },
+      workspaceId: WORKSPACE_ID,
+      pendingPermissions: new Map(),
+    };
+    const { server, pushNotifications } = createServer({
+      getAgent: vi.fn(() => agent),
+    });
+    const ws = connectClient(server, null);
+
+    await asInternals<WebSocketServerInternals>(server).broadcastAgentAttention({
+      agentId: "agent-archived-goal",
+      provider: "codex",
+      reason: "finished",
+      goal: agent.goal,
+    });
+
+    expect(pushNotifications.sent).toEqual([]);
+    expect(ws.send).not.toHaveBeenCalled();
+  });
+
+  it("drops an in-flight Goal notification when the Goal is archived before delivery", async () => {
+    let releaseAssistantMessage: ((value: string | null) => void) | null = null;
+    const assistantMessage = new Promise<string | null>((resolve) => {
+      releaseAssistantMessage = resolve;
+    });
+    const agent = {
+      goal: { objective: "Ship Goal state support", status: "complete" },
+      archivedGoal: null as { objective: string; archivedAt: Date } | null,
+      workspaceId: WORKSPACE_ID,
+      pendingPermissions: new Map(),
+    };
+    const getLastAssistantMessage = vi.fn(() => assistantMessage);
+    const { server, pushNotifications } = createServer({
+      getAgent: vi.fn(() => agent),
+      getLastAssistantMessage,
+    });
+    const ws = connectClient(server, null);
+
+    const broadcast = asInternals<WebSocketServerInternals>(server).broadcastAgentAttention({
+      agentId: "agent-in-flight-goal",
+      provider: "codex",
+      reason: "finished",
+      goal: agent.goal,
+    });
+    await vi.waitFor(() => expect(getLastAssistantMessage).toHaveBeenCalled());
+    agent.archivedGoal = {
+      objective: agent.goal.objective,
+      archivedAt: new Date("2026-07-22T10:16:40.738Z"),
+    };
+    releaseAssistantMessage?.(null);
+    await broadcast;
+
+    expect(pushNotifications.sent).toEqual([]);
+    expect(ws.send).not.toHaveBeenCalled();
+  });
+
+  it("keeps lifecycle error attention for an Agent whose Goal is archived", async () => {
+    const agent = {
+      goal: { objective: "Ship Goal state support", status: "complete" },
+      archivedGoal: {
+        objective: "Ship Goal state support",
+        archivedAt: new Date("2026-07-22T10:16:40.738Z"),
+      },
+      workspaceId: WORKSPACE_ID,
+      pendingPermissions: new Map(),
+    };
+    const { server } = createServer({
+      getAgent: vi.fn(() => agent),
+    });
+    const ws = connectClient(server, null);
+
+    await asInternals<WebSocketServerInternals>(server).broadcastAgentAttention({
+      agentId: "agent-archived-goal-error",
+      provider: "codex",
+      reason: "error",
+    });
+
+    expect(readAttentionRequiredMessage(ws).reason).toBe("error");
+  });
+
   it("routes a hidden stale focused browser tab's notification to the present Electron web client", async () => {
     const { server, pushNotifications } = createServer();
     const nowMs = Date.now();

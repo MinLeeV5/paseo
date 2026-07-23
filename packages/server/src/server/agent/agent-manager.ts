@@ -90,6 +90,40 @@ const STORED_AGENT_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindBoth: false,
 };
 
+function getTurnPreparationKey(agentId: string, turnId: string): string {
+  return `${agentId}\u0000${turnId}`;
+}
+
+function getPromptRecordText(prompt: AgentPromptInput): string {
+  if (typeof prompt === "string") {
+    return prompt.trim();
+  }
+  if (!Array.isArray(prompt)) {
+    const legacyText = (prompt as { text?: unknown }).text;
+    return typeof legacyText === "string" ? legacyText.trim() : "";
+  }
+  return prompt
+    .filter(
+      (block): block is Extract<(typeof prompt)[number], { type: "text" }> =>
+        block.type === "text" && !("mimeType" in block),
+    )
+    .map((block) => block.text.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function getTurnDiffTerminalStatus(
+  event: AgentStreamEvent,
+): "completed" | "failed" | "canceled" | null {
+  if (event.type === "turn_completed") {
+    return "completed";
+  }
+  if (event.type === "turn_canceled") {
+    return "canceled";
+  }
+  return event.type === "turn_failed" ? "failed" : null;
+}
+
 type TimeoutResult = "completed" | "timed_out";
 
 export class AgentManagerShuttingDownError extends Error {
@@ -239,6 +273,7 @@ export interface CreateAgentOptions {
   // undefined is an explicit decision: the agent never appears in the sidebar.
   workspaceId: string | undefined;
   owner?: AgentOwner;
+  archivedGoal?: ArchivedGoalMarker | null;
 }
 
 export interface AgentManagerOptions {
@@ -248,6 +283,25 @@ export interface AgentManagerOptions {
   registry?: AgentStorage;
   onAgentAttention?: AgentAttentionCallback;
   onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
+  onBeforeAgentTurn?: (params: {
+    agentId: string;
+    cwd: string;
+    prompt: string;
+    messageId?: string;
+  }) => Promise<string | null | void> | string | null | void;
+  onAgentTurnStarted?: (params: {
+    agentId: string;
+    cwd: string;
+    preparationId: string;
+    turnId: string;
+  }) => Promise<void> | void;
+  onAfterAgentTurn?: (params: {
+    agentId: string;
+    cwd: string;
+    preparationId: string;
+    turnId?: string;
+    status: "completed" | "failed" | "canceled";
+  }) => Promise<void> | void;
   durableTimelineStore?: AgentTimelineStore;
   terminalManager?: TerminalManager | null;
   mcpBaseUrl?: string;
@@ -323,6 +377,7 @@ interface ManagedAgentBase {
   features?: AgentFeature[];
   currentModeId: string | null;
   goal: AgentGoal | null;
+  archivedGoal?: ArchivedGoalMarker | null;
   pendingPermissions: Map<string, AgentPermissionRequest>;
   bufferedPermissionResolutions: Map<
     string,
@@ -347,6 +402,11 @@ interface ManagedAgentBase {
    * User-defined labels for categorizing agents (e.g., { surface: "workspace" }).
    */
   labels: Record<string, string>;
+}
+
+interface ArchivedGoalMarker {
+  objective: string;
+  archivedAt: Date;
 }
 
 type ManagedAgentWithSession = ManagedAgentBase & {
@@ -494,6 +554,30 @@ function normalizeStoredGoal(
   return { objective: goal.objective, status };
 }
 
+function applyGoalUpdate(agent: ManagedAgent, goal: AgentGoal | null): void {
+  agent.goal = goal;
+  if (agent.archivedGoal && (!goal || agent.archivedGoal.objective !== goal.objective)) {
+    agent.archivedGoal = null;
+  }
+}
+
+export function isCurrentGoalArchived(agent: ManagedAgent): boolean {
+  return Boolean(
+    agent.goal && agent.archivedGoal && agent.archivedGoal.objective === agent.goal.objective,
+  );
+}
+
+function resolveInitialArchivedGoal(
+  options:
+    | {
+        archivedGoal?: ArchivedGoalMarker | null;
+      }
+    | null
+    | undefined,
+): ArchivedGoalMarker | null {
+  return options?.archivedGoal ?? null;
+}
+
 function isTurnTerminalEvent(event: AgentStreamEvent): boolean {
   return (
     event.type === "turn_completed" ||
@@ -633,6 +717,10 @@ export class AgentManager {
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
+  private onBeforeAgentTurn?: AgentManagerOptions["onBeforeAgentTurn"];
+  private onAgentTurnStarted?: AgentManagerOptions["onAgentTurnStarted"];
+  private onAfterAgentTurn?: AgentManagerOptions["onAfterAgentTurn"];
+  private readonly turnPreparationIds = new Map<string, string>();
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
   private acceptingAgentRegistrations = true;
@@ -642,7 +730,10 @@ export class AgentManager {
     this.registry = options?.registry;
     this.durableTimelineStore = options?.durableTimelineStore;
     this.onAgentAttention = options?.onAgentAttention;
-    this.onWorkspaceStateMayHaveChanged = options?.onWorkspaceStateMayHaveChanged;
+    this.onWorkspaceStateMayHaveChanged = options.onWorkspaceStateMayHaveChanged;
+    this.onBeforeAgentTurn = options.onBeforeAgentTurn;
+    this.onAgentTurnStarted = options.onAgentTurnStarted;
+    this.onAfterAgentTurn = options.onAfterAgentTurn;
     this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
     this.mcpAuthToken = options?.mcpAuthToken ?? null;
     this.configurePaseoTools(options);
@@ -1092,6 +1183,7 @@ export class AgentManager {
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
       owner: options.owner,
+      archivedGoal: options.archivedGoal,
     });
   }
 
@@ -1116,6 +1208,7 @@ export class AgentManager {
       labels?: Record<string, string>;
       workspaceId?: string;
       owner?: AgentOwner;
+      archivedGoal?: ArchivedGoalMarker | null;
     },
   ): Promise<ManagedAgent> {
     return this.trackAgentRegistrationOperation(
@@ -1134,6 +1227,7 @@ export class AgentManager {
       labels?: Record<string, string>;
       workspaceId?: string;
       owner?: AgentOwner;
+      archivedGoal?: ArchivedGoalMarker | null;
     },
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
@@ -1324,6 +1418,7 @@ export class AgentManager {
         lastUsage: preservedLastUsage,
         lastError: preservedLastError,
         attention: preservedAttention,
+        archivedGoal: existing.archivedGoal,
       });
     } finally {
       if (!handedToRegistration) {
@@ -1600,6 +1695,12 @@ export class AgentManager {
         features: record.features,
         currentModeId: record.lastModeId ?? null,
         goal: normalizeStoredGoal(record.goal),
+        archivedGoal: record.archivedGoal
+          ? {
+              objective: record.archivedGoal.objective,
+              archivedAt: new Date(record.archivedGoal.archivedAt),
+            }
+          : null,
         pendingPermissions: new Map(),
         bufferedPermissionResolutions: new Map(),
         inFlightPermissionResponses: new Set(),
@@ -1793,6 +1894,66 @@ export class AgentManager {
       throw new Error(`Agent not found in storage after detach: ${agentId}`);
     }
     return { record: result.record, live: false, previousParentAgentId };
+  }
+
+  async archiveAgentGoal(agentId: string): Promise<{
+    archivedAt: string;
+    record: StoredAgentRecord;
+    live: boolean;
+  }> {
+    const registry = this.requireRegistry();
+    const archivedAt = new Date().toISOString();
+    const liveAgent = this.agents.get(agentId);
+
+    if (liveAgent) {
+      if (!liveAgent.goal) {
+        throw new Error(`Agent ${agentId} has no Goal to archive`);
+      }
+      const previousArchivedGoal = liveAgent.archivedGoal;
+      const previousUpdatedAt = liveAgent.updatedAt;
+      const archivedGoal = {
+        objective: liveAgent.goal.objective,
+        archivedAt: new Date(archivedAt),
+      };
+      liveAgent.archivedGoal = archivedGoal;
+      this.touchUpdatedAt(liveAgent);
+      const archiveUpdatedAt = liveAgent.updatedAt;
+      try {
+        await this.persistSnapshot(liveAgent);
+      } catch (error) {
+        if (liveAgent.archivedGoal === archivedGoal) {
+          liveAgent.archivedGoal = previousArchivedGoal;
+        }
+        if (liveAgent.updatedAt === archiveUpdatedAt) {
+          liveAgent.updatedAt = previousUpdatedAt;
+        }
+        throw error;
+      }
+      this.emitState(liveAgent, { persist: false });
+      const record = await registry.get(agentId);
+      if (!record) {
+        throw new Error(`Agent not found in storage after Goal archive: ${agentId}`);
+      }
+      return { archivedAt, record, live: true };
+    }
+
+    const record = await registry.get(agentId);
+    if (!record) {
+      throw new Error(`Agent not found: ${agentId}`);
+    }
+    if (!record.goal) {
+      throw new Error(`Agent ${agentId} has no Goal to archive`);
+    }
+    const nextRecord: StoredAgentRecord = {
+      ...record,
+      archivedGoal: {
+        objective: record.goal.objective,
+        archivedAt,
+      },
+      updatedAt: this.nextStoredUpdatedAt(record),
+    };
+    await registry.upsert(nextRecord);
+    return { archivedAt, record: nextRecord, live: false };
   }
 
   notifyAgentState(agentId: string): void {
@@ -2022,6 +2183,131 @@ export class AgentManager {
     });
   }
 
+  private async prepareForegroundTurn(
+    agent: ActiveManagedAgent,
+    prompt: AgentPromptInput,
+    options?: AgentRunOptions,
+  ): Promise<string | null> {
+    const promptRecordText = getPromptRecordText(prompt);
+    if (isSystemInjectedEnvelope(promptRecordText)) {
+      return null;
+    }
+    try {
+      return (
+        (await this.onBeforeAgentTurn?.({
+          agentId: agent.id,
+          cwd: agent.cwd,
+          prompt: promptRecordText,
+          ...(options?.clientMessageId ? { messageId: options.clientMessageId } : null),
+        })) ?? null
+      );
+    } catch (error) {
+      this.logger.warn(
+        { err: error, agentId: agent.id },
+        "Agent pre-turn preparation failed; continuing the turn",
+      );
+      return null;
+    }
+  }
+
+  private async recordStartedTurnPreparation(
+    agent: ActiveManagedAgent,
+    preparationId: string | null,
+    turnId: string,
+  ): Promise<void> {
+    if (!preparationId) {
+      return;
+    }
+    this.turnPreparationIds.set(getTurnPreparationKey(agent.id, turnId), preparationId);
+    try {
+      await this.onAgentTurnStarted?.({
+        agentId: agent.id,
+        cwd: agent.cwd,
+        preparationId,
+        turnId,
+      });
+    } catch (error) {
+      this.logger.warn(
+        { err: error, agentId: agent.id, turnId },
+        "Agent turn-start preparation update failed; continuing the turn",
+      );
+    }
+  }
+
+  private async recordFailedTurnPreparation(
+    agent: ActiveManagedAgent,
+    preparationId: string | null,
+  ): Promise<void> {
+    if (!preparationId) {
+      return;
+    }
+    try {
+      await this.onAfterAgentTurn?.({
+        agentId: agent.id,
+        cwd: agent.cwd,
+        preparationId,
+        status: "failed",
+      });
+    } catch (error) {
+      this.logger.warn(
+        { err: error, agentId: agent.id },
+        "Agent failed-turn snapshot failed; continuing failure handling",
+      );
+    }
+  }
+
+  private recordTerminalTurnPreparation(
+    agent: ActiveManagedAgent,
+    event: AgentStreamEvent,
+    turnId: string | undefined,
+    isForegroundEvent: boolean,
+  ): Promise<void> | null {
+    if (!isForegroundEvent || !turnId) {
+      return null;
+    }
+    const status = getTurnDiffTerminalStatus(event);
+    if (!status) {
+      return null;
+    }
+    const preparationKey = getTurnPreparationKey(agent.id, turnId);
+    const preparationId = this.turnPreparationIds.get(preparationKey);
+    if (!preparationId) {
+      return null;
+    }
+    return this.finishTerminalTurnPreparation({
+      agent,
+      preparationId,
+      preparationKey,
+      status,
+      turnId,
+    });
+  }
+
+  private async finishTerminalTurnPreparation(input: {
+    agent: ActiveManagedAgent;
+    preparationId: string;
+    preparationKey: string;
+    status: "completed" | "failed" | "canceled";
+    turnId: string;
+  }): Promise<void> {
+    try {
+      await this.onAfterAgentTurn?.({
+        agentId: input.agent.id,
+        cwd: input.agent.cwd,
+        preparationId: input.preparationId,
+        turnId: input.turnId,
+        status: input.status,
+      });
+    } catch (error) {
+      this.logger.warn(
+        { err: error, agentId: input.agent.id, turnId: input.turnId },
+        "Agent terminal-turn snapshot failed; continuing completion handling",
+      );
+    } finally {
+      this.turnPreparationIds.delete(input.preparationKey);
+    }
+  }
+
   streamAgent(
     agentId: string,
     prompt: AgentPromptInput,
@@ -2065,13 +2351,17 @@ export class AgentManager {
 
     const streamForwarder = async function* streamForwarder(this: AgentManager) {
       let turnId: string;
+      let preparationId: string | null = null;
       let turnStream: ReturnType<AgentRunState["createTurnStream"]> | null = null;
       try {
+        preparationId = await this.prepareForegroundTurn(agent, prompt, options);
         const result = await agent.session.startTurn(prompt, options);
         turnId = result.turnId;
+        await this.recordStartedTurnPreparation(agent, preparationId, turnId);
       } catch (error) {
         agent.pendingReplacement = false;
         const errorMsg = error instanceof Error ? error.message : "Failed to start turn";
+        await this.recordFailedTurnPreparation(agent, preparationId);
         await this.handleStreamEvent(agent, {
           type: "turn_failed",
           provider: agent.provider,
@@ -2806,6 +3096,7 @@ export class AgentManager {
       publishWhenReady?: boolean;
       workspaceId?: string;
       owner?: AgentOwner;
+      archivedGoal?: ArchivedGoalMarker | null;
     },
   ): Promise<ManagedAgent> {
     let registered = false;
@@ -2946,6 +3237,7 @@ export class AgentManager {
           persistence?: AgentPersistenceHandle;
           workspaceId?: string;
           owner?: AgentOwner;
+          archivedGoal?: ArchivedGoalMarker | null;
         }
       | undefined;
   }): ActiveManagedAgent {
@@ -2966,6 +3258,7 @@ export class AgentManager {
       availableModes: [],
       currentModeId: null,
       goal: null,
+      archivedGoal: resolveInitialArchivedGoal(options),
       pendingPermissions: new Map<string, AgentPermissionRequest>(),
       bufferedPermissionResolutions: new Map(),
       inFlightPermissionResponses: new Set(),
@@ -3235,16 +3528,16 @@ export class AgentManager {
 
     if (agent.session.getGoal) {
       try {
-        agent.goal = await agent.session.getGoal();
+        applyGoalUpdate(agent, await agent.session.getGoal());
       } catch (error) {
-        agent.goal = null;
+        applyGoalUpdate(agent, null);
         this.logger.warn(
           { err: error, agentId: agent.id, provider: agent.provider },
           "Failed to refresh agent goal state",
         );
       }
     } else {
-      agent.goal = null;
+      applyGoalUpdate(agent, null);
     }
 
     this.syncFeaturesFromSession(agent);
@@ -3485,6 +3778,15 @@ export class AgentManager {
     }
 
     if (!options?.fromHistory && isTurnTerminalEvent(event)) {
+      const preparation = this.recordTerminalTurnPreparation(
+        agent,
+        event,
+        eventTurnId,
+        isForegroundEvent,
+      );
+      if (preparation) {
+        await preparation;
+      }
       this.runs.settleTerminalRun(agent.id, eventTurnId);
       if (isForegroundEvent) {
         this.finalizeForegroundTurn(agent, eventTurnId);
@@ -3670,6 +3972,7 @@ export class AgentManager {
         this.emitState(agent);
         return true;
       case "thinking_option_changed":
+        agent.config.thinkingOptionId = event.thinkingOptionId ?? undefined;
         if (agent.runtimeInfo) {
           agent.runtimeInfo = {
             ...agent.runtimeInfo,
@@ -3680,7 +3983,7 @@ export class AgentManager {
         this.emitState(agent);
         return true;
       case "goal_changed":
-        agent.goal = event.goal;
+        applyGoalUpdate(agent, event.goal);
         if (event.goal?.status === "active" && agent.lifecycle !== "error") {
           agent.attention = { requiresAttention: false };
         }
@@ -4073,6 +4376,12 @@ export class AgentManager {
         attentionTimestamp: new Date(),
       };
       this.broadcastAgentAttention(agent, "error");
+      return;
+    }
+
+    // Archiving the current Goal dismisses both its presentation and later notifications.
+    // Lifecycle errors above and permission requests handled elsewhere remain visible.
+    if (isCurrentGoalArchived(agent)) {
       return;
     }
 

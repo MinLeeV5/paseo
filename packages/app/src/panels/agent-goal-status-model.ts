@@ -19,8 +19,9 @@ export interface AgentGoalStatusModel {
 export function buildAgentGoalStatusModel(input: {
   supported: boolean;
   goal: AgentGoalPayload | null | undefined;
+  goalArchivedAt?: Date | string | null;
 }): AgentGoalStatusModel | null {
-  if (!input.supported || !input.goal) {
+  if (!input.supported || !input.goal || input.goalArchivedAt) {
     return null;
   }
 

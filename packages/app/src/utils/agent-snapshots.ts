@@ -34,6 +34,7 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     provider: snapshot.provider,
     status: snapshot.status,
     goal: snapshot.goal ?? null,
+    goalArchivedAt: snapshot.goalArchivedAt ? new Date(snapshot.goalArchivedAt) : null,
     createdAt,
     updatedAt,
     lastUserMessageAt,

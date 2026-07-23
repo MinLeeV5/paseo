@@ -33,6 +33,27 @@ const PERSISTENCE_HANDLE_SCHEMA = z
   .nullable()
   .optional();
 
+const STORED_AGENT_TURN_DIFF_SNAPSHOT_SCHEMA = z.object({
+  ref: z.string(),
+  commit: z.string(),
+  tree: z.string().optional(),
+  repoRoot: z.string(),
+  capturedAt: z.string(),
+});
+
+const STORED_AGENT_TURN_DIFF_RECORD_SCHEMA = z.object({
+  id: z.string(),
+  messageId: z.string().optional(),
+  providerTurnId: z.string().optional(),
+  prompt: z.string(),
+  status: z.enum(["running", "completed", "failed", "canceled"]),
+  startSnapshot: STORED_AGENT_TURN_DIFF_SNAPSHOT_SCHEMA,
+  endSnapshot: STORED_AGENT_TURN_DIFF_SNAPSHOT_SCHEMA.optional(),
+  hasChanges: z.boolean().optional(),
+  startedAt: z.string(),
+  endedAt: z.string().optional(),
+});
+
 const STORED_AGENT_SCHEMA = z.object({
   id: z.string(),
   provider: z.string(),
@@ -46,6 +67,13 @@ const STORED_AGENT_SCHEMA = z.object({
   labels: z.record(z.string(), z.string()).default({}),
   lastStatus: AgentStatusSchema.default("closed"),
   goal: AgentGoalPayloadSchema.nullable().optional(),
+  archivedGoal: z
+    .object({
+      objective: z.string(),
+      archivedAt: z.string(),
+    })
+    .nullable()
+    .optional(),
   lastModeId: z.string().nullable().optional(),
   config: SERIALIZABLE_CONFIG_SCHEMA,
   runtimeInfo: z
@@ -67,6 +95,15 @@ const STORED_AGENT_SCHEMA = z.object({
   internal: z.boolean().optional(),
   archivedAt: z.string().nullable().optional(),
   owner: AgentOwnerSchema.optional(),
+  sessionDiffBaseline: z
+    .object({
+      ref: z.string(),
+      commit: z.string(),
+      repoRoot: z.string(),
+      capturedAt: z.string(),
+    })
+    .optional(),
+  turnDiffRecords: z.array(STORED_AGENT_TURN_DIFF_RECORD_SCHEMA).optional(),
 });
 
 export type SerializableAgentConfig = Pick<
@@ -81,6 +118,9 @@ export type SerializableAgentConfig = Pick<
 >;
 
 export type StoredAgentRecord = z.infer<typeof STORED_AGENT_SCHEMA>;
+export type StoredAgentSessionDiffBaseline = NonNullable<StoredAgentRecord["sessionDiffBaseline"]>;
+export type StoredAgentTurnDiffSnapshot = z.infer<typeof STORED_AGENT_TURN_DIFF_SNAPSHOT_SCHEMA>;
+export type StoredAgentTurnDiffRecord = z.infer<typeof STORED_AGENT_TURN_DIFF_RECORD_SCHEMA>;
 export function parseStoredAgentRecord(value: unknown): StoredAgentRecord {
   return STORED_AGENT_SCHEMA.parse(value);
 }
@@ -226,6 +266,12 @@ export class AgentStorage {
     if (existing && existing.archivedAt !== undefined) {
       record.archivedAt = existing.archivedAt;
     }
+    if (existing?.sessionDiffBaseline !== undefined) {
+      record.sessionDiffBaseline = existing.sessionDiffBaseline;
+    }
+    if (existing?.turnDiffRecords !== undefined) {
+      record.turnDiffRecords = existing.turnDiffRecords;
+    }
     await this.upsert(record);
   }
 
@@ -237,6 +283,67 @@ export class AgentStorage {
       throw new Error(`Agent ${agentId} not found`);
     }
     await this.upsert({ ...record, title });
+  }
+
+  async setSessionDiffBaseline(
+    agentId: string,
+    baseline: StoredAgentSessionDiffBaseline,
+  ): Promise<void> {
+    await this.load();
+    await this.waitForPendingWrite(agentId);
+    const record = await this.get(agentId);
+    if (!record) {
+      throw new Error(`Agent ${agentId} not found`);
+    }
+    if (record.sessionDiffBaseline) {
+      return;
+    }
+    await this.upsert({ ...record, sessionDiffBaseline: baseline });
+  }
+
+  async appendTurnDiffRecord(
+    agentId: string,
+    turnDiffRecord: StoredAgentTurnDiffRecord,
+  ): Promise<void> {
+    await this.load();
+    await this.waitForPendingWrite(agentId);
+    const record = await this.get(agentId);
+    if (!record) {
+      throw new Error(`Agent ${agentId} not found`);
+    }
+    if (record.turnDiffRecords?.some((candidate) => candidate.id === turnDiffRecord.id)) {
+      throw new Error(`Turn diff record ${turnDiffRecord.id} already exists for agent ${agentId}`);
+    }
+    await this.upsert({
+      ...record,
+      turnDiffRecords: [...(record.turnDiffRecords ?? []), turnDiffRecord],
+    });
+  }
+
+  async updateTurnDiffRecord(
+    agentId: string,
+    turnDiffRecordId: string,
+    patch: Partial<
+      Pick<
+        StoredAgentTurnDiffRecord,
+        "providerTurnId" | "status" | "endSnapshot" | "hasChanges" | "endedAt"
+      >
+    >,
+  ): Promise<void> {
+    await this.load();
+    await this.waitForPendingWrite(agentId);
+    const record = await this.get(agentId);
+    if (!record) {
+      throw new Error(`Agent ${agentId} not found`);
+    }
+    const turnDiffRecords = record.turnDiffRecords ?? [];
+    const recordIndex = turnDiffRecords.findIndex((candidate) => candidate.id === turnDiffRecordId);
+    if (recordIndex < 0) {
+      throw new Error(`Turn diff record ${turnDiffRecordId} not found for agent ${agentId}`);
+    }
+    const updatedTurnDiffRecords = turnDiffRecords.slice();
+    updatedTurnDiffRecords[recordIndex] = Object.assign({}, turnDiffRecords[recordIndex], patch);
+    await this.upsert({ ...record, turnDiffRecords: updatedTurnDiffRecords });
   }
 
   async flush(): Promise<void> {
