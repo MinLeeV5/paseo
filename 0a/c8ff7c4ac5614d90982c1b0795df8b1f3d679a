@@ -1,0 +1,198 @@
+packages/app/src/data/push-router.test.ts
+  8fac7d247b9b2c3d 324-334,346-356,370-387,393-419
+  9e6de639c3b8f11d 594-598,640
+  044fccf5de3e0367 4,9,25-32,39-40,66-73,81-82,92-99,147-165,176-177,286-323,335-345,357-369,388-391,420-425,520-527,556-571,573-575,592-593,603-605,625-639,661,663
+docs/glossary.md
+  044fccf5de3e0367 25
+packages/server/src/server/websocket-server.notifications.test.ts
+  044fccf5de3e0367 279-283,285-310,312-345,347-362
+  9e6de639c3b8f11d 284,311,346
+packages/app/src/i18n/resources/ru.ts
+  044fccf5de3e0367 227-231,838-848,851,853-861
+  8fac7d247b9b2c3d 852
+packages/app/src/contexts/session-attention-notifications.test.ts
+  044fccf5de3e0367 32-58
+packages/server/src/server/persistence-hooks.test.ts
+  044fccf5de3e0367 6,31-44
+packages/server/src/server/agent/agent-manager.test.ts
+  044fccf5de3e0367 3542-3567,3569-3610,4667-4797
+packages/server/src/server/session/agent-session-changes/agent-session-changes-session.ts
+  9e6de639c3b8f11d 1-69
+packages/server/src/server/agent-session-changes-manager.ts
+  8fac7d247b9b2c3d 88-91,278,500-503
+  044fccf5de3e0367 1-38,40-77,80,103-153,155-277,279-281,283-483,485-489,499,534-576,579-610,615-729
+packages/app/src/hooks/use-changes-preferences/storage.test.ts
+  044fccf5de3e0367 35,59,83,115-127
+packages/protocol/src/messages.test.ts
+  044fccf5de3e0367 297,303,311-347
+packages/app/src/stores/session-store.ts
+  044fccf5de3e0367 102
+packages/app/src/i18n/resources/fr.ts
+  8fac7d247b9b2c3d 861-862
+  044fccf5de3e0367 229-232,234,847-857,860,863-872
+packages/app/src/panels/agent-goal-status.tsx
+  044fccf5de3e0367 1,26,49-50,53,59,61,65,90-93,107-112,115-116,139-163
+packages/app/src/i18n/resources/zh-CN.ts
+  8fac7d247b9b2c3d 810
+  044fccf5de3e0367 225-229,808-809,811-820,823-831
+packages/server/src/utils/checkout-git.ts
+  044fccf5de3e0367 3-4,192,265-291,557,599,719,782,1484,1851,1853,3865-3874,3898,3903-3909,3911-3921,3923-3926,3928-3931,3934-3937,3939-3951,3953-3958,3960-3975,3977,3980,3982,3986-3995,3997-4016,4019-4020,4022,4029-4055
+packages/server/src/server/agent/agent-loading.ts
+  044fccf5de3e0367 127-132
+docs/architecture.md
+  044fccf5de3e0367 67-81,321
+packages/server/src/server/workspace-git-service.ts
+  044fccf5de3e0367 522,525-527,540-541
+packages/app/src/git/use-agent-session-changes-query.ts
+  044fccf5de3e0367 1-82
+packages/server/src/server/session.test.ts
+  8fac7d247b9b2c3d 130,162
+  044fccf5de3e0367 1032-1033,1157-1221
+packages/server/src/server/session/agent-session-changes/agent-session-changes-session.test.ts
+  9e6de639c3b8f11d 1-86
+docs/agent-lifecycle.md
+  044fccf5de3e0367 15-16,61
+packages/server/src/server/agent/agent-storage.test.ts
+  044fccf5de3e0367 299-373
+packages/app/src/contexts/session-context.tsx
+  044fccf5de3e0367 513-514
+packages/app/src/i18n/resources/ja.ts
+  044fccf5de3e0367 228-231,233,828-838,841,843-851
+  8fac7d247b9b2c3d 842
+packages/app/src/i18n/resources/ar.ts
+  8fac7d247b9b2c3d 830
+  044fccf5de3e0367 225-229,816-826,829,831-839
+packages/app/src/data/push-router.ts
+  044fccf5de3e0367 21-24,31-32,37-38,56-66,75,94-103,116,146-153,184-206,259,266,275,280,290-293,303-308,319,323,332,369-381,384-403,406-412,416,443-444,450-453,499-546,652-678,681,690,747-751,791-800,851,858,871-872,877,892-920,971-998,1032-1037
+  8fac7d247b9b2c3d 382-383,404-405
+  9e6de639c3b8f11d 801-806,873-874,921-922,1038-1042
+packages/protocol/src/messages.agent-session-changes.test.ts
+  044fccf5de3e0367 1-105
+packages/server/src/server/agent/agent-projections.ts
+  044fccf5de3e0367 52-67,101-106,148,254
+packages/server/src/server/session.ts
+  044fccf5de3e0367 138-139,420,551-563,635-636,673,784,1736-1737,1773-1777,2188,2190,2210-2214,2325-2356,6415
+packages/app/src/panels/archive-goal-agent.test.ts
+  044fccf5de3e0367 10-11,23,36,48-51,54,60-61
+packages/protocol/src/messages.ts
+  044fccf5de3e0367 711-712,1487-1503,1673-1689,2518,2524-2525,2797-2800,2833-2834,4143-4177,5252,5271-5272,5426,5586,5595-5606
+packages/app/src/runtime/host-runtime.test.ts
+  044fccf5de3e0367 2637
+packages/app/src/hooks/use-changes-preferences/storage.ts
+  044fccf5de3e0367 16,25,34
+packages/app/src/utils/agent-directory-reconciliation.test.ts
+  044fccf5de3e0367 61
+packages/client/src/daemon-client.ts
+  044fccf5de3e0367 378-381,1110-1118,2281-2296,2444-2457,3560-3610,5697
+packages/server/src/server/persistence-hooks.ts
+  044fccf5de3e0367 114,123-128
+packages/app/src/i18n/resources/es.ts
+  8fac7d247b9b2c3d 863
+  044fccf5de3e0367 228-232,234,849-859,862,864-872
+packages/app/src/git/diff-pane.tsx
+  044fccf5de3e0367 57,102,1423-1424,2651-2658,2766-2802,2804-2919,2921-2998,3013-3056,3075-3076,3082-3091,3116-3117,3181-3195,3201,3212-3218,3230-3237,3256-3257,3262,3265-3272,3433,3447,3497-3513,3516-3517,3558-3559,3561-3571,3574-3575,3667-3671,3691-3695,3707-3708
+  9e6de639c3b8f11d 3176,3258-3259,3263-3264,3434
+  8fac7d247b9b2c3d 2803,2999-3012,3163-3167,3175,3177-3180,3196-3200,3208
+packages/server/src/server/agent/agent-storage.ts
+  044fccf5de3e0367 36-56,70-76,98-106,121-123,269-274,288-328,330-346
+packages/app/src/i18n/resources/pt-BR.ts
+  044fccf5de3e0367 228-232,234,840-850,853,855-863
+  8fac7d247b9b2c3d 854
+packages/protocol/src/messages.workspaces.test.ts
+  044fccf5de3e0367 155,182
+packages/app/src/panels/agent-goal-status-model.ts
+  044fccf5de3e0367 22,24
+packages/server/src/server/bootstrap.ts
+  044fccf5de3e0367 149,800-805,831-852,1567
+packages/server/src/server/websocket-server.ts
+  044fccf5de3e0367 7-11,22,470,558,583,968,1180,1385-1387,1420-1421,2180,2182-2183,2185-2186,2188-2189
+  9e6de639c3b8f11d 2181,2187
+docs/data-model.md
+  044fccf5de3e0367 74-135
+packages/app/src/i18n/resources/en.ts
+  8fac7d247b9b2c3d 828
+  044fccf5de3e0367 224-228,826-827,829-838,841-849
+packages/app/src/utils/agent-snapshots.test.ts
+  044fccf5de3e0367 21,84-91
+  9e6de639c3b8f11d 92
+packages/app/src/utils/agent-snapshots.ts
+  044fccf5de3e0367 37
+packages/app/src/panels/agent-goal-status.test.ts
+  044fccf5de3e0367 15-24
+packages/server/src/server/agent-session-changes-manager.test.ts
+  8fac7d247b9b2c3d 64,218,224,233-257,331-336
+  044fccf5de3e0367 1-63,65-217,219-223,225-232,315-330,337-425
+packages/app/src/panels/archive-goal-agent.ts
+  044fccf5de3e0367 10,12-13,16,22,36,42
+packages/server/src/server/agent/agent-manager.ts
+  044fccf5de3e0367 93-115,118-123,125-126,276,286-304,380,407-411,557-580,720-723,733-736,1186,1211,1230,1421,1698-1703,1899-1958,2186-2200,2202-2258,2260,2262-2263,2265,2271-2274,2276,2293-2294,2300-2302,2304-2306,2308-2310,2354,2357,2360,2364,3099,3240,3261,3531,3533,3540,3986,4382-4384
+  8fac7d247b9b2c3d 116-117,124,2259,2261,2264,2266-2270,2275,2277-2292,2295-2299,2303,2307,3781-3789
+  9e6de639c3b8f11d 3975
+packages/app/src/contexts/session-attention-notifications.ts
+  044fccf5de3e0367 6,8-12
+packages/app/src/git/query-keys.ts
+  044fccf5de3e0367 34-50
+packages/client/src/daemon-client.test.ts
+  044fccf5de3e0367 3150-3215,4052-4092
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.0",
+  "base_commit_sha": "0ac8ff7c4ac5614d90982c1b0795df8b1f3d679a",
+  "prompts": {
+    "044fccf5de3e0367": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8cfb-8745-74e1-84ed-d60592b1a937",
+        "model": "unknown"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 4062,
+      "overriden_lines": 34
+    },
+    "8a181e6ac493b17e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8e48-4e23-7750-8ccc-7b1fe77bd673",
+        "model": "gpt-5.4-mini"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 50,
+      "total_deletions": 5,
+      "accepted_lines": 46,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/302f2c65b5ae19be4e9fbb013aa60a986e22b7987554c93f8551948c3db2f14b"
+    },
+    "8fac7d247b9b2c3d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f892a-16da-7cc3-9d21-35874ec6f795",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 153,
+      "total_deletions": 114,
+      "accepted_lines": 214,
+      "overriden_lines": 1
+    },
+    "9e6de639c3b8f11d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8de9-8a0b-7061-b906-ec93583348b6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 6453,
+      "total_deletions": 649,
+      "accepted_lines": 7912,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/545cce13bd14e1bc63b7fec46c3056c757f3aca3b204d536f8843bee488f88b0"
+    }
+  }
+}
