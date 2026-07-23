@@ -1,0 +1,61 @@
+packages/app/src/components/mermaid/source.browser.test.ts
+  8a181e6ac493b17e 1,3,20-63
+  044fccf5de3e0367 2,4-19,65-83
+  9e6de639c3b8f11d 64
+packages/app/src/components/mermaid/source.ts
+  044fccf5de3e0367 1-22
+packages/app/src/components/mermaid/diagram.tsx
+  044fccf5de3e0367 10,70,93,109
+packages/app/src/components/mermaid/source.test.ts
+  044fccf5de3e0367 1-36
+packages/app/src/components/mermaid/diagram.native.tsx
+  044fccf5de3e0367 17,214,240,264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.0",
+  "base_commit_sha": "ba0f4449b610c21caca2abad1931fb5e7e923211",
+  "prompts": {
+    "044fccf5de3e0367": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8cfb-8745-74e1-84ed-d60592b1a937",
+        "model": "unknown"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 102,
+      "overriden_lines": 0
+    },
+    "8a181e6ac493b17e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8e48-4e23-7750-8ccc-7b1fe77bd673",
+        "model": "gpt-5.4-mini"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 46,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/74355daac8d325ca14c720bf2f420e16bc943e0834f537ae9b57959a8a1b6223"
+    },
+    "9e6de639c3b8f11d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8de9-8a0b-7061-b906-ec93583348b6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 4464,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/545cce13bd14e1bc63b7fec46c3056c757f3aca3b204d536f8843bee488f88b0"
+    }
+  }
+}
