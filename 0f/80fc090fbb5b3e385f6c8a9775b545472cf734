@@ -1,0 +1,463 @@
+packages/server/src/services/quota-fetcher/service.test.ts
+  03434167522075ce 445,1280-1627
+packages/server/src/server/workspace-reconciliation-service.ts
+  03434167522075ce 90,120,142,243
+packages/app/src/components/model-browser-view.test.ts
+  03434167522075ce 1-49
+packages/cli/tests/helpers/test-daemon.ts
+  03434167522075ce 19,47,238-252,254,354
+packages/app/plugins/with-fdroid-autolinking.js
+  03434167522075ce 14-58,113
+packages/app/src/i18n/resources/en.ts
+  03434167522075ce 513,551,858-859
+packages/server/src/server/agent/providers/acp-agent.test.ts
+  03434167522075ce 2153-2160,2538-2633,2667-2709,2812-2837,2917-2991,3154-3214
+packages/app/src/hooks/image-attachment-picker.test.ts
+  03434167522075ce 3,42-62,99,107-118,122,125
+packages/server/src/server/agent/providers/omp/custom-message.ts
+  03434167522075ce 1-7
+packages/server/src/server/agent/providers/omp/message-history.ts
+  03434167522075ce 3,121-123
+packages/server/src/server/agent/providers/omp/map-omp-model.test.ts
+  03434167522075ce 1-146
+packages/app/src/components/combined-model-selector.tsx
+  03434167522075ce 1-2,5,8-11,15,22,57-60,69,81,86-95,101,103,105-106,108,114,116,120,156-169,181-183,188,205-207,209,211-217,220,233-236,238,245-247,262-271
+packages/server/src/utils/checkout-git.commits.test.ts
+  03434167522075ce 7,77-79,99-118,149-166,168-171,173,178,180-215,217,219
+packages/app/src/components/icons/omp-icon.tsx
+  03434167522075ce 10
+packages/app/src/hooks/use-global-workspace-pin-action.ts
+  03434167522075ce 1-64
+packages/server/src/server/websocket-server.liveness.e2e.test.ts
+  03434167522075ce 1-196
+packages/app/eas.json
+  03434167522075ce 22-24
+packages/app/src/components/file-drop/use-drop-listeners.ts
+  03434167522075ce 10,30-33,38-41,44
+packages/app/src/contexts/session-resume-revalidation.ts
+  03434167522075ce 13-19
+packages/app/e2e/workspace-terminal-tab-rename.spec.ts
+  03434167522075ce 1,39-52,54-84,122
+packages/server/src/server/snapshot-mutation-ownership.test.ts
+  03434167522075ce 122,132
+packages/server/src/server/agent/providers/omp/history-mapper.test.ts
+  03434167522075ce 212-259
+packages/protocol/src/messages.checkout-commits.test.ts
+  03434167522075ce 38,51,66,68,72-96,139,146,149
+packages/app/src/command-center/results.ts
+  03434167522075ce 66-70
+packages/app/e2e/bottom-sheet-reopen.spec.ts
+  03434167522075ce 126-137
+packages/server/src/server/agent/providers/claude/agent.ts
+  03434167522075ce 40,367,1444,1453-1454,1506-1516,1638-1658
+packages/protocol/src/messages.ts
+  03434167522075ce 1781-1782,2381-2400,2475-2486,2489,2618-2620,2882-2883,2896-2897,3487-3510,5194-5204,5224,5230,5263,5299-5301,5488-5498
+packages/app/src/git/commits-section/commit-row.tsx
+  03434167522075ce 2,5-6,8,11-13,18-31,41,43-51,69-78,83
+packages/server/src/server/relay-transport.ts
+  03434167522075ce 12,30,33,443-447
+packages/server/src/server/agent/provider-registry.test.ts
+  03434167522075ce 544
+packages/server/src/server/agent/providers/claude/agent.test.ts
+  03434167522075ce 14,409,419-421,426,442-465,477,489,507-510,2119,2122
+packages/server/src/server/session/workspace-provisioning/workspace-provisioning-service.ts
+  03434167522075ce 45,59,180,197,229-231,302-306
+packages/cli/src/commands/hub/index.ts
+  03434167522075ce 2,6-34,88,90,92,100-102,105,109-123,129,141,149-151
+.mise.toml
+  03434167522075ce 1-3,5,7-9
+packages/server/src/server/agent/providers/omp/map-omp-model.ts
+  03434167522075ce 1-91
+packages/server/src/server/agent/agent-sdk-types.ts
+  03434167522075ce 628-633,722
+packages/app/src/screens/workspace/workspace-tab-menu.test.ts
+  03434167522075ce 37,68,104,133,163,182,184,199,210-211,217-225,250,293,324
+CHANGELOG.md
+  03434167522075ce 3,5,7,9,11,13,15,19-24,26,30-32,36-37,39-40,45-49,53-62,68,80
+packages/app/src/components/adaptive-modal-sheet.tsx
+  03434167522075ce 6,14,17,207-214,260-292,497,504-506,516,522-523,542,545-550,552,557,562,567,572,657-675,693-694,696,709,717
+packages/app/src/hooks/picked-image-normalizer.test.ts
+  03434167522075ce 56-79
+packages/app/src/composer/agent-controls/layout.ts
+  03434167522075ce 1-134
+packages/app/src/provider-selection/provider-selection.ts
+  03434167522075ce 160-162
+packages/app/src/composer/agent-controls/mode-control.tsx
+  03434167522075ce 10,41-43,98,111,118-120,122,128,140,154-165,234,236-243,250,267,281-284,337-347
+packages/server/src/server/agent/providers/omp/rpc-types.ts
+  03434167522075ce 90-98,105,581
+packages/server/src/server/pairing-qr.ts
+  03434167522075ce 2,4-5,10,13-17
+packages/server/src/server/workspace-archive-record-scoped.e2e.test.ts
+  03434167522075ce 8-12,92-118,195-249
+packages/cli/src/commands/script/index.ts
+  03434167522075ce 1-39
+packages/server/package.json
+  03434167522075ce 68
+packages/server/src/server/hub/daemon-executions.ts
+  03434167522075ce 5,12,29-34,56-59,68,79-80,85,114-145,149-152,201-203,240-275,280,282
+docs/floating-panels.md
+  03434167522075ce 132-138
+packages/app/e2e/commit-diff-panel.spec.ts
+  03434167522075ce 8-26,45
+packages/server/src/server/agent/providers/opencode-agent.ts
+  03434167522075ce 3665-3667
+packages/server/src/server/workspace-reconciliation-service.test.ts
+  03434167522075ce 477,507-509,514-523
+packages/app/src/components/context-window-meter.tsx
+  03434167522075ce 21-22,76,87-88,90-94,107,128
+docs/terminal-performance.md
+  03434167522075ce 35-39
+packages/app/src/hooks/use-sidebar-workspace-pin.ts
+  03434167522075ce 1,8-20,30,45,51-52,55
+packages/server/src/server/hub/execution-controller.test.ts
+  03434167522075ce 40-41
+packages/app/src/timeline/turn-time.ts
+  03434167522075ce 12,22-23,45-46,67-68,76
+packages/server/src/server/session/workspace-scripts/workspace-scripts-service.test.ts
+  03434167522075ce 223-270
+packages/app/src/components/model-browser.tsx
+  03434167522075ce 1-1169
+packages/server/src/server/websocket/runtime-metrics.ts
+  03434167522075ce 49,71
+packages/server/src/server/websocket/encrypted-relay-socket.ts
+  03434167522075ce 1-100
+packages/app/src/file-pane/editor/model.ts
+  03434167522075ce 4,9,18,55,65,69,176,180,251,255,302-308
+packages/server/src/server/service-proxy.ts
+  03434167522075ce 259-317,329,372,921,927-933
+packages/app/src/composer/index.tsx
+  03434167522075ce 248,263,270-272,339-349,1125,1405-1407,1429,1827,1835,1839,1848,1851-1853,2184,2286
+packages/app/src/agent-stream/strategy-web.tsx
+  03434167522075ce 25,92-93
+packages/server/src/server/session.ts
+  03434167522075ce 16-18,134,136,319-321,375,611-614,1020,1164,1167-1170,1172-1175,1180-1186,1200-1201,1289,1293-1295,1397-1524,1933-1939,2199-2209,2458,2695,2740,2856,2911,4460-4469,4659-4663,4682,4686-4690,4700,4726-4736,4738-4743,4745,4786,4956,4972-4977,5041,5053-5055,5131,5144-5147,5223-5226,5598-5682,6624,6630-6633
+public-docs/cli.md
+  03434167522075ce 3,89-101
+packages/app/src/attachments/file-types.test.ts
+  03434167522075ce 9,41-63
+packages/app/src/file-explorer/read-result.test.ts
+  03434167522075ce 1-34
+packages/app/src/composer/agent-controls/model-sheet.tsx
+  03434167522075ce 1-275
+packages/server/src/server/websocket/encrypted-relay-socket.test.ts
+  03434167522075ce 1-120
+packages/app/src/file-explorer/read-result.ts
+  03434167522075ce 11,17-19
+packages/app/src/composer/agent-controls/control.tsx
+  03434167522075ce 1-173
+packages/app/src/composer/agent-controls/layout.test.ts
+  03434167522075ce 1-168
+packages/app/src/composer/attachments/workspace.tsx
+  03434167522075ce 48,200-209,215,227
+packages/app/src/hooks/use-acp-provider-catalog.test.ts
+  03434167522075ce 37-40
+packages/app/src/screens/workspace/workspace-screen.tsx
+  03434167522075ce 450,647,666,680,703,772,829,848,2827-2839,3604,3713,3750,3832,3855,4033-4037,4056-4058
+packages/cli/src/commands/script/shared.ts
+  03434167522075ce 1-78
+packages/server/src/server/agent/agent-loading.ts
+  03434167522075ce 114
+packages/server/src/utils/checkout-git.ts
+  03434167522075ce 2221-2226,3112-3114,3134-3139,3264-3268,3277-3301,3307-3321,3324,3327,3334,3336-3347,3350-3359,3361-3368,3374,3383,3938,4208,4284,4622
+packages/app/src/i18n/resources/es.ts
+  03434167522075ce 520,559,881-882
+packages/server/src/server/agent/providers/acp-agent.ts
+  03434167522075ce 470,472,1300-1301,1373-1391,1402-1406,1408-1413,1415-1444,1446,1448-1457,1491,1496,2042,2141-2144,2359-2362,2471-2475,2479,2484,2488-2491,2493-2500,2503,2507,2516,2519,2522,2531,2533-2550,2552-2582,2599,2602,2749,2780,2783-2784
+packages/app/src/i18n/resources/pt-BR.ts
+  03434167522075ce 520,558,872-873
+docs/hub.md
+  03434167522075ce 48-63
+packages/app/src/hooks/use-keyboard-shift-style.ts
+  03434167522075ce 13-15,46-57
+packages/app/src/agent-stream/strategy-web.test.tsx
+  03434167522075ce 202-284
+packages/app/src/composer/draft/import-pill.tsx
+  03434167522075ce 22,36,54,63,66-67
+packages/app/src/provider-selection/resolve-agent-form.test.ts
+  03434167522075ce 1099,1109
+packages/app/src/utils/image-attachments-from-files.test.ts
+  03434167522075ce 95,130-133,147,162
+packages/server/src/server/daemon-client.e2e.test.ts
+  03434167522075ce 1011
+public-docs/mcp.md
+  03434167522075ce 3,58-68
+packages/app/src/i18n/resources/ar.ts
+  03434167522075ce 514,552,848-849
+packages/server/src/server/agent/providers/claude/model-manifest.ts
+  03434167522075ce 9-10,34-60,65-66,81-82,92-99,187-197,199-200,202,208-218,222-253,310,321,331,358,376
+packages/server/src/server/agent/tools/paseo-tools.ts
+  03434167522075ce 13,78,117,543,2227-2298
+packages/cli/src/commands/onboard.ts
+  03434167522075ce 21,524-529
+packages/server/src/server/websocket/physical-socket.test.ts
+  03434167522075ce 1-68
+.github/workflows/ci.yml
+  03434167522075ce 352-354
+packages/app/src/command-center/command-center.tsx
+  03434167522075ce 56,218,228-232,268-269,272,297,477-481
+packages/server/src/server/websocket-server.ts
+  03434167522075ce 45-51,97-104,141-144,147-148,238-251,381,437-442,544-545,684,772-784,861-864,960-964,1035-1040,1043-1044,1046,1048-1056,1061-1106,1110-1117,1119-1125,1127-1130,1136,1557-1558,1569-1570,1645,1962-1963,1999,2199-2201,2209-2211,2221-2223,2240,2268-2271
+public-docs/codex.md
+  03434167522075ce 1-84
+packages/server/src/utils/git-command-runtime-metrics.ts
+  03434167522075ce 1-147
+packages/server/src/services/quota-fetcher/providers/claude.ts
+  03434167522075ce 44-58,64-66,82-84,109-299,319,326,366-376,401-426
+docs/agent-lifecycle.md
+  03434167522075ce 116-125
+packages/app/src/file-pane/editor/view.web.tsx
+  03434167522075ce 59-60,81-84,86
+packages/server/src/server/agent/providers/codex-app-server-agent.ts
+  03434167522075ce 11,116-123,3404,3451-3453,3455-3456,3458-3463,3465-3476,3782-3784,3808-3817,6686,6708
+packages/server/src/server/test-utils/workspace-git-service-stub.ts
+  03434167522075ce 74-87
+packages/app/src/agent-stream/bottom-anchor-controller.test.ts
+  03434167522075ce 1,129-130,133-137,158-161,221,240-330,332,356-423,440,461,482,495,507,517,521,526,544,555,578,604,640,649,661,692,702,746,757,794,801
+packages/server/src/server/agent/providers/omp/agent.ts
+  03434167522075ce 69,71,110,2024-2036,2259
+packages/app/src/composer/actions.ts
+  03434167522075ce 96,189-204,211,218-230,232
+packages/app/e2e/sidebar-workspace-pin-shortcut.spec.ts
+  03434167522075ce 1-266
+packages/server/src/server/hub/execution-controller.ts
+  03434167522075ce 4,20,38-74
+packages/server/src/server/workspace-git-service.ts
+  03434167522075ce 176,180-194,473-516
+packages/server/src/utils/checkout-git.test.ts
+  03434167522075ce 4356-4369
+packages/app/src/file-pane/editor/model.test.ts
+  03434167522075ce 80-90,154-197,202,212-231,241,243,263-277,285,293-310
+skills/paseo/SKILL.md
+  03434167522075ce 3,18-34
+packages/protocol/src/messages.workspaces.test.ts
+  03434167522075ce 674-709
+packages/server/src/utils/run-git-command.ts
+  03434167522075ce 5-8,17,89-95,138-139,142,192,196,202-213,339-340,346-348
+packages/server/src/server/agent/providers/codex-app-server-agent.test.ts
+  03434167522075ce 109-139,905-964,1207
+packages/server/src/server/service-proxy.test.ts
+  03434167522075ce 4,34-40,43,304-557
+packages/app/src/screens/new-workspace-screen.tsx
+  03434167522075ce 1495,1516
+packages/server/src/utils/git-command-runtime-metrics.test.ts
+  03434167522075ce 1-74
+packages/cli/src/commands/hub/cloud-device-authorization.test.ts
+  03434167522075ce 1-202
+packages/app/src/screens/settings/providers-section.tsx
+  03434167522075ce 13,182,234-235,237,251-264,285,300,302-312,547-549
+packages/server/src/server/hub/daemon-executions.test.ts
+  03434167522075ce 56
+packages/cli/src/commands/script/ls.ts
+  03434167522075ce 1-32
+packages/app/src/attachments/file-types.ts
+  03434167522075ce 44-60,66,70
+packages/app/src/agent-stream/strategy-native.tsx
+  03434167522075ce 92-93,134-140,220-221,230,232,281-293,308,323-327,338-368,476-479
+public-docs/supported-providers.md
+  03434167522075ce 18,20
+packages/app/src/components/message.tsx
+  03434167522075ce 2668-2670
+nix/npm-deps.hash
+  03434167522075ce 1
+packages/server/src/server/session.workspace-git-watch.test.ts
+  03434167522075ce 201,219
+packages/app/e2e/file-editing.spec.ts
+  03434167522075ce 242-264
+packages/server/src/server/hub/test-utils/relationship-harness.ts
+  03434167522075ce 15-16,705-747,770-794,837-840,925-928,969-982,1416-1419,1425-1428,1482-1485
+packages/app/src/utils/image-attachments-from-files.ts
+  03434167522075ce 3,17-21,24,29,34-35,42,49,52,56
+packages/app/src/hooks/image-attachment-picker.ts
+  03434167522075ce 2-3,11,34-44,51,54-58,65-68,73,75-79,93,95,113-123
+packages/app/src/hooks/picked-image-normalizer.ts
+  03434167522075ce 5,65-67,71,73
+packages/client/src/daemon-client.ts
+  03434167522075ce 2196-2236
+packages/app/src/git/use-commits-query.ts
+  03434167522075ce 2,20-24,77-78,81-83,95-100
+public-docs/worktrees.md
+  03434167522075ce 132-133
+packages/server/src/server/pairing-qr.test.ts
+  03434167522075ce 1-28
+packages/app/src/hooks/image-attachment-picker.native.ts
+  03434167522075ce 37-39
+packages/app/e2e/tool-call-shimmer.spec.ts
+  03434167522075ce 1-238
+packages/app/src/components/icons/pi-icon.tsx
+  03434167522075ce 10
+packages/app/src/stores/session-store.ts
+  03434167522075ce 284-285
+packages/app/src/data/acp-provider-catalog.ts
+  03434167522075ce 21,24,143,146,162,165,176,179,185,188,305,308
+packages/cli/src/commands/daemon/pair.ts
+  03434167522075ce 7,101-107
+packages/server/src/server/workspace-registry.ts
+  03434167522075ce 81-97,113,125,128-131,204-207,210-211,394-397,407-452
+packages/server/src/server/hub/execution-session.websocket.test.ts
+  03434167522075ce 100-160,168,171,181,189-277
+packages/app/src/screens/workspace/workspace-tab-menu.ts
+  03434167522075ce 11,27,73,90,168,208-222,329
+packages/server/src/server/session/workspace-git-observer/workspace-git-observer-service.ts
+  03434167522075ce 22-27,49,249-255
+packages/app/src/command-center/results.test.ts
+  03434167522075ce 5,107-136
+packages/app/src/composer/actions.test.ts
+  03434167522075ce 324-328,340-359
+packages/app/src/git/commits-section/commits-section.tsx
+  03434167522075ce 9,27-33,58-60,62-66,71-79,121-124,197-199,202-207
+packages/cli/src/commands/hub/device-authorization.test.ts
+  03434167522075ce 1-273
+packages/app/src/provider-selection/provider-selection.test.ts
+  03434167522075ce 263-281
+packages/app/src/hooks/use-agent-form-state.ts
+  03434167522075ce 311-313,572
+packages/app/src/hooks/use-image-attachment-picker.ts
+  03434167522075ce 8,54-55,58
+docs/android.md
+  03434167522075ce 30,36,123-131
+packages/server/src/server/agent/provider-registry.ts
+  03434167522075ce 411,426
+packages/server/src/server/agent/providers/claude/models.test.ts
+  03434167522075ce 13,42-48,53-55,60,75,85-88,91-92,104-117,121-129,146-148,169-171,176-177,179,213,266,280,300,320,333-345,350-351,353,355,363,369-373,377-379,408-410
+packages/cli/tests/15-provider.test.ts
+  03434167522075ce 49-52,66,110-141,174,180,185,423,433
+packages/server/src/server/websocket/physical-socket.ts
+  03434167522075ce 1-78
+packages/app/src/composer/agent-controls/index.tsx
+  03434167522075ce 4,17-18,43-47,71-82,114,210,216,223,307,313,315-318,421,429,432-435,469,471-529,565-570,594-600,602,623-624,653-740,783,790-795,842,844-849,852-860,893,910,924,926-932,939,954,960,962-1006,1031,1044-1045,1071,1079-1080,1100-1101,1103-1130,1133,1135-1142,1144-1145,1147-1167,1176,1183,1187,1193-1196,1201,1203,1211-1216,1224-1234,1239,1252,1255-1261,1263,1266,1272-1281,1304,1310-1314,1328-1333,1339-1354,1359,1362-1378,1381-1385,1431,1644,1713-1725,1744,1749,1758-1760,1762,1764,1775-1783,1789-1790,1804-1805,1815
+packages/cli/package.json
+  03434167522075ce 23-24,39-40
+packages/server/src/server/paseo-worktree-service.ts
+  03434167522075ce 94
+packages/app/src/provider-selection/resolve-agent-form.ts
+  03434167522075ce 60
+packages/app/src/i18n/resources/ru.ts
+  03434167522075ce 518,556,870-871
+packages/app/src/screens/settings/providers-section.test.tsx
+  03434167522075ce 47,94
+packages/server/src/server/session.workspace-resolution-invariants.test.ts
+  03434167522075ce 112,145
+packages/app/src/i18n/resources/fr.ts
+  03434167522075ce 519,558,881-882
+packages/app/src/app/_layout.tsx
+  03434167522075ce 35,555
+packages/app/src/components/model-browser-view.ts
+  03434167522075ce 1-40
+packages/app/e2e/new-workspace-mode-cycle-safety.spec.ts
+  03434167522075ce 1-146
+packages/server/src/server/agent/providers/opencode-agent.test.ts
+  03434167522075ce 2731-2789
+packages/app/e2e/command-center-workspaces.spec.ts
+  03434167522075ce 60-66,98-101,116-145
+packages/server/src/server/session.workspaces.test.ts
+  03434167522075ce 13,75,83-86,184,3601-3621,3626,3786-3788,3959,3961-3965,3971,3980,3987-3989,4005,4018-4019,4022-4031,6654-6655,6671,6721-6725,6998,7132-7581,7614,7628,8964,8972,8974-8979,8983-8988,8996,9004,9007-9011
+packages/app/src/components/ui/combobox.tsx
+  03434167522075ce 27,104-105,940,954,974-977,1008-1047,1240,1260,1535,1548,1591-1598
+packages/app/src/composer/draft/workspace-tab.tsx
+  03434167522075ce 634
+packages/server/src/server/bootstrap.ts
+  03434167522075ce 95,111,175,177,181-182,204,871-874,881,902,906-907,1076-1096,1139-1143,1305-1322
+packages/app/src/components/split-container.tsx
+  03434167522075ce 98,377,597,744,802,852,908,1054
+packages/server/src/server/agent/providers/omp/agent.test.ts
+  03434167522075ce 94,120,124-138,278-321
+packages/app/src/composer/agent-controls/layout-context.tsx
+  03434167522075ce 1-37
+packages/server/src/server/agent/providers/omp/test-utils/omp-harness.ts
+  03434167522075ce 204-208,214-218,221-222
+packages/server/src/server/session/workspace-scripts/workspace-scripts-service.ts
+  03434167522075ce 6,47-49,103,143-237,240,248,255,271
+packages/app/src/agent-stream/bottom-anchor-controller.ts
+  03434167522075ce 71-72,248,417,422-424,491,508-539,554-556,575-577,607-609,623-625,792-796
+packages/cli/src/cli.ts
+  03434167522075ce 10,175-176
+packages/cli/src/commands/script/start.ts
+  03434167522075ce 1-36
+packages/app/src/hooks/use-keyboard-action-handler.ts
+  03434167522075ce 1,18-38,40-45,48-59,61
+packages/app/src/git/commits-section/commit-graph-node.tsx
+  03434167522075ce 1,3,5-9,11-14,16-29,31-32,34-40,43-63,65-77
+packages/server/src/server/agent/agent-loading.test.ts
+  03434167522075ce 1-82
+packages/cli/src/commands/hub/cloud-device-authorization.ts
+  03434167522075ce 1-108
+packages/cli/src/commands/script/stop.ts
+  03434167522075ce 1-36
+packages/server/src/server/agent/agent-manager.ts
+  03434167522075ce 23,453,860,1216,1219,1236,1263-1268
+packages/server/src/server/agent/providers/claude/models.ts
+  03434167522075ce 20-21,37,39
+packages/server/src/server/agent/providers/omp/v17-rpc-compat.test.ts
+  03434167522075ce 4,6,20-31
+packages/app/src/file-pane/pane.tsx
+  03434167522075ce 710,724-725,896-899,901-902,924
+packages/app/src/screens/workspace/workspace-desktop-tabs-row.tsx
+  03434167522075ce 422,768,852,951,983,1105,1132,1159,1177
+packages/cli/src/commands/hub/device-authorization.ts
+  03434167522075ce 1-118
+packages/cli/src/output/pairing.test.ts
+  03434167522075ce 1-30
+packages/cli/src/output/pairing.ts
+  03434167522075ce 1-37
+packages/protocol/src/messages.hub.test.ts
+  03434167522075ce 39,55-67,96,102-153,188-195
+packages/app/src/agent-stream/view.tsx
+  03434167522075ce 879
+docs/service-proxy.md
+  03434167522075ce 29-40,110-131
+packages/app/src/contexts/session-resume-revalidation.test.ts
+  03434167522075ce 35-51
+docs/architecture.md
+  03434167522075ce 125,215-217
+packages/server/src/server/agent/agent-owner.ts
+  03434167522075ce 8-9
+packages/app/src/i18n/resources/ja.ts
+  03434167522075ce 519,558,860-861
+packages/app/src/timeline/turn-time.test.ts
+  03434167522075ce 25-54
+packages/app/src/i18n/resources/zh-CN.ts
+  03434167522075ce 514,552,840-841
+packages/app/src/composer/agent-controls/glyph.tsx
+  03434167522075ce 1-32
+packages/app/src/components/workspace-pin-shortcut-handler.tsx
+  03434167522075ce 1-9
+packages/cli/src/commands/script/schema.ts
+  03434167522075ce 1-17
+packages/server/src/server/session/workspace-git-observer/workspace-git-observer-service.test.ts
+  03434167522075ce 210-238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "0f80fc090fbb5b3e385f6c8a9775b545472cf734",
+  "prompts": {
+    "03434167522075ce": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f9ef2-391b-70d2-b7b4-dedb0174b857",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 14888,
+      "total_deletions": 3239,
+      "accepted_lines": 14820,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/e2a282e439d4ada4255bbd8f594e3daf843336088afd195b5f9280d98a826502"
+    },
+    "4ae34539d253849f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f91e4-bdcd-7cc3-bdb3-6abacb9eb418",
+        "model": "unknown"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  }
+}
