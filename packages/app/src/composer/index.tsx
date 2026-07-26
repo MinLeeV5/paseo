@@ -245,6 +245,7 @@ function renderContextWindowMeter(
   serverId: string,
   provider: string | null,
   pending: boolean,
+  glyphSize: number,
 ): ReactElement | null {
   const hasData = contextWindowMaxTokens !== null && contextWindowUsedTokens !== null;
   if (!hasData && !pending) {
@@ -259,21 +260,16 @@ function renderContextWindowMeter(
       serverId={serverId}
       provider={provider}
       pending={pending}
+      glyphSize={glyphSize}
     />
   );
 }
 
 function resolveContextWindowPlacement(
   meter: ReactElement | null,
-  isMobile: boolean,
-): { beforeVoiceContent: ReactNode; footerInlineContent: ReactNode } {
-  if (isMobile) {
-    return { beforeVoiceContent: null, footerInlineContent: meter };
-  }
-  return {
-    beforeVoiceContent: <View style={styles.contextWindowMeterSlot}>{meter}</View>,
-    footerInlineContent: null,
-  };
+  reserveSlot: boolean,
+): ReactNode {
+  return reserveSlot ? <View style={styles.contextWindowMeterSlot}>{meter}</View> : null;
 }
 
 interface RenderLeftContentArgs {
@@ -315,23 +311,6 @@ interface RenderAttachmentTrayArgs {
   };
 }
 
-function renderComposerFooter(
-  footer: ReactNode,
-  footerInlineContent: ReactNode,
-): ReactElement | null {
-  if (!footer && !footerInlineContent) return null;
-  return (
-    <View style={styles.footer}>
-      <View style={styles.footerContent}>
-        <View style={styles.footerLeft}>
-          {footer}
-          {footerInlineContent}
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function renderAttachmentTray(args: RenderAttachmentTrayArgs): ReactElement | null {
   const {
     selectedAttachments,
@@ -353,6 +332,17 @@ function renderAttachmentTray(args: RenderAttachmentTrayArgs): ReactElement | nu
           labels,
         }),
       )}
+    </View>
+  );
+}
+
+function renderComposerFooter(footer: ReactNode): ReactElement | null {
+  if (!footer) return null;
+  return (
+    <View style={styles.footer}>
+      <View style={styles.footerContent}>
+        <View style={styles.footerLeft}>{footer}</View>
+      </View>
     </View>
   );
 }
@@ -1132,6 +1122,7 @@ export function Composer({
     buildOutgoingAttachments,
     removeAttachment,
     openAttachment,
+    beginSubmit,
     clearSentAttachments,
     completeSubmit,
     resetSuppression,
@@ -1411,6 +1402,9 @@ export function Composer({
           queueMessage(queuedText, queuedAttachments);
         },
         submitMessage: async ({ message: submitText, attachments: submitAttachments }) => {
+          if (submitBehavior !== "preserve-and-lock") {
+            beginSubmit(submitAttachments);
+          }
           await submitMessage(submitText, submitAttachments);
         },
         clearDraft,
@@ -1432,6 +1426,7 @@ export function Composer({
     },
     [
       allowEmptySubmit,
+      beginSubmit,
       clearDraft,
       completeSubmit,
       hasExternalContent,
@@ -1829,6 +1824,7 @@ export function Composer({
 
   const contextWindowPending =
     agentState.status === "initializing" || agentState.status === "running";
+  const contextWindowMeterGlyphSize = isCompactLayout ? ICON_SIZE.md : buttonIconSize;
 
   const contextWindowMeter = useMemo(
     () =>
@@ -1836,24 +1832,25 @@ export function Composer({
         contextWindowMaxTokens,
         contextWindowUsedTokens,
         agentState.totalCostUsd,
-        isCompactLayout,
+        false,
         serverId,
         agentState.provider,
         contextWindowPending,
+        contextWindowMeterGlyphSize,
       ),
     [
       contextWindowMaxTokens,
       contextWindowUsedTokens,
       agentState.totalCostUsd,
-      isCompactLayout,
       serverId,
       agentState.provider,
       contextWindowPending,
+      contextWindowMeterGlyphSize,
     ],
   );
-  const { beforeVoiceContent, footerInlineContent } = useMemo(
-    () => resolveContextWindowPlacement(contextWindowMeter, isCompactLayout),
-    [contextWindowMeter, isCompactLayout],
+  const beforeVoiceContent = useMemo(
+    () => resolveContextWindowPlacement(contextWindowMeter, hasAgent),
+    [contextWindowMeter, hasAgent],
   );
 
   const hasGithubAttachment = useMemo(
@@ -2184,7 +2181,7 @@ export function Composer({
             </View>
           </View>
         </View>
-        {renderComposerFooter(footer, footerInlineContent)}
+        {renderComposerFooter(footer)}
       </Animated.View>
     </ComposerKeyboardScopeProvider>
   );
@@ -2286,6 +2283,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   contextWindowMeterSlot: {
     width: 28,
     height: 28,
+    flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
   },
