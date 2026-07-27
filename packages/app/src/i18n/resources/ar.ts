@@ -860,6 +860,8 @@ export const ar: TranslationResources = {
         openIn: "افتح مساحة العمل في{{target}}",
         openFileIn: "Open {{fileName}} in {{target}}",
         failedOpen: "فشل في فتح مساحة العمل",
+        failedOpenFile: "فشل في فتح الملف",
+        targetUnavailable: "أداة الفتح المحددة غير متاحة",
       },
       pr: {
         actions: {

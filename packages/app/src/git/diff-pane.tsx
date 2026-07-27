@@ -38,6 +38,7 @@ import {
   Columns2,
   Download,
   Eye,
+  ExternalLink,
   FolderTree,
   GitCommitHorizontal,
   GitFork,
@@ -53,6 +54,7 @@ import {
   Upload,
   WrapText,
 } from "lucide-react-native";
+import { useMutation } from "@tanstack/react-query";
 import { type ParsedDiffFile, type DiffLine, type HighlightToken } from "@/git/use-diff-query";
 import { useAgentSessionChangesQuery } from "@/git/use-agent-session-changes-query";
 import { buildDiffFlatItems, sumHeightsBefore, type DiffFlatItem } from "@/git/diff-flat-items";
@@ -128,6 +130,11 @@ import {
 } from "@/review";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
+import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { resolvePreferredEditorTarget, usePreferredEditor } from "@/hooks/use-preferred-editor";
+import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
+import { planWorkspaceOpenTargets } from "@/workspace/open-target-planner";
+import { openExternalUrl } from "@/utils/open-external-url";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -228,6 +235,9 @@ interface DiffFileSectionProps {
   onToggle?: (path: string) => void;
   onOpenFile?: (file: ParsedDiffFile) => void;
   onPreviewFile?: (file: ParsedDiffFile) => void;
+  onOpenInPreferredTool?: (file: ParsedDiffFile) => void;
+  preferredOpenToolLabel?: string;
+  openingPreferredToolPath?: string | null;
   onOpenPlainFile?: (path: string) => void;
   onAddToChat?: (path: string) => void;
   onCopyPath?: (path: string) => void;
@@ -931,24 +941,48 @@ function DiffFileOpenButton({
   testID,
   onPress,
   icon,
+  disabled = false,
+  isPending = false,
 }: {
   label: string;
   testID?: string;
   onPress: (event: GestureResponderEvent) => void;
-  icon: "file" | "preview";
+  icon: "external" | "file" | "preview";
+  disabled?: boolean;
+  isPending?: boolean;
 }) {
-  const Icon = icon === "preview" ? ThemedEye : ThemedFileText;
+  let content: ReactElement;
+  if (isPending) {
+    content = <ThemedActivityIndicator size="small" uniProps={foregroundMutedIconColorMapping} />;
+  } else if (icon === "external") {
+    content = <ThemedExternalLink size={14} uniProps={foregroundMutedIconColorMapping} />;
+  } else if (icon === "preview") {
+    content = <ThemedEye size={14} uniProps={foregroundMutedIconColorMapping} />;
+  } else {
+    content = <ThemedFileText size={14} uniProps={foregroundMutedIconColorMapping} />;
+  }
+  const accessibilityState = useMemo(() => ({ disabled }), [disabled]);
+  const buttonStyle = useCallback(
+    (state: PressableStateCallbackType) => [
+      ...fileOpenButtonStyle(state),
+      disabled && styles.fileOpenButtonDisabled,
+    ],
+    [disabled],
+  );
+
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={label}
+          accessibilityState={accessibilityState}
           testID={testID}
-          style={fileOpenButtonStyle}
+          style={buttonStyle}
           onPress={onPress}
+          disabled={disabled}
         >
-          <Icon size={14} uniProps={foregroundMutedIconColorMapping} />
+          {content}
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="bottom">
@@ -971,6 +1005,9 @@ const DiffFileHeader = memo(function DiffFileHeader({
   onToggle,
   onOpenFile,
   onPreviewFile,
+  onOpenInPreferredTool,
+  preferredOpenToolLabel,
+  openingPreferredToolPath,
   onOpenPlainFile,
   onAddToChat,
   onCopyPath,
@@ -1013,6 +1050,14 @@ const DiffFileHeader = memo(function DiffFileHeader({
       onPreviewFile?.(file);
     },
     [file, onPreviewFile],
+  );
+  const handleOpenInPreferredTool = useCallback(
+    (event: GestureResponderEvent) => {
+      pressHandledRef.current = true;
+      event.stopPropagation();
+      onOpenInPreferredTool?.(file);
+    },
+    [file, onOpenInPreferredTool],
   );
 
   const handleOpenPlainFile = useCallback(() => {
@@ -1098,6 +1143,14 @@ const DiffFileHeader = memo(function DiffFileHeader({
   );
 
   const fileName = file.path.split("/").pop() ?? file.path;
+  const openInPreferredToolLabel = preferredOpenToolLabel
+    ? t("workspace.git.openInEditor.openFileIn", {
+        fileName,
+        target: preferredOpenToolLabel,
+      })
+    : null;
+  const isPreferredToolOpening = openingPreferredToolPath === file.path;
+  const isPreferredToolOpenPending = typeof openingPreferredToolPath === "string";
   const displayDirectory = useMemo(() => {
     if (!showDir || !file.path.includes("/")) {
       return "";
@@ -1146,6 +1199,16 @@ const DiffFileHeader = memo(function DiffFileHeader({
         )}
       </View>
       <View style={styles.fileHeaderRight}>
+        {onOpenInPreferredTool && openInPreferredToolLabel ? (
+          <DiffFileOpenButton
+            label={openInPreferredToolLabel}
+            testID={testID ? `${testID}-open-in-preferred-tool` : undefined}
+            onPress={handleOpenInPreferredTool}
+            icon="external"
+            disabled={isPreferredToolOpenPending}
+            isPending={isPreferredToolOpening}
+          />
+        ) : null}
         {canPreviewFile ? (
           <DiffFileOpenButton
             label={previewFileLabel}
@@ -1449,6 +1512,7 @@ const ThemedArchive = withUnistyles(Archive);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedFileText = withUnistyles(FileText);
 const ThemedEye = withUnistyles(Eye);
+const ThemedExternalLink = withUnistyles(ExternalLink);
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
 );
@@ -1998,6 +2062,9 @@ interface SharedDiffViewProps {
         reviewActions?: InlineReviewActions;
         onOpenFile?: (file: ParsedDiffFile) => void;
         onPreviewFile?: (file: ParsedDiffFile) => void;
+        onOpenInPreferredTool?: (file: ParsedDiffFile) => void;
+        preferredOpenToolLabel?: string;
+        openingPreferredToolPath?: string | null;
         onFilePress?: (path: string) => void;
         workspaceFileDragScope?: { serverId: string; workspaceId: string };
         onOpenPlainFile?: (path: string) => void;
@@ -2062,6 +2129,12 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   const focusRequestId = mode.kind === "working_tab" ? mode.focusRequestId : undefined;
   const onOpenFile = mode.kind === "working_tree" ? mode.onOpenFile : undefined;
   const onPreviewFile = mode.kind === "working_tree" ? mode.onPreviewFile : undefined;
+  const onOpenInPreferredTool =
+    mode.kind === "working_tree" ? mode.onOpenInPreferredTool : undefined;
+  const preferredOpenToolLabel =
+    mode.kind === "working_tree" ? mode.preferredOpenToolLabel : undefined;
+  const openingPreferredToolPath =
+    mode.kind === "working_tree" ? mode.openingPreferredToolPath : undefined;
   const onOpenPlainFile = mode.kind === "working_tree" ? mode.onOpenPlainFile : undefined;
   const onAddToChat = mode.kind === "working_tree" ? mode.onAddToChat : undefined;
   const workspaceFileDragScope =
@@ -2443,6 +2516,9 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
             onToggle={interactive ? (onFilePress ?? handleToggleExpanded) : undefined}
             onOpenFile={onOpenFile}
             onPreviewFile={onPreviewFile}
+            onOpenInPreferredTool={onOpenInPreferredTool}
+            preferredOpenToolLabel={preferredOpenToolLabel}
+            openingPreferredToolPath={openingPreferredToolPath}
             onOpenPlainFile={onOpenPlainFile}
             onAddToChat={onAddToChat}
             onCopyPath={onCopyPath}
@@ -2484,6 +2560,9 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       onFilePress,
       onOpenFile,
       onPreviewFile,
+      onOpenInPreferredTool,
+      preferredOpenToolLabel,
+      openingPreferredToolPath,
       onOpenPlainFile,
       onAddToChat,
       onCopyPath,
@@ -2519,6 +2598,8 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       wrapLines,
       reviewActions,
       workspaceFileDragScope,
+      preferredOpenToolLabel,
+      openingPreferredToolPath,
     }),
     [
       expandedPathsArray,
@@ -2530,6 +2611,8 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       reviewActions,
       typographyKey,
       workspaceFileDragScope,
+      preferredOpenToolLabel,
+      openingPreferredToolPath,
       wrapLines,
     ],
   );
@@ -3128,6 +3211,10 @@ export function GitDiffPane({
   const overflowToggleStyle = useMemo(() => buildOverflowButtonStyle(), []);
 
   const toast = useToast();
+  const isLocalDaemon = useIsLocalDaemon(serverId);
+  const { targets: desktopOpenTargets, isAvailable: isDesktopOpenAvailable } =
+    useDesktopOpenTargets({ isLocalExecution: isLocalDaemon });
+  const { preferredEditorId } = usePreferredEditor();
   const {
     changesTabOpen,
     toggleChanges: handleToggleChangesTab,
@@ -3280,6 +3367,60 @@ export function GitDiffPane({
     cwd,
     enabled: isGit,
   });
+  const workspaceOpenTargets = useMemo(
+    () =>
+      planWorkspaceOpenTargets({
+        workspaceDirectory: cwd,
+        desktopTargets: desktopOpenTargets,
+        canUseDesktopBridge: isDesktopOpenAvailable,
+        isLocalExecution: isLocalDaemon,
+        checkoutStatus: status,
+        forge,
+      }),
+    [cwd, desktopOpenTargets, forge, isDesktopOpenAvailable, isLocalDaemon, status],
+  );
+  const preferredOpenTarget = useMemo(
+    () => resolvePreferredEditorTarget(workspaceOpenTargets, preferredEditorId),
+    [preferredEditorId, workspaceOpenTargets],
+  );
+  const openInPreferredToolMutation = useMutation({
+    mutationFn: async (file: ParsedDiffFile) => {
+      const fileTargets = planWorkspaceOpenTargets({
+        workspaceDirectory: cwd,
+        activeFile: { path: file.path },
+        desktopTargets: desktopOpenTargets,
+        canUseDesktopBridge: isDesktopOpenAvailable,
+        isLocalExecution: isLocalDaemon,
+        checkoutStatus: status,
+        forge,
+      });
+      const target = resolvePreferredEditorTarget(fileTargets, preferredEditorId);
+      if (!target) {
+        throw new Error(t("workspace.git.openInEditor.targetUnavailable"));
+      }
+      if (target.source === "desktop") {
+        await openDesktopTarget(target.openInput);
+        return;
+      }
+      await openExternalUrl(target.url);
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error ? error.message : t("workspace.git.openInEditor.failedOpenFile"),
+      );
+    },
+  });
+  const handleOpenInPreferredTool = useCallback(
+    (file: ParsedDiffFile) => {
+      if (!openInPreferredToolMutation.isPending) {
+        openInPreferredToolMutation.mutate(file);
+      }
+    },
+    [openInPreferredToolMutation],
+  );
+  const openingPreferredToolPath = openInPreferredToolMutation.isPending
+    ? (openInPreferredToolMutation.variables?.path ?? null)
+    : null;
   const forgeProvidersSupported = useSessionStore(
     (s) => s.sessions[serverId]?.serverInfo?.features?.forgeProviders === true,
   );
@@ -3435,6 +3576,9 @@ export function GitDiffPane({
       workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
       onOpenFile: onOpenWorkspaceFile ? handleOpenDiffFile : undefined,
       onPreviewFile: onOpenWorkspaceFile ? handlePreviewDiffFile : undefined,
+      onOpenInPreferredTool: preferredOpenTarget ? handleOpenInPreferredTool : undefined,
+      preferredOpenToolLabel: preferredOpenTarget?.label,
+      openingPreferredToolPath,
       onOpenPlainFile: onOpenFile,
       onAddToChat,
       onCopyPath: handleCopyPath,
@@ -3450,6 +3594,7 @@ export function GitDiffPane({
       handleCollapsedGroupKeysChange,
       handleExpandedPathsChange,
       handleOpenDiffFile,
+      handleOpenInPreferredTool,
       handlePreviewDiffFile,
       handleCopyPath,
       handleDownloadPath,
@@ -3457,6 +3602,8 @@ export function GitDiffPane({
       onChangesFilePress,
       onOpenFile,
       onOpenWorkspaceFile,
+      openingPreferredToolPath,
+      preferredOpenTarget,
       reviewActions,
       serverId,
       stableCollapsedFoldersArray,
@@ -3874,6 +4021,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   fileOpenButtonPressed: {
     backgroundColor: theme.colors.surface2,
+  },
+  fileOpenButtonDisabled: {
+    opacity: 0.6,
   },
   fileIcon: {
     flexShrink: 0,

@@ -882,6 +882,8 @@ export const ru: TranslationResources = {
         openIn: "Открыть рабочую область в{{target}}",
         openFileIn: "Open {{fileName}} in {{target}}",
         failedOpen: "Не удалось открыть рабочую область",
+        failedOpenFile: "Не удалось открыть файл",
+        targetUnavailable: "Выбранный инструмент недоступен",
       },
       pr: {
         actions: {

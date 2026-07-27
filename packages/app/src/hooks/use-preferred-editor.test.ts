@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolvePreferredEditorId } from "./use-preferred-editor";
+import { resolvePreferredEditorId, resolvePreferredEditorTarget } from "./use-preferred-editor";
 
 describe("resolvePreferredEditorId", () => {
   it("keeps the stored editor when it is still available", () => {
@@ -28,5 +28,28 @@ describe("resolvePreferredEditorId", () => {
 
   it("returns null when no editors are available", () => {
     expect(resolvePreferredEditorId([], "cursor")).toBeNull();
+  });
+});
+
+describe("resolvePreferredEditorTarget", () => {
+  const targets = [
+    { id: "cursor", label: "Cursor" },
+    { id: "finder", label: "Finder" },
+  ];
+
+  it("returns the selected file-opening tool", () => {
+    expect(resolvePreferredEditorTarget(targets, "finder")).toEqual({
+      id: "finder",
+      label: "Finder",
+    });
+    expect(resolvePreferredEditorTarget(targets, "cursor")).toEqual({
+      id: "cursor",
+      label: "Cursor",
+    });
+  });
+
+  it("uses the same deterministic fallback and loading behavior as the workspace button", () => {
+    expect(resolvePreferredEditorTarget(targets, "missing")).toBe(targets[0]);
+    expect(resolvePreferredEditorTarget(targets, undefined)).toBeNull();
   });
 });

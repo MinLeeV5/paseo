@@ -872,6 +872,8 @@ export const ja: TranslationResources = {
         openIn: "{{target}}でワークスペースを開く",
         openFileIn: "{{target}}で{{fileName}}を開く",
         failedOpen: "ワークスペースを開けませんでした",
+        failedOpenFile: "ファイルを開けませんでした",
+        targetUnavailable: "選択したツールは利用できません",
       },
       pr: {
         actions: {

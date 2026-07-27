@@ -22,7 +22,7 @@ import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-preferred-editor";
+import { resolvePreferredEditorTarget, usePreferredEditor } from "@/hooks/use-preferred-editor";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { isAbsolutePath } from "@/utils/path";
 import { isWeb } from "@/constants/platform";
@@ -163,12 +163,10 @@ export function WorkspaceOpenInEditorButton({
     ],
   );
 
-  const targetIds = useMemo(() => targets.map((target) => target.id), [targets]);
-  const effectivePreferredEditorId = useMemo(
-    () => resolvePreferredEditorId(targetIds, preferredEditorId),
-    [targetIds, preferredEditorId],
+  const primaryOption = useMemo(
+    () => resolvePreferredEditorTarget(targets, preferredEditorId),
+    [preferredEditorId, targets],
   );
-  const primaryOption = targets.find((target) => target.id === effectivePreferredEditorId) ?? null;
 
   const openMutation = useMutation({
     mutationFn: (target: OpenTarget) => Promise.resolve(target.onOpen()),
@@ -269,7 +267,7 @@ export function WorkspaceOpenInEditorButton({
                 <OpenTargetMenuItem
                   key={target.id}
                   target={target}
-                  isPreferred={target.id === effectivePreferredEditorId}
+                  isPreferred={target.id === primaryOption.id}
                   onOpen={handleOpenTarget}
                 />
               ))}

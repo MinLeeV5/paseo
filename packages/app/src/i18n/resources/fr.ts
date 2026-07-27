@@ -893,6 +893,8 @@ export const fr: TranslationResources = {
         openIn: "Espace de travail ouvert dans{{target}}",
         openFileIn: "Open {{fileName}} in {{target}}",
         failedOpen: "Échec de l'ouverture de l'espace de travail",
+        failedOpenFile: "Échec de l'ouverture du fichier",
+        targetUnavailable: "L’outil sélectionné n’est pas disponible",
       },
       pr: {
         actions: {

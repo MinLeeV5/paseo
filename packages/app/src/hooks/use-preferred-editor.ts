@@ -4,6 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 type EditorTargetId = string;
 
+interface EditorTargetWithId {
+  id: EditorTargetId;
+}
+
 const PREFERRED_EDITOR_STORAGE_KEY = "@paseo:preferred-editor";
 const PREFERRED_EDITOR_QUERY_KEY = ["preferred-editor"];
 
@@ -29,6 +33,15 @@ export function resolvePreferredEditorId(
     return storedEditorId;
   }
   return availableEditorIds[0] ?? null;
+}
+
+export function resolvePreferredEditorTarget<TTarget extends EditorTargetWithId>(
+  availableTargets: readonly TTarget[],
+  storedEditorId: EditorTargetId | null | undefined,
+): TTarget | null {
+  const availableEditorIds = availableTargets.map((target) => target.id);
+  const preferredEditorId = resolvePreferredEditorId(availableEditorIds, storedEditorId);
+  return availableTargets.find((target) => target.id === preferredEditorId) ?? null;
 }
 
 export function usePreferredEditor() {

@@ -852,6 +852,8 @@ export const zhCN: TranslationResources = {
         openIn: "在 {{target}} 中打开 workspace",
         openFileIn: "在 {{target}} 中打开 {{fileName}}",
         failedOpen: "打开 workspace 失败",
+        failedOpenFile: "打开文件失败",
+        targetUnavailable: "选中的打开工具不可用",
       },
       pr: {
         actions: {

@@ -884,6 +884,8 @@ export const ptBR: TranslationResources = {
         openIn: "Abrir workspace em {{target}}",
         openFileIn: "Abrir {{fileName}} em {{target}}",
         failedOpen: "Falha ao abrir workspace",
+        failedOpenFile: "Falha ao abrir arquivo",
+        targetUnavailable: "A ferramenta selecionada não está disponível",
       },
       pr: {
         actions: {

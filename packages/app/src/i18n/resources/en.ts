@@ -870,6 +870,8 @@ export const en = {
         openIn: "Open workspace in {{target}}",
         openFileIn: "Open {{fileName}} in {{target}}",
         failedOpen: "Failed to open workspace",
+        failedOpenFile: "Failed to open file",
+        targetUnavailable: "The selected open tool is unavailable",
       },
       pr: {
         actions: {
