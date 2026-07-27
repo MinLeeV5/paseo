@@ -67,6 +67,7 @@ async function buildPrompt(
         label: "Title style",
         default: [
           "A terse, task-shaped label naming what the task is about (sentence case, max 80 characters).",
+          "Match the title language to the source material's primary human language. For a primarily Chinese prompt, write a natural concise Chinese title; do not default to English merely because these instructions are English.",
           "Aim for about 4 words. Go longer only when the task genuinely needs it; most titles must stay short.",
           "Do not start with a generic 'do' verb (Fix, Add, Implement, Diagnose, Update, Change, Create, Set, Make) — every task is implicitly one of these, so the verb is noise. Name the thing instead.",
           "Keep a verb only when it states the specific operation (Swap, Split, Extract, Rename, Merge, Inline).",

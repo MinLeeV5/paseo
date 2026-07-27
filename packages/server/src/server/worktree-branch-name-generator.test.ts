@@ -25,6 +25,7 @@ The branch is generated directly from the prompt — it is NEVER derived from or
 
 Title style:
 A terse, task-shaped label naming what the task is about (sentence case, max 80 characters).
+Match the title language to the source material's primary human language. For a primarily Chinese prompt, write a natural concise Chinese title; do not default to English merely because these instructions are English.
 Aim for about 4 words. Go longer only when the task genuinely needs it; most titles must stay short.
 Do not start with a generic 'do' verb (Fix, Add, Implement, Diagnose, Update, Change, Create, Set, Make) — every task is implicitly one of these, so the verb is noise. Name the thing instead.
 Keep a verb only when it states the specific operation (Swap, Split, Extract, Rename, Merge, Inline).
@@ -122,6 +123,27 @@ describe("generateBranchNameFromFirstAgentContext", () => {
     expect(firstCall.prompt).toContain("Fix the login flow");
     expect(firstCall.prompt).toContain("<user-prompt>\nFix the login flow\n</user-prompt>");
     expect(firstCall.prompt).not.toContain("User context:");
+  });
+
+  test("asks the generator to preserve Chinese as the title language", async () => {
+    const structured = createStructuredGenerator({
+      title: "登录流程校验",
+      branch: "login-validation",
+    });
+
+    const result = await generateBranchNameFromFirstAgentContext({
+      agentManager: {} as AgentManager,
+      cwd: "/tmp/repo",
+      firstAgentContext: { prompt: "优化登录流程的参数校验" },
+      logger: createLogger(),
+      deps: { generateStructuredAgentResponseWithFallback: structured.generateStructured },
+    });
+
+    expect(result?.title).toBe("登录流程校验");
+    expect(structured.calls[0]?.prompt).toContain("For a primarily Chinese prompt");
+    expect(structured.calls[0]?.prompt).toContain(
+      "<user-prompt>\n优化登录流程的参数校验\n</user-prompt>",
+    );
   });
 
   test("wraps a slash-only first-agent prompt as naming input", async () => {

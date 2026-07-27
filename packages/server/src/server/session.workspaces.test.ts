@@ -1286,12 +1286,25 @@ test("create_agent_request launches from an exact subdirectory in a created work
   }
 });
 
-test("create_agent_request does not title an existing workspace from the agent prompt", async () => {
-  vi.useFakeTimers();
+test("the first agent automatically names a setup-created worktree in Chinese", async () => {
   const workdir = mkdtempSync(path.join(tmpdir(), "paseo-create-agent-existing-title-"));
   try {
     const cwd = path.join(workdir, "repo");
     mkdirSync(cwd, { recursive: true });
+    execFileSync("git", ["init", "-b", "placeholder-branch", cwd], { stdio: "pipe" });
+    execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+      cwd,
+      stdio: "pipe",
+    });
+    execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd, stdio: "pipe" });
+    execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd, stdio: "pipe" });
+    writeFileSync(path.join(cwd, "README.md"), "hello\n");
+    execFileSync("git", ["add", "README.md"], { cwd, stdio: "pipe" });
+    execFileSync("git", ["commit", "-m", "initial"], { cwd, stdio: "pipe" });
+    writePaseoWorktreeMetadata(cwd, { baseRefName: "main" });
+    writePaseoWorktreeFirstAgentBranchAutoNameMetadata(cwd, {
+      placeholderBranchName: "placeholder-branch",
+    });
 
     const logger = {
       child: () => logger,
@@ -1302,11 +1315,12 @@ test("create_agent_request does not title an existing workspace from the agent p
       error: vi.fn(),
     };
     const agentStorage = new AgentStorage(path.join(workdir, "agents"), asSessionLogger(logger));
+    let nextAgentNumber = 552;
     const agentManager = new AgentManager({
       clients: { codex: new CreateAgentTestClient() },
       registry: agentStorage,
       logger: asSessionLogger(logger),
-      idFactory: () => "00000000-0000-4000-8000-000000000552",
+      idFactory: () => `00000000-0000-4000-8000-${String(nextAgentNumber++).padStart(12, "0")}`,
     });
     const projectRegistry = new FileBackedProjectRegistry(
       path.join(workdir, "projects.json"),
@@ -1332,15 +1346,37 @@ test("create_agent_request does not title an existing workspace from the agent p
         workspaceId: "ws-existing",
         projectId: "proj-existing",
         cwd,
-        kind: "local_checkout",
-        displayName: "repo",
+        kind: "worktree",
+        displayName: "placeholder-branch",
         title: null,
+        branch: "placeholder-branch",
+        worktreeRoot: cwd,
+        baseBranch: "main",
+        isPaseoOwnedWorktree: true,
+        mainRepoRoot: cwd,
         createdAt: "2026-05-07T00:00:00.000Z",
         updatedAt: "2026-05-07T00:00:00.000Z",
       }),
     );
 
+    const workspaceGitService = createNoopWorkspaceGitService();
+    const providerSnapshotManager = createProviderSnapshotManagerStub().manager;
     let generateCalls = 0;
+    const workspaceAutoName = new WorkspaceAutoName({
+      agentManager,
+      workspaceRegistry,
+      workspaceGitService,
+      providerSnapshotManager,
+      readDaemonConfig: () => ({ metadataGeneration: { providers: [] } }),
+      gitMutation: { notifyGitMutation: async () => {} },
+      emitWorkspaceUpdateForCwd: async () => {},
+      emitWorkspaceUpdateForWorkspaceId: async () => {},
+      logger: asSessionLogger(logger),
+      generateWorkspaceName: async () => {
+        generateCalls += 1;
+        return { title: "登录校验优化", branch: "login-validation" };
+      },
+    });
     const session = asTestSession(
       new Session({
         clientId: "test-client",
@@ -1374,7 +1410,8 @@ test("create_agent_request does not title an existing workspace from the agent p
           }),
           dispose: () => {},
         }),
-        workspaceGitService: createNoopWorkspaceGitService(),
+        workspaceGitService,
+        workspaceAutoName,
         daemonConfigStore: asDaemonConfigStore({
           get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
           onChange: () => () => {},
@@ -1382,11 +1419,7 @@ test("create_agent_request does not title an existing workspace from the agent p
         mcpBaseUrl: null,
         stt: null,
         tts: null,
-        generateWorkspaceName: async () => {
-          generateCalls += 1;
-          return { title: "Generated title that must not be written", branch: null };
-        },
-        providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+        providerSnapshotManager,
         terminalManager: null,
       }),
     );
@@ -1396,21 +1429,46 @@ test("create_agent_request does not title an existing workspace from the agent p
       requestId: "req-create-existing-title",
       workspaceId: "ws-existing",
       config: { provider: "codex", cwd },
-      initialPrompt: "Fix login bug\nwith better validation",
+      initialPrompt: "优化登录流程的参数校验",
       attachments: [],
     });
-    await vi.runAllTimersAsync();
+    await vi.waitFor(async () => {
+      expect(generateCalls).toBe(1);
+      expect(
+        execFileSync("git", ["branch", "--show-current"], { cwd, stdio: "pipe" }).toString().trim(),
+      ).toBe("login-validation");
+      await expect(workspaceRegistry.get("ws-existing")).resolves.toMatchObject({
+        title: "登录校验优化",
+        branch: "login-validation",
+      });
+    });
 
     const [createdAgent] = agentManager.listAgents();
     expect(createdAgent?.workspaceId).toBe("ws-existing");
-    expect(generateCalls).toBe(0);
+    expect(readPaseoWorktreeMetadata(cwd)).toMatchObject({
+      firstAgentBranchAutoName: { status: "attempted" },
+    });
     await expect(workspaceRegistry.get("ws-existing")).resolves.toMatchObject({
-      title: null,
-      updatedAt: "2026-05-07T00:00:00.000Z",
+      title: "登录校验优化",
+      branch: "login-validation",
+    });
+
+    await session.handleMessage({
+      type: "create_agent_request",
+      requestId: "req-create-existing-title-second",
+      workspaceId: "ws-existing",
+      config: { provider: "codex", cwd },
+      initialPrompt: "第二轮会话不应再次命名 workspace",
+      attachments: [],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(generateCalls).toBe(1);
+    await expect(workspaceRegistry.get("ws-existing")).resolves.toMatchObject({
+      title: "登录校验优化",
     });
   } finally {
-    vi.useRealTimers();
-    rmSync(workdir, { recursive: true, force: true });
+    await removeTempDirForTest(workdir);
   }
 });
 

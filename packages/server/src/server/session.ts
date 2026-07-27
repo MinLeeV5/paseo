@@ -3138,6 +3138,12 @@ export class Session {
           },
           { currentSelection: this.getFocusedAgentSelectionForCwd(resolvedIntent.config.cwd) },
         );
+      } else if (!createdWorktree && trimmedPrompt) {
+        this.scheduleAutoNameForFirstAgentInExistingWorkspace({
+          agentId: snapshot.id,
+          workspaceId: resolvedIntent.intent.workspaceId,
+          firstAgentContext,
+        });
       }
       this.createAgentLifecycleDispatch.registerAutoArchiveIfRequested({
         autoArchive,
@@ -3238,6 +3244,61 @@ export class Session {
       intent,
       createdDirectoryWorkspace: !createdWorktree && !request.workspaceId && !callerAgent,
     };
+  }
+
+  private scheduleAutoNameForFirstAgentInExistingWorkspace(input: {
+    agentId: string;
+    workspaceId: string;
+    firstAgentContext: FirstAgentContext;
+  }): void {
+    setTimeout(() => {
+      void this.maybeAutoNameFirstAgentInExistingWorkspace(input).catch((error) => {
+        this.sessionLogger.warn(
+          { err: error, agentId: input.agentId, workspaceId: input.workspaceId },
+          "Failed to schedule first-agent workspace auto-name",
+        );
+      });
+    }, 0);
+  }
+
+  private async maybeAutoNameFirstAgentInExistingWorkspace(input: {
+    agentId: string;
+    workspaceId: string;
+    firstAgentContext: FirstAgentContext;
+  }): Promise<void> {
+    const workspace = await this.workspaceRegistry.get(input.workspaceId);
+    if (!workspace || workspace.archivedAt || workspace.title) {
+      return;
+    }
+
+    const firstWorkspaceAgent = (await this.agentStorage.list())
+      .filter((agent) => !agent.internal && agent.workspaceId === input.workspaceId)
+      .sort(
+        (left, right) =>
+          left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+      )[0];
+    if (firstWorkspaceAgent?.id !== input.agentId) {
+      return;
+    }
+
+    const context = {
+      currentSelection: this.getFocusedAgentSelectionForCwd(workspace.cwd),
+    };
+    if (workspace.kind === "worktree") {
+      this.workspaceAutoName.scheduleForWorktree(
+        { workspace, firstAgentContext: input.firstAgentContext },
+        context,
+      );
+      return;
+    }
+    this.workspaceAutoName.scheduleForDirectory(
+      {
+        workspaceId: workspace.workspaceId,
+        cwd: workspace.cwd,
+        firstAgentContext: input.firstAgentContext,
+      },
+      context,
+    );
   }
 
   private async handleResumeAgentRequest(

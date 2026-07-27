@@ -14,6 +14,13 @@ Each live agent in `AgentManager` carries a `lastStatus` of `initializing`, `idl
 
 Every accepted foreground user Prompt is bracketed by diff lifecycle hooks. Immediately before `startTurn`, the daemon freezes a start snapshot and stores the Prompt record; after the provider returns a turn ID, that ID is attached to the record. A completed, failed, or canceled terminal event freezes the end snapshot before the foreground run lock is released. Running records therefore compare start-to-working-tree, while finished records compare immutable start-to-end snapshots and cannot be contaminated by later turns. Snapshot failures are logged but never prevent provider lifecycle handling.
 
+When a workspace is created before its first agent (for example, **Create and run setup**),
+the first successful agent creation supplies the missing naming context. If the workspace still has
+no user title, the daemon asynchronously generates one from that first prompt; Paseo-owned
+branch-off worktrees may also replace their generated placeholder branch. The title follows the
+prompt's primary language, including Chinese. Later agents and manual workspace titles never
+retrigger or get overwritten by this path, and generation failure never blocks the agent turn.
+
 ## Runtime residency
 
 An unarchived agent may be `closed` without being deleted or archived. Closing releases its provider
