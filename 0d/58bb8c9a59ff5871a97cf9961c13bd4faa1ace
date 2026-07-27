@@ -1,0 +1,60 @@
+packages/app/src/i18n/resources/pt-BR.ts
+  539580ac5699255d 887-888
+packages/app/src/i18n/resources/es.ts
+  539580ac5699255d 896-897
+packages/app/src/i18n/resources/ja.ts
+  539580ac5699255d 875-876
+packages/app/src/hooks/use-preferred-editor.test.ts
+  539580ac5699255d 2,33-53
+packages/app/src/i18n/resources/fr.ts
+  539580ac5699255d 896-897
+packages/app/src/git/diff-pane.tsx
+  539580ac5699255d 41,57,133,135-137,238-240,944-945,950-952,954-972,979,981,983,985,1008-1010,1054-1061,1146-1152,1202-1211,1515,2065-2067,2132-2137,2519-2521,2563-2565,2601-2602,2614-2615
+packages/app/src/screens/workspace/workspace-open-in-editor-button.tsx
+  539580ac5699255d 25,166-168,270
+packages/app/src/i18n/resources/ar.ts
+  539580ac5699255d 863-864
+packages/app/src/i18n/resources/en.ts
+  539580ac5699255d 873-874
+packages/app/src/i18n/resources/zh-CN.ts
+  539580ac5699255d 855-856
+packages/app/src/i18n/resources/ru.ts
+  539580ac5699255d 885-886
+packages/app/src/hooks/use-preferred-editor.ts
+  539580ac5699255d 7-10,38-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "0d58bb8c9a59ff5871a97cf9961c13bd4faa1ace",
+  "prompts": {
+    "539580ac5699255d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa1b2-187a-7d11-9b7b-489b352d1639",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 161,
+      "total_deletions": 24,
+      "accepted_lines": 147,
+      "overriden_lines": 2,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/b4cafe58264f84b0c344630849ed231dddf616cf3210a0d7d8f721ea56f662e5"
+    },
+    "b3ddeea27eb92d53": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa17d-8de5-7fa0-bb43-3a42d5bfc64b",
+        "model": "gpt-5.4-mini"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/0def0019129b63b6a79dc92ed3a4f2a8b2af0bfee4ea06542eef913247d78bc3"
+    }
+  }
+}
