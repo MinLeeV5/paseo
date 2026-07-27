@@ -1,0 +1,45 @@
+docs/agent-lifecycle.md
+  b3ddeea27eb92d53 17-23
+packages/server/src/server/session.ts
+  b3ddeea27eb92d53 3141-3146,3249-3301
+packages/server/src/server/worktree-branch-name-generator.ts
+  b3ddeea27eb92d53 70
+packages/server/src/server/worktree-branch-name-generator.test.ts
+  b3ddeea27eb92d53 28,128-146
+packages/server/src/server/session.workspaces.test.ts
+  b3ddeea27eb92d53 1289,1294-1307,1318,1323,1349-1350,1352-1356,1362-1363,1365-1379,1413-1414,1422,1432,1435-1444,1448-1450,1452-1468,1471
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "89e0a4539d862a15aec52d157a262b36345450b9",
+  "prompts": {
+    "b3a5236514f8a720": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa168-95d2-75a3-9db0-bba4c1b69b70",
+        "model": "unknown"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "b3ddeea27eb92d53": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa17d-8de5-7fa0-bb43-3a42d5bfc64b",
+        "model": "gpt-5.4-mini"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 196,
+      "total_deletions": 48,
+      "accepted_lines": 168,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/2274d2865cd96ce32d9ced4cb69db6870b9dd29d75141c0faeedc0d4c2652612"
+    }
+  }
+}
