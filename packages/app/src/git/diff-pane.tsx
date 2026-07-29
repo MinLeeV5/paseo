@@ -14,7 +14,6 @@ import { DiffStat } from "@/components/diff-stat";
 import {
   View,
   Text,
-  ActivityIndicator,
   Pressable,
   FlatList,
   type LayoutChangeEvent,
@@ -953,7 +952,7 @@ function DiffFileOpenButton({
 }) {
   let content: ReactElement;
   if (isPending) {
-    content = <ThemedActivityIndicator size="small" uniProps={foregroundMutedIconColorMapping} />;
+    content = <ThemedLoadingSpinner size="small" uniProps={foregroundMutedIconColorMapping} />;
   } else if (icon === "external") {
     content = <ThemedExternalLink size={14} uniProps={foregroundMutedIconColorMapping} />;
   } else if (icon === "preview") {
@@ -1491,7 +1490,7 @@ type PressableStyleFn = (
 
 const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
-const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedAlignJustify = withUnistyles(AlignJustify);
 const ThemedColumns2 = withUnistyles(Columns2);
 const ThemedFolderTree = withUnistyles(FolderTree);
@@ -1915,7 +1914,6 @@ export function DiffOptionsMenu({
 }
 
 const ThemedRotateCw = withUnistyles(RotateCw);
-const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
 type DiffFlatItemLayoutGetter = NonNullable<FlatListProps<DiffFlatItem>["getItemLayout"]>;
 const EMPTY_PATH_LIST: string[] = [];
@@ -2001,7 +1999,7 @@ function DiffBodyContent({
   if (isStatusLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ThemedActivityIndicator size="large" uniProps={foregroundMutedIconColorMapping} />
+        <ThemedLoadingSpinner size="large" uniProps={foregroundMutedIconColorMapping} />
         <Text style={styles.loadingText}>{checkingRepositoryLabel}</Text>
       </View>
     );
@@ -2023,7 +2021,7 @@ function DiffBodyContent({
   if (isDiffLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ThemedActivityIndicator size="large" uniProps={foregroundMutedIconColorMapping} />
+        <ThemedLoadingSpinner size="large" uniProps={foregroundMutedIconColorMapping} />
       </View>
     );
   }

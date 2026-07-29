@@ -607,6 +607,17 @@ export async function createPaseoWorktreeWorkflow(
   const slug = basename(createdWorktree.worktree.worktreePath);
   const workspace = createdWorktree.workspace;
 
+  if (createdWorktree.created && createdWorktree.worktreeIncludeSummary?.skipped.length) {
+    dependencies.sessionLogger.warn(
+      {
+        materialized: createdWorktree.worktreeIncludeSummary.materialized,
+        skipped: createdWorktree.worktreeIncludeSummary.skipped,
+        worktreePath: createdWorktree.worktree.worktreePath,
+      },
+      "Worktree include completed with skipped entries",
+    );
+  }
+
   setTimeout(() => {
     if (input.firstAgentContext) {
       dependencies.autoNameWorkspaceBranchForFirstAgent({
