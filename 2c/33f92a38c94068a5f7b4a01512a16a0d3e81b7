@@ -1,0 +1,48 @@
+packages/app/src/i18n/resources/ar.ts
+  194affb3d90f0921 522,581
+packages/app/src/screens/workspace/workspace-screen.tsx
+  194affb3d90f0921 458,656,676,691,715,785,843,863,3093-3107,3743,3781,3865,3888
+packages/app/src/i18n/resources/fr.ts
+  194affb3d90f0921 527,588
+packages/app/src/i18n/resources/ja.ts
+  194affb3d90f0921 527,585
+packages/app/src/screens/workspace/workspace-tab-menu.ts
+  194affb3d90f0921 19,36,83,101,180,292-301,352
+packages/app/src/components/split-container.tsx
+  194affb3d90f0921 105,385,606,754,813,864,921,1027-1030,1072
+packages/app/src/i18n/resources/ru.ts
+  194affb3d90f0921 526,586
+packages/app/src/i18n/resources/pt-BR.ts
+  194affb3d90f0921 528,587
+packages/app/src/i18n/resources/es.ts
+  194affb3d90f0921 528,589
+packages/app/src/i18n/resources/zh-CN.ts
+  194affb3d90f0921 522,578
+packages/app/src/i18n/resources/en.ts
+  194affb3d90f0921 521,579
+packages/app/src/screens/workspace/workspace-tab-menu.test.ts
+  194affb3d90f0921 28,46,56,79,89,95-127,150,180,211,248,300,344,376
+packages/app/src/screens/workspace/workspace-desktop-tabs-row.tsx
+  194affb3d90f0921 429,776,862,961,983,1117,1145,1174,1181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "2c33f92a38c94068a5f7b4a01512a16a0d3e81b7",
+  "prompts": {
+    "194affb3d90f0921": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fad37-34e7-7121-8e85-5dd5a5f8cc91",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 91,
+      "total_deletions": 0,
+      "accepted_lines": 91,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/b20ebe8e6618ecdb53c949b9027f26c8f6825f51f7c4dff6021fc300c656d34c"
+    }
+  }
+}
