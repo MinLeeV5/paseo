@@ -52,7 +52,6 @@ interface ExplorerSidebarProps {
   isGit: boolean;
   onOpenFile?: (filePath: string) => void;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
-  onOpenExternalUrl?: (url: string) => void;
 }
 
 interface ExplorerSidebarSharedState {
@@ -84,7 +83,6 @@ export function CompactExplorerSidebar({
   isGit,
   onOpenFile,
   onOpenWorkspaceFile,
-  onOpenExternalUrl,
 }: ExplorerSidebarProps) {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
@@ -143,7 +141,6 @@ export function CompactExplorerSidebar({
           isOpen={isOpen}
           onOpenFile={onOpenFile}
           onOpenWorkspaceFile={onOpenWorkspaceFile}
-          onOpenExternalUrl={onOpenExternalUrl}
         />
       </MobilePanelOverlay>
     </RetainedPanelActivity>
@@ -157,7 +154,6 @@ export function ExplorerSidebar({
   isGit,
   onOpenFile,
   onOpenWorkspaceFile,
-  onOpenExternalUrl,
 }: ExplorerSidebarProps) {
   const insets = useSafeAreaInsets();
   const explorerWidth = usePanelStore((state) => state.explorerWidth);
@@ -243,7 +239,6 @@ export function ExplorerSidebar({
           isOpen={isOpen}
           onOpenFile={onOpenFile}
           onOpenWorkspaceFile={onOpenWorkspaceFile}
-          onOpenExternalUrl={onOpenExternalUrl}
         />
       </View>
     </Animated.View>
@@ -289,7 +284,6 @@ interface SidebarContentProps {
   isOpen: boolean;
   onOpenFile?: (filePath: string) => void;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
-  onOpenExternalUrl?: (url: string) => void;
 }
 
 function ExplorerSidebarContent({
@@ -303,7 +297,6 @@ function ExplorerSidebarContent({
   isOpen,
   onOpenFile,
   onOpenWorkspaceFile,
-  onOpenExternalUrl,
 }: SidebarContentProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -421,9 +414,7 @@ function ExplorerSidebarContent({
             workspaceId={workspaceId}
             workspaceRoot={workspaceRoot}
             isOpen={isOpen}
-            onOpenFile={onOpenFile}
             onOpenWorkspaceFile={handleOpenWorkspaceFile}
-            onOpenExternalUrl={onOpenExternalUrl}
           />
         )}
         {resolvedTab === "files" && (
@@ -489,18 +480,10 @@ function ChangedFilesPane({
   workspaceId,
   workspaceRoot,
   isOpen,
-  onOpenFile,
   onOpenWorkspaceFile,
-  onOpenExternalUrl,
 }: Pick<
   SidebarContentProps,
-  | "serverId"
-  | "workspaceId"
-  | "workspaceRoot"
-  | "isOpen"
-  | "onOpenFile"
-  | "onOpenWorkspaceFile"
-  | "onOpenExternalUrl"
+  "serverId" | "workspaceId" | "workspaceRoot" | "isOpen" | "onOpenWorkspaceFile"
 >) {
   const { addFile, canAddToChat } = useAddFileToChat({ serverId, workspaceId });
   return (
@@ -509,10 +492,8 @@ function ChangedFilesPane({
       workspaceId={workspaceId}
       cwd={workspaceRoot}
       enabled={isOpen}
-      onOpenFile={onOpenFile}
       onAddToChat={canAddToChat ? addFile : undefined}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
-      onOpenExternalUrl={onOpenExternalUrl}
     />
   );
 }

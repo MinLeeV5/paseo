@@ -2,12 +2,24 @@ import { isAbsolutePath } from "@/utils/path";
 
 export type OpenFileDisposition = "main" | "side";
 
-export interface WorkspaceFileDiffContext {
+export interface WorkspaceFileCheckoutDiffContext {
+  source?: "checkout";
   cwd: string;
   mode: "uncommitted" | "base";
   baseRef?: string;
   ignoreWhitespace: boolean;
 }
+
+export interface WorkspaceFileSessionDiffContext {
+  source: "session";
+  agentId: string;
+  turnId?: string;
+  ignoreWhitespace: boolean;
+}
+
+export type WorkspaceFileDiffContext =
+  | WorkspaceFileCheckoutDiffContext
+  | WorkspaceFileSessionDiffContext;
 
 export interface WorkspaceFileLocation {
   path: string;
@@ -79,6 +91,19 @@ function normalizeWorkspaceFileDiffContext(
   if (!context) {
     return undefined;
   }
+  if (context.source === "session") {
+    const agentId = context.agentId.trim();
+    if (!agentId) {
+      return undefined;
+    }
+    const turnId = context.turnId?.trim();
+    return {
+      source: "session",
+      agentId,
+      ...(turnId ? { turnId } : {}),
+      ignoreWhitespace: context.ignoreWhitespace === true,
+    };
+  }
   const cwd = context.cwd.trim();
   if (!cwd) {
     return undefined;
@@ -99,6 +124,15 @@ function workspaceFileDiffContextsEqual(
 ): boolean {
   if (!left || !right) {
     return left === right;
+  }
+  if (left.source === "session" || right.source === "session") {
+    return (
+      left.source === "session" &&
+      right.source === "session" &&
+      left.agentId === right.agentId &&
+      left.turnId === right.turnId &&
+      left.ignoreWhitespace === right.ignoreWhitespace
+    );
   }
   return (
     left.cwd === right.cwd &&

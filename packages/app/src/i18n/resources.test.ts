@@ -420,7 +420,6 @@ describe("translation resources", () => {
     expect(en.toolCallDetails.error).toBe("Error");
     expect(en.toolCallDetails.empty).toBe("No additional details available");
     expect(en.message.actions.openFile).toBe("Open file");
-    expect(en.message.actions.previewFile).toBe("Preview file");
   });
 
   it("includes hook and modal utility keys for the Batch 4M migration", () => {

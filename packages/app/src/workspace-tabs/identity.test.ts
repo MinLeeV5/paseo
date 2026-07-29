@@ -80,6 +80,34 @@ describe("working diff tab identity", () => {
   });
 });
 
+describe("file diff tab identity", () => {
+  it("keeps checkout and session diff tabs distinct for the same file", () => {
+    const checkoutId = buildDeterministicWorkspaceTabId({
+      kind: "file",
+      path: "src/example.ts",
+      diffContext: {
+        cwd: "/repo",
+        mode: "uncommitted",
+        ignoreWhitespace: false,
+      },
+    });
+    const sessionId = buildDeterministicWorkspaceTabId({
+      kind: "file",
+      path: "src/example.ts",
+      diffContext: {
+        source: "session",
+        agentId: "agent-1",
+        turnId: "turn-2",
+        ignoreWhitespace: false,
+      },
+    });
+
+    expect(sessionId).not.toBe(checkoutId);
+    expect(sessionId).toContain("agent-1");
+    expect(sessionId).toContain("turn-2");
+  });
+});
+
 describe("commit diff tab identity", () => {
   it("keys a commit diff tab by its sha", () => {
     expect(buildDeterministicWorkspaceTabId({ kind: "commit_diff", sha: "abc123" })).toBe(
