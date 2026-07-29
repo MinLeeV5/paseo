@@ -20,8 +20,11 @@ import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { lineNumberGutterWidth } from "@/components/code-insets";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
-import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
-import { getFilePaneContentRenderMode } from "@/components/file-pane-render-mode";
+import {
+  getDefaultFilePaneMarkdownMode,
+  getFilePaneContentRenderMode,
+  isRenderedMarkdownFile,
+} from "@/components/file-pane-render-mode";
 import { MermaidDiagram } from "@/components/mermaid/diagram";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
@@ -29,11 +32,17 @@ import { persistAttachmentFromBytes } from "@/attachments/service";
 import { createPreviewAttachmentId, getFileNameFromPath } from "@/attachments/utils";
 import { explorerFileFromReadResult } from "@/file-explorer/read-result";
 import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
-import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
+import {
+  resolveWorkspaceFilePaths,
+  type WorkspaceFileCheckoutDiffContext,
+  type WorkspaceFileLocation,
+  type WorkspaceFileSessionDiffContext,
+} from "@/workspace/file-open";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
 import { useCheckoutDiffQuery, type ParsedDiffFile } from "@/git/use-diff-query";
+import { useAgentSessionChangesQuery } from "@/git/use-agent-session-changes-query";
 import {
   buildWorkspaceFileDiffDecorations,
   type WorkspaceFileDeletedDiffRow,
@@ -76,6 +85,7 @@ interface FilePreviewBodyProps {
   navigationRevision: number;
   imagePreviewUri: string | null;
   diffDecorations: WorkspaceFileDiffDecorations | null;
+  mode?: "preview" | "source";
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
@@ -219,6 +229,60 @@ function getDeletedRowsAfterRenderedLines(input: {
   return rows;
 }
 
+function useCheckoutWorkspaceFileDiffFiles(input: {
+  serverId: string;
+  workspaceRoot: string;
+  diffContext: WorkspaceFileCheckoutDiffContext | null;
+  isActive: boolean;
+  isAppVisible: boolean;
+}): ParsedDiffFile[] {
+  return useCheckoutDiffQuery({
+    serverId: input.serverId,
+    cwd: input.diffContext?.cwd ?? input.workspaceRoot,
+    mode: input.diffContext?.mode ?? "uncommitted",
+    baseRef: input.diffContext?.baseRef,
+    ignoreWhitespace: input.diffContext?.ignoreWhitespace,
+    enabled: Boolean(input.diffContext && input.isActive && input.isAppVisible),
+  }).files;
+}
+
+function useSessionWorkspaceFileDiffFiles(input: {
+  serverId: string;
+  diffContext: WorkspaceFileSessionDiffContext | null;
+  isActive: boolean;
+  isAppVisible: boolean;
+}): ParsedDiffFile[] {
+  return useAgentSessionChangesQuery({
+    serverId: input.serverId,
+    agentId: input.diffContext?.agentId ?? null,
+    mode: "session",
+    turnId: input.diffContext?.turnId ?? null,
+    ignoreWhitespace: input.diffContext?.ignoreWhitespace,
+    enabled: Boolean(input.diffContext && input.isActive && input.isAppVisible),
+  }).files;
+}
+
+function useWorkspaceFileDiffFiles(input: {
+  serverId: string;
+  workspaceRoot: string;
+  diffContext: WorkspaceFileLocation["diffContext"];
+  isActive: boolean;
+  isAppVisible: boolean;
+}): ParsedDiffFile[] {
+  const sessionDiffContext = input.diffContext?.source === "session" ? input.diffContext : null;
+  const checkoutDiffContext =
+    input.diffContext?.source !== "session" ? (input.diffContext ?? null) : null;
+  const checkoutFiles = useCheckoutWorkspaceFileDiffFiles({
+    ...input,
+    diffContext: checkoutDiffContext,
+  });
+  const sessionFiles = useSessionWorkspaceFileDiffFiles({
+    ...input,
+    diffContext: sessionDiffContext,
+  });
+  return sessionDiffContext ? sessionFiles : checkoutFiles;
+}
+
 function useWorkspaceFileDiffDecorations(input: {
   serverId: string;
   normalizedWorkspaceRoot: string;
@@ -237,24 +301,22 @@ function useWorkspaceFileDiffDecorations(input: {
         : null,
     [input.normalizedFilePath, input.normalizedWorkspaceRoot],
   );
-  const diffContext = input.location.diffContext;
-  const diffQuery = useCheckoutDiffQuery({
+  const diffFiles = useWorkspaceFileDiffFiles({
     serverId: input.serverId,
-    cwd: diffContext?.cwd ?? input.normalizedWorkspaceRoot,
-    mode: diffContext?.mode ?? "uncommitted",
-    baseRef: diffContext?.baseRef,
-    ignoreWhitespace: diffContext?.ignoreWhitespace,
-    enabled: Boolean(diffContext && input.isActive && input.isAppVisible),
+    workspaceRoot: input.normalizedWorkspaceRoot,
+    diffContext: input.location.diffContext,
+    isActive: input.isActive,
+    isAppVisible: input.isAppVisible,
   });
   const diffFile = useMemo(
     () =>
       findDiffFileForLocation({
-        files: diffQuery.files,
+        files: diffFiles,
         path: input.normalizedFilePath,
         relativePath: resolvedFilePaths?.relativePath ?? null,
         absolutePath: resolvedFilePaths?.absolutePath ?? null,
       }),
-    [diffQuery.files, input.normalizedFilePath, resolvedFilePaths],
+    [diffFiles, input.normalizedFilePath, resolvedFilePaths],
   );
   return useMemo(() => (diffFile ? buildWorkspaceFileDiffDecorations(diffFile) : null), [diffFile]);
 }
@@ -386,6 +448,7 @@ function FilePreviewBody({
   navigationRevision,
   imagePreviewUri,
   diffDecorations,
+  mode,
 }: FilePreviewBodyProps) {
   const theme = UnistylesRuntime.getTheme();
   const { t } = useTranslation();
@@ -396,6 +459,7 @@ function FilePreviewBody({
           filePath,
           hasLineSelection: Boolean(location.lineStart),
           hasDiffContext: Boolean(location.diffContext),
+          mode,
         })
       : "code";
 
@@ -631,7 +695,9 @@ export function FilePane({
 }) {
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
-  const [markdownMode, setMarkdownMode] = useState<"preview" | "source">("preview");
+  const isDiffView = Boolean(location.diffContext);
+  const defaultMarkdownMode = getDefaultFilePaneMarkdownMode(isDiffView);
+  const [markdownMode, setMarkdownMode] = useState<"preview" | "source">(defaultMarkdownMode);
   const [resolvedPreview, setResolvedPreview] = useState<{
     key: string | null;
     file: ExplorerFile | null;
@@ -695,7 +761,7 @@ export function FilePane({
     };
   }, [query.data, readTarget]);
 
-  useEffect(() => setMarkdownMode("preview"), [readTarget?.path]);
+  useEffect(() => setMarkdownMode(defaultMarkdownMode), [defaultMarkdownMode, readTarget?.path]);
 
   const previewKey = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
   const preview = resolvedPreview.key === previewKey ? resolvedPreview.file : null;
@@ -706,9 +772,9 @@ export function FilePane({
   const editable = isEditableTextFile({
     preview,
     supportsEditing,
-    isDiffView: Boolean(location.diffContext),
+    isDiffView,
   });
-  const canToggleMarkdownMode = isMarkdown && editable;
+  const canToggleMarkdownMode = isMarkdown && (editable || isDiffView);
   const lineCount =
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
   const errorMessage = getFileErrorMessage(query.error, t("panels.file.failedToLoad"));
@@ -854,6 +920,7 @@ function FilePanePresentation({
         navigationRevision={navigationRevision}
         imagePreviewUri={imagePreviewUri}
         diffDecorations={diffDecorations}
+        mode={markdownMode}
       />
     </View>
   );

@@ -43,6 +43,28 @@ describe("normalizeWorkspaceFileLocation", () => {
     });
   });
 
+  it("normalizes session diff context for file tabs opened from agent changes", () => {
+    expect(
+      normalizeWorkspaceFileLocation({
+        path: "src/app.ts",
+        diffContext: {
+          source: "session",
+          agentId: " agent-1 ",
+          turnId: " turn-2 ",
+          ignoreWhitespace: true,
+        },
+      }),
+    ).toEqual({
+      path: "src/app.ts",
+      diffContext: {
+        source: "session",
+        agentId: "agent-1",
+        turnId: "turn-2",
+        ignoreWhitespace: true,
+      },
+    });
+  });
+
   it("drops invalid or backwards line ranges", () => {
     expect(normalizeWorkspaceFileLocation({ path: "src/app.ts", lineStart: -1 })).toEqual({
       path: "src/app.ts",
@@ -91,6 +113,28 @@ describe("workspace file tab targets", () => {
         {
           path: "src/app.ts",
           diffContext: { cwd: "/repo", mode: "uncommitted", ignoreWhitespace: true },
+        },
+      ),
+    ).toBe(false);
+    expect(
+      workspaceFileLocationsEqual(
+        {
+          path: "src/app.ts",
+          diffContext: {
+            source: "session",
+            agentId: "agent-1",
+            turnId: "turn-1",
+            ignoreWhitespace: false,
+          },
+        },
+        {
+          path: "src/app.ts",
+          diffContext: {
+            source: "session",
+            agentId: "agent-1",
+            turnId: "turn-2",
+            ignoreWhitespace: false,
+          },
         },
       ),
     ).toBe(false);

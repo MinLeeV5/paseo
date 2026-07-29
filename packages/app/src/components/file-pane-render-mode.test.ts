@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getDefaultFilePaneMarkdownMode,
   getFilePaneContentRenderMode,
   getFilePaneRenderMode,
   isRenderedMarkdownFile,
@@ -46,6 +47,11 @@ describe("getFilePaneRenderMode", () => {
 });
 
 describe("getFilePaneContentRenderMode", () => {
+  it("defaults changed files to source while regular files default to preview", () => {
+    expect(getDefaultFilePaneMarkdownMode(true)).toBe("source");
+    expect(getDefaultFilePaneMarkdownMode(false)).toBe("preview");
+  });
+
   it("forces previewable text files through code rendering when diff context is present", () => {
     expect(
       getFilePaneContentRenderMode({
@@ -69,6 +75,25 @@ describe("getFilePaneContentRenderMode", () => {
         filePath: "README.md",
         hasLineSelection: false,
         hasDiffContext: false,
+      }),
+    ).toBe("markdown");
+  });
+
+  it("lets the file-pane control switch a diffed Markdown file between source and preview", () => {
+    expect(
+      getFilePaneContentRenderMode({
+        filePath: "README.md",
+        hasLineSelection: false,
+        hasDiffContext: true,
+        mode: "source",
+      }),
+    ).toBe("code");
+    expect(
+      getFilePaneContentRenderMode({
+        filePath: "README.md",
+        hasLineSelection: false,
+        hasDiffContext: true,
+        mode: "preview",
       }),
     ).toBe("markdown");
   });

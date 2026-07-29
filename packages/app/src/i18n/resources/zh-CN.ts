@@ -277,7 +277,6 @@ export const zhCN: TranslationResources = {
       forkMissingWorkspace: "此 Agent 不在工作区中。",
       forkFailed: "分叉聊天失败",
       openFile: "打开文件",
-      previewFile: "预览文件",
       copied: "已复制",
     },
     attachments: {
@@ -519,6 +518,7 @@ export const zhCN: TranslationResources = {
         closeLeft: "关闭左侧标签",
         closeRight: "关闭右侧标签",
         closeOthers: "关闭其他标签",
+        closeAll: "关闭全部标签",
         reloadAgent: "重新加载 Agent",
         reloadAgentTooltip: "重新加载 Agent 以更新 skills、MCPs 或登录状态。",
         close: "关闭",
@@ -574,6 +574,7 @@ export const zhCN: TranslationResources = {
         closeTabsLeftTitle: "关闭左侧标签？",
         closeTabsRightTitle: "关闭右侧标签？",
         closeOtherTabsTitle: "关闭其他标签？",
+        closeAllTabsTitle: "关闭全部标签？",
         bulk: {
           all: "这会归档 {{agents}} 个 Agent，关闭 {{terminals}} 个 Terminal，并关闭 {{tabs}} 个标签。已关闭 Terminal 中任何正在运行的进程都会立即停止。",
           agentsAndTerminals:

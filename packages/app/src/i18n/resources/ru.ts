@@ -279,7 +279,6 @@ export const ru: TranslationResources = {
       forkMissingWorkspace: "Этот агент не находится в рабочем пространстве.",
       forkFailed: "Не удалось форкнуть чат",
       openFile: "Открыть файл",
-      previewFile: "Предпросмотр файла",
       copied: "Скопировано",
     },
     attachments: {
@@ -523,6 +522,7 @@ export const ru: TranslationResources = {
         closeLeft: "Ближе к левому краю",
         closeRight: "Ближе к правому",
         closeOthers: "Закрыть другие вкладки",
+        closeAll: "Закрыть все вкладки",
         reloadAgent: "Перезагрузить агент",
         reloadAgentTooltip: "Перезагрузите агента, чтобы обновить навыки, MCP или статус входа.",
         close: "Закрывать",
@@ -582,6 +582,7 @@ export const ru: TranslationResources = {
         closeTabsLeftTitle: "Закрыть вкладки слева?",
         closeTabsRightTitle: "Закрыть вкладки справа?",
         closeOtherTabsTitle: "Закрыть другие вкладки?",
+        closeAllTabsTitle: "Закрыть все вкладки?",
         bulk: {
           all: "При этом агенты{{agents}}будут заархивированы, терминалы{{terminals}}закроются, а вкладки{{tabs}}будут закрыты. Любой запущенный процесс в закрытом терминале будет немедленно остановлен.",
           agentsAndTerminals:

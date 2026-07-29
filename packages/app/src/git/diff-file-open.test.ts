@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDiffFileOpenTarget, createDiffFilePreviewTarget } from "@/git/diff-file-open";
+import { createDiffFileOpenTarget } from "@/git/diff-file-open";
 
 const diffContext = {
   cwd: "/repo",
@@ -9,7 +9,7 @@ const diffContext = {
 };
 
 describe("changed file open targets", () => {
-  it("keeps diff context for open and removes it for preview", () => {
+  it("keeps checkout diff context when opening a changed file", () => {
     expect(
       createDiffFileOpenTarget({
         filePath: "docs/README.md",
@@ -25,11 +25,18 @@ describe("changed file open targets", () => {
         },
       },
     });
+  });
 
+  it("keeps session diff context when opening an agent-changed file", () => {
     expect(
-      createDiffFilePreviewTarget({
+      createDiffFileOpenTarget({
         filePath: "docs/README.md",
-        workspaceRoot: "/repo",
+        diffContext: {
+          source: "session",
+          agentId: "agent-1",
+          turnId: "turn-2",
+          ignoreWhitespace: false,
+        },
       }),
     ).toEqual({
       kind: "file",
@@ -37,20 +44,14 @@ describe("changed file open targets", () => {
         disposition: "main",
         location: {
           path: "docs/README.md",
+          diffContext: {
+            source: "session",
+            agentId: "agent-1",
+            turnId: "turn-2",
+            ignoreWhitespace: false,
+          },
         },
       },
-    });
-  });
-
-  it("opens HTML previews as local file URLs in the system browser", () => {
-    expect(
-      createDiffFilePreviewTarget({
-        filePath: "site/index.html",
-        workspaceRoot: "/repo",
-      }),
-    ).toEqual({
-      kind: "externalUrl",
-      url: "file:///repo/site/index.html",
     });
   });
 });

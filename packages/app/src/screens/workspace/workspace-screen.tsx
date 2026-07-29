@@ -109,7 +109,6 @@ import { useWorkspace } from "@/stores/session-store-hooks";
 import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-workspace-terminal-session-retention";
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { openExternalUrl } from "@/utils/open-external-url";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { removeResidentBrowserWebview } from "@/components/browser-webview-resident";
@@ -456,6 +455,7 @@ interface MobileWorkspaceTabSwitcherProps {
   onCloseTabsAbove: (tabId: string) => Promise<void> | void;
   onCloseTabsBelow: (tabId: string) => Promise<void> | void;
   onCloseOtherTabs: (tabId: string) => Promise<void> | void;
+  onCloseAllTabs: () => Promise<void> | void;
 }
 
 function MobileActiveTabTrigger({
@@ -536,14 +536,6 @@ function WorkspaceDocumentTitleEffect({
 }
 
 function noop() {}
-
-function openWorkspaceExternalUrl(url: string): void {
-  void openExternalUrl(url);
-}
-
-function getWorkspaceExternalUrlOpener(): ((url: string) => void) | undefined {
-  return getIsElectron() ? openWorkspaceExternalUrl : undefined;
-}
 
 function mobileTabMenuTriggerStyle({ open, pressed }: { open?: boolean; pressed?: boolean }) {
   return [
@@ -653,6 +645,7 @@ function MobileWorkspaceTabOption({
   onCloseTabsAbove,
   onCloseTabsBelow,
   onCloseOtherTabs,
+  onCloseAllTabs,
 }: {
   tab: WorkspaceTabDescriptor;
   tabIndex: number;
@@ -672,6 +665,7 @@ function MobileWorkspaceTabOption({
   onCloseTabsAbove: (tabId: string) => Promise<void> | void;
   onCloseTabsBelow: (tabId: string) => Promise<void> | void;
   onCloseOtherTabs: (tabId: string) => Promise<void> | void;
+  onCloseAllTabs: () => Promise<void> | void;
 }) {
   const { t } = useTranslation();
   const tabMenuLabels = useMemo<WorkspaceTabMenuLabels>(
@@ -686,6 +680,7 @@ function MobileWorkspaceTabOption({
       closeLeft: t("workspace.tabs.menu.closeLeft"),
       closeRight: t("workspace.tabs.menu.closeRight"),
       closeOthers: t("workspace.tabs.menu.closeOthers"),
+      closeAll: t("workspace.tabs.menu.closeAll"),
       reloadAgent: t("workspace.tabs.menu.reloadAgent"),
       reloadAgentTooltip: t("workspace.tabs.menu.reloadAgentTooltip"),
       close: t("workspace.tabs.menu.close"),
@@ -709,6 +704,7 @@ function MobileWorkspaceTabOption({
     onCloseTabsBefore: onCloseTabsAbove,
     onCloseTabsAfter: onCloseTabsBelow,
     onCloseOtherTabs,
+    onCloseAllTabs,
     labels: tabMenuLabels,
   });
 
@@ -778,6 +774,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   onCloseTabsAbove,
   onCloseTabsBelow,
   onCloseOtherTabs,
+  onCloseAllTabs,
 }: MobileWorkspaceTabSwitcherProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -835,6 +832,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
           onCloseTabsAbove={onCloseTabsAbove}
           onCloseTabsBelow={onCloseTabsBelow}
           onCloseOtherTabs={onCloseOtherTabs}
+          onCloseAllTabs={onCloseAllTabs}
         />
       );
     },
@@ -854,6 +852,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
       onCloseTabsAbove,
       onCloseTabsBelow,
       onCloseOtherTabs,
+      onCloseAllTabs,
     ],
   );
 
@@ -3083,6 +3082,21 @@ function WorkspaceScreenContent({
     [handleCloseOtherTabsInPane, tabs],
   );
 
+  const handleCloseAllTabsInPane = useCallback(
+    async (paneTabs: WorkspaceTabDescriptor[]) => {
+      await handleBulkCloseTabs({
+        tabsToClose: paneTabs,
+        title: t("workspace.tabs.confirmations.closeAllTabsTitle"),
+        logLabel: "from close all tabs",
+      });
+    },
+    [handleBulkCloseTabs, t],
+  );
+
+  const handleCloseAllTabs = useCallback(async () => {
+    await handleCloseAllTabsInPane(tabs);
+  }, [handleCloseAllTabsInPane, tabs]);
+
   const handleWorkspaceTabAction = useCallback(
     (action: KeyboardActionDefinition): boolean => {
       switch (action.id) {
@@ -3718,6 +3732,7 @@ function WorkspaceScreenContent({
         onCloseTabsToLeft={handleCloseTabsToLeftInPane}
         onCloseTabsToRight={handleCloseTabsToRightInPane}
         onCloseOtherTabs={handleCloseOtherTabsInPane}
+        onCloseAllTabs={handleCloseAllTabsInPane}
         onCreateDraftTab={handleCreateDraftTab}
         onCreateTerminalTab={handleCreateTerminal}
         onCreateBrowserTab={handleCreateBrowserTab}
@@ -3755,6 +3770,7 @@ function WorkspaceScreenContent({
     handleCloseTabsToLeftInPane,
     handleCloseTabsToRightInPane,
     handleCloseOtherTabsInPane,
+    handleCloseAllTabsInPane,
     handleCreateDraftTab,
     handleCreateTerminal,
     handleCreateBrowserTab,
@@ -3838,6 +3854,7 @@ function WorkspaceScreenContent({
           onCloseTabsAbove={handleCloseTabsToLeft}
           onCloseTabsBelow={handleCloseTabsToRight}
           onCloseOtherTabs={handleCloseOtherTabs}
+          onCloseAllTabs={handleCloseAllTabs}
         />
       ) : null}
 
@@ -3860,6 +3877,7 @@ function WorkspaceScreenContent({
           onCloseTabsToLeft={handleCloseTabsToLeft}
           onCloseTabsToRight={handleCloseTabsToRight}
           onCloseOtherTabs={handleCloseOtherTabs}
+          onCloseAllTabs={handleCloseAllTabs}
           onCreateDraftTab={handleCreateDraftTab}
           onCreateTerminalTab={handleCreateTerminal}
           onCreateBrowserTab={handleCreateBrowserTab}
@@ -3906,7 +3924,6 @@ function WorkspaceScreenContent({
               isGit={isGitCheckout}
               onOpenFile={handleOpenFileFromExplorer}
               onOpenWorkspaceFile={handleOpenWorkspaceFileFromExplorer}
-              onOpenExternalUrl={getWorkspaceExternalUrlOpener()}
             >
               {workspaceCenterColumn}
             </WorkspaceChromeRow>
