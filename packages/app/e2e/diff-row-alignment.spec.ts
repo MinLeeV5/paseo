@@ -231,15 +231,19 @@ test("changes file actions open from the kebab and right-click", async ({ page }
   await expect(page.getByTestId("diff-file-1")).toContainText("zz-deleted.ts");
   await page.getByTestId("diff-file-1-actions").click();
   await expect(page.getByText("Copy path")).toBeVisible();
-  await expect(page.getByTestId("diff-file-1-open-file")).toHaveCount(0);
+  await expect(page.getByTestId("diff-file-1-menu-open-file")).toHaveCount(0);
   await page.keyboard.press("Escape");
 
-  await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
   await expect(page.getByTestId("diff-file-0-open-file")).toBeVisible();
-  await page.getByTestId("diff-file-0-open-file").click();
+  await expect(page.getByTestId("diff-file-0-preview-file")).toHaveCount(0);
+  await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
+  await expect(page.getByTestId("diff-file-0-menu-open-file")).toBeVisible();
+  await page.getByTestId("diff-file-0-menu-open-file").click();
 
   await expect(page.getByTestId("workspace-file-pane")).toBeVisible();
-  await expect(page.getByTestId("workspace-tab-file_src/use-mounted-tab-set.ts")).toBeVisible();
+  await expect(
+    page.getByTestId(/^workspace-tab-file_src\/use-mounted-tab-set\.ts#diff:/),
+  ).toBeVisible();
 });
 
 test("Changes switches between inline and full-tab navigation", async ({ page }) => {

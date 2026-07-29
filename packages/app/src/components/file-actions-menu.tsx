@@ -91,7 +91,7 @@ export function FileActionsMenu({
         label: t("workspace.fileActions.openFile"),
         icon: FileText,
         onSelect: onOpenFile,
-        testID: testIDPrefix ? `${testIDPrefix}-open-file` : undefined,
+        testID: testIDPrefix ? `${testIDPrefix}-menu-open-file` : undefined,
       });
     }
     if (onCopyPath) {

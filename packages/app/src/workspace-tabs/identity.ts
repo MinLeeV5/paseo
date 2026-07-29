@@ -197,6 +197,16 @@ function buildFileTabId(target: Extract<WorkspaceTabTarget, { kind: "file" }>): 
   if (!diffContext) {
     return baseTabId;
   }
+  if (diffContext.source === "session") {
+    const encodedSessionDiffContext = [
+      diffContext.agentId,
+      diffContext.turnId ?? "",
+      diffContext.ignoreWhitespace ? "ignore-ws" : "keep-ws",
+    ]
+      .map((part) => encodeURIComponent(part))
+      .join(":");
+    return `${baseTabId}#diff-session:${encodedSessionDiffContext}`;
+  }
   const encodedDiffContext = [
     diffContext.cwd,
     diffContext.mode,

@@ -108,7 +108,6 @@ import { useWorkspace } from "@/stores/session-store-hooks";
 import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-workspace-terminal-session-retention";
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { openExternalUrl } from "@/utils/open-external-url";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { removeResidentBrowserWebview } from "@/components/browser-webview-resident";
@@ -536,14 +535,6 @@ function WorkspaceDocumentTitleEffect({
 }
 
 function noop() {}
-
-function openWorkspaceExternalUrl(url: string): void {
-  void openExternalUrl(url);
-}
-
-function getWorkspaceExternalUrlOpener(): ((url: string) => void) | undefined {
-  return getIsElectron() ? openWorkspaceExternalUrl : undefined;
-}
 
 function mobileTabMenuTriggerStyle({ open, pressed }: { open?: boolean; pressed?: boolean }) {
   return [
@@ -3932,7 +3923,6 @@ function WorkspaceScreenContent({
               isGit={isGitCheckout}
               onOpenFile={handleOpenFileFromExplorer}
               onOpenWorkspaceFile={handleOpenWorkspaceFileFromExplorer}
-              onOpenExternalUrl={getWorkspaceExternalUrlOpener()}
             >
               {workspaceCenterColumn}
             </WorkspaceChromeRow>
