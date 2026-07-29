@@ -16,6 +16,7 @@ export interface WorkspaceTabMenuLabels {
   closeLeft: string;
   closeRight: string;
   closeOthers: string;
+  closeAll: string;
   reloadAgent: string;
   reloadAgentTooltip: string;
   close: string;
@@ -32,6 +33,7 @@ export const DEFAULT_WORKSPACE_TAB_MENU_LABELS: WorkspaceTabMenuLabels = {
   closeLeft: i18n.t("workspace.tabs.menu.closeLeft"),
   closeRight: i18n.t("workspace.tabs.menu.closeRight"),
   closeOthers: i18n.t("workspace.tabs.menu.closeOthers"),
+  closeAll: i18n.t("workspace.tabs.menu.closeAll"),
   reloadAgent: i18n.t("workspace.tabs.menu.reloadAgent"),
   reloadAgentTooltip: i18n.t("workspace.tabs.menu.reloadAgentTooltip"),
   close: i18n.t("workspace.tabs.menu.close"),
@@ -78,6 +80,7 @@ interface BuildWorkspaceTabMenuEntriesInput {
   onCloseTabsBefore: (tabId: string) => Promise<void> | void;
   onCloseTabsAfter: (tabId: string) => Promise<void> | void;
   onCloseOtherTabs: (tabId: string) => Promise<void> | void;
+  onCloseAllTabs: () => Promise<void> | void;
   labels?: WorkspaceTabMenuLabels;
 }
 
@@ -95,6 +98,7 @@ interface BuildWorkspaceDesktopTabActionsInput {
   onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
   onCloseTabsToRight: (tabId: string) => Promise<void> | void;
   onCloseOtherTabs: (tabId: string) => Promise<void> | void;
+  onCloseAllTabs: () => Promise<void> | void;
   labels?: WorkspaceTabMenuLabels;
 }
 
@@ -173,6 +177,7 @@ export function buildWorkspaceTabMenuEntries(
     onCloseTabsBefore,
     onCloseTabsAfter,
     onCloseOtherTabs,
+    onCloseAllTabs,
   } = input;
   const labels = input.labels ?? DEFAULT_WORKSPACE_TAB_MENU_LABELS;
   const isFirstTab = index === 0;
@@ -284,6 +289,16 @@ export function buildWorkspaceTabMenuEntries(
       void onCloseOtherTabs(tab.tabId);
     },
   });
+  entries.push({
+    kind: "item",
+    key: "close-all",
+    label: labels.closeAll,
+    icon: "copy-x",
+    testID: `${menuTestIDBase}-close-all`,
+    onSelect: () => {
+      void onCloseAllTabs();
+    },
+  });
   if (tab.target.kind === "agent") {
     const { agentId } = tab.target;
     entries.push({
@@ -334,6 +349,7 @@ export function buildWorkspaceDesktopTabActions(
       onCloseTabsBefore: input.onCloseTabsToLeft,
       onCloseTabsAfter: input.onCloseTabsToRight,
       onCloseOtherTabs: input.onCloseOtherTabs,
+      onCloseAllTabs: input.onCloseAllTabs,
       labels: input.labels,
     }),
     closeButtonTestId: getCloseButtonTestId(input.tab),
