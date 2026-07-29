@@ -1,0 +1,46 @@
+packages/app/src/workspace-tabs/identity.ts
+  a5ec5d47af4bd5f5 200-209
+packages/app/src/workspace/file-open/index.test.ts
+  a5ec5d47af4bd5f5 46-67,119-137
+packages/app/src/components/file-pane-render-mode.ts
+  a5ec5d47af4bd5f5 4,25,27-32,39-40
+packages/app/e2e/diff-row-alignment.spec.ts
+  a5ec5d47af4bd5f5 234,238-241,244-246
+packages/app/src/components/file-pane-render-mode.test.ts
+  a5ec5d47af4bd5f5 3,50-54,81-99
+packages/app/src/git/diff-pane.tsx
+  a5ec5d47af4bd5f5 120,947,1048-1050,1212,3262-3272,3274,3294,3296
+packages/app/src/components/file-actions-menu.tsx
+  a5ec5d47af4bd5f5 94
+packages/app/src/workspace/file-open/index.ts
+  a5ec5d47af4bd5f5 5-6,13-23,94-106,128-135
+packages/app/src/workspace-tabs/identity.test.ts
+  a5ec5d47af4bd5f5 83-110
+packages/app/src/git/diff-file-open.test.ts
+  a5ec5d47af4bd5f5 2,12,28,30,32,34-39,47-52
+packages/app/src/file-pane/pane.tsx
+  a5ec5d47af4bd5f5 28-32,40-45,50,87,231-284,303,305-308,313,318,450,461,697-699,763,774,776,922
+packages/app/src/components/explorer-sidebar.tsx
+  a5ec5d47af4bd5f5 486
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "b8725b3ecb7332d121f1c7a9b2018a8f059cefaf",
+  "prompts": {
+    "a5ec5d47af4bd5f5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fad34-1af1-78a3-9104-35b82903bdc3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 329,
+      "total_deletions": 209,
+      "accepted_lines": 301,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/bbca40e6ce86ce0bb8f182d4c60015caf14c8a0ac10940a55da228ed7193e0f7"
+    }
+  }
+}
