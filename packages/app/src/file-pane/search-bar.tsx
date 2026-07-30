@@ -39,20 +39,27 @@ export function FileSearchToolbar({ search }: { search: FileSearchController }) 
     (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
       if (event.nativeEvent.key === "Escape") {
         close();
+        return;
+      }
+      const isPreviousNavigation =
+        event.nativeEvent.key === "Enter" && Reflect.get(event.nativeEvent, "shiftKey") === true;
+      if (isPreviousNavigation) {
+        event.preventDefault();
+        previous();
       }
     },
-    [close],
+    [close, previous],
   );
   const resultLabel = useMemo(() => {
-    if (!search.query || search.matches.length === 0) {
+    if (!search.query || search.matchCount === 0) {
       return t("panels.file.search.noMatches");
     }
     return t("panels.file.search.matchCount", {
       current: search.currentIndex + 1,
-      total: search.matches.length,
+      total: search.matchCount,
     });
-  }, [search.currentIndex, search.matches.length, search.query, t]);
-  const navigationDisabled = search.matches.length === 0;
+  }, [search.currentIndex, search.matchCount, search.query, t]);
+  const navigationDisabled = search.matchCount === 0;
 
   return (
     <View style={styles.toolbar} testID="file-search-toolbar">
@@ -76,6 +83,7 @@ export function FileSearchToolbar({ search }: { search: FileSearchController }) 
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
+            blurOnSubmit={false}
             style={styles.input}
             testID="file-search-input"
           />

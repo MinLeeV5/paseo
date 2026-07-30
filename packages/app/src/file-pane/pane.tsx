@@ -13,7 +13,6 @@ import type { FileVersion } from "@getpaseo/protocol/messages";
 import { Image as RNImage, ScrollView as RNScrollView, Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useSessionStore, type ExplorerFile } from "@/stores/session-store";
 import { highlightCode, type HighlightToken } from "@getpaseo/highlight";
@@ -62,6 +61,7 @@ import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attri
 import type { Theme } from "@/styles/theme";
 import { splitFileSearchTokens, type FileSearchMatch, type FileSearchTokenState } from "./search";
 import { useFileSearch, type FileSearchController } from "./use-search";
+import { MarkdownSearchPreview } from "./markdown-search-preview";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -637,8 +637,9 @@ function FilePreviewBody({
             style={styles.previewContent}
             contentContainerStyle={styles.previewMarkdownScrollContent}
             showsVerticalScrollIndicator
+            testID="file-markdown-preview-scroll"
           >
-            <MarkdownRenderer text={preview.content ?? ""} />
+            <MarkdownSearchPreview text={preview.content ?? ""} search={search} />
           </RNScrollView>
         </View>
       );
@@ -1035,12 +1036,14 @@ function ReadOnlyFilePane({
   isPaneFocused: boolean;
   searchHandlerId: string;
 }) {
-  const canSearch = isSearchableTextPreview({ preview, location, mode: markdownMode });
+  const textRenderMode = getSearchableTextRenderMode({ preview, location, mode: markdownMode });
+  const canSearch = textRenderMode !== null;
   const search = useFileSearch({
     content: preview?.kind === "text" ? (preview.content ?? "") : "",
     enabled: canSearch,
     isPaneFocused,
     handlerId: searchHandlerId,
+    matchSource: textRenderMode === "markdown" ? "rendered" : "content",
   });
 
   return (
@@ -1089,22 +1092,21 @@ function FileSearchOverlay({ search }: { search?: FileSearchController }) {
   );
 }
 
-function isSearchableTextPreview(input: {
+function getSearchableTextRenderMode(input: {
   preview: ExplorerFile | null;
   location: WorkspaceFileLocation;
   mode?: "preview" | "source";
-}): boolean {
+}): "code" | "markdown" | null {
   if (input.preview?.kind !== "text") {
-    return false;
+    return null;
   }
-  return (
-    getFilePaneContentRenderMode({
-      filePath: input.location.path,
-      hasLineSelection: Boolean(input.location.lineStart),
-      hasDiffContext: Boolean(input.location.diffContext),
-      mode: input.mode,
-    }) === "code"
-  );
+  const renderMode = getFilePaneContentRenderMode({
+    filePath: input.location.path,
+    hasLineSelection: Boolean(input.location.lineStart),
+    hasDiffContext: Boolean(input.location.diffContext),
+    mode: input.mode,
+  });
+  return renderMode === "mermaid" ? null : renderMode;
 }
 
 function EditableFilePane({
@@ -1254,9 +1256,10 @@ function EditableFilePane({
   const showSource = mode !== "preview";
   const search = useFileSearch({
     content: snapshot.content,
-    enabled: showSource,
+    enabled: true,
     isPaneFocused,
     handlerId: searchHandlerId,
+    matchSource: showSource ? "content" : "rendered",
   });
 
   return (
@@ -1274,7 +1277,7 @@ function EditableFilePane({
         onReload={handleReload}
         mode={mode}
         onModeChange={onModeChange}
-        search={showSource ? search : undefined}
+        search={search}
       />
       <View style={styles.contentLayer}>
         {showSource ? (
@@ -1298,9 +1301,10 @@ function EditableFilePane({
             navigationRevision={navigationRevision}
             imagePreviewUri={null}
             diffDecorations={null}
+            search={search}
           />
         )}
-        <FileSearchOverlay search={showSource ? search : undefined} />
+        <FileSearchOverlay search={search} />
       </View>
     </View>
   );

@@ -12,6 +12,7 @@ interface FileSearchState {
   isOpen: boolean;
   query: string;
   currentIndex: number;
+  renderedMatchCount: number;
   navigationRevision: number;
   focusRevision: number;
 }
@@ -20,6 +21,7 @@ type FileSearchAction =
   | { type: "open" }
   | { type: "close" }
   | { type: "query"; query: string }
+  | { type: "renderedMatches"; matchCount: number }
   | {
       type: "navigate";
       direction: FileSearchDirection;
@@ -31,6 +33,7 @@ export interface FileSearchController {
   isOpen: boolean;
   query: string;
   matches: FileSearchMatch[];
+  matchCount: number;
   currentIndex: number;
   currentMatch: FileSearchMatch | null;
   navigationRevision: number;
@@ -38,6 +41,7 @@ export interface FileSearchController {
   open(): void;
   close(): void;
   setQuery(query: string): void;
+  reportRenderedMatchCount(matchCount: number): void;
   navigate(direction: FileSearchDirection): void;
 }
 
@@ -45,6 +49,7 @@ const INITIAL_STATE: FileSearchState = {
   isOpen: false,
   query: "",
   currentIndex: -1,
+  renderedMatchCount: 0,
   navigationRevision: 0,
   focusRevision: 0,
 };
@@ -56,23 +61,34 @@ export function useFileSearch(input: {
   enabled: boolean;
   isPaneFocused: boolean;
   handlerId: string;
+  matchSource?: "content" | "rendered";
 }): FileSearchController {
   const [state, dispatch] = useReducer(fileSearchReducer, INITIAL_STATE);
+  const matchSource = input.matchSource ?? "content";
   const matches = useMemo(
-    () => (state.isOpen && input.enabled ? findFileSearchMatches(input.content, state.query) : []),
-    [input.content, input.enabled, state.isOpen, state.query],
+    () =>
+      state.isOpen && input.enabled && matchSource === "content"
+        ? findFileSearchMatches(input.content, state.query)
+        : [],
+    [input.content, input.enabled, matchSource, state.isOpen, state.query],
   );
-  const currentIndex = resolveCurrentFileSearchIndex(state.currentIndex, matches.length);
+  const matchCount = matchSource === "content" ? matches.length : state.renderedMatchCount;
+  const currentIndex = resolveCurrentFileSearchIndex(state.currentIndex, matchCount);
   const currentMatch = currentIndex >= 0 ? matches[currentIndex] : null;
 
   const open = useCallback(() => dispatch({ type: "open" }), []);
   const close = useCallback(() => dispatch({ type: "close" }), []);
   const setQuery = useCallback((query: string) => dispatch({ type: "query", query }), []);
+  const reportRenderedMatchCount = useCallback(
+    (reportedMatchCount: number) =>
+      dispatch({ type: "renderedMatches", matchCount: reportedMatchCount }),
+    [],
+  );
   const navigate = useCallback(
     (direction: FileSearchDirection) => {
-      dispatch({ type: "navigate", direction, currentIndex, matchCount: matches.length });
+      dispatch({ type: "navigate", direction, currentIndex, matchCount });
     },
-    [currentIndex, matches.length],
+    [currentIndex, matchCount],
   );
   const handleKeyboardAction = useCallback(
     (action: KeyboardActionDefinition) => {
@@ -102,6 +118,7 @@ export function useFileSearch(input: {
     isOpen: state.isOpen,
     query: state.query,
     matches,
+    matchCount,
     currentIndex,
     currentMatch,
     navigationRevision: state.navigationRevision,
@@ -109,6 +126,7 @@ export function useFileSearch(input: {
     open,
     close,
     setQuery,
+    reportRenderedMatchCount,
     navigate,
   };
 }
@@ -129,7 +147,16 @@ function fileSearchReducer(state: FileSearchState, action: FileSearchAction): Fi
         ...state,
         query: action.query,
         currentIndex: action.query ? 0 : -1,
+        renderedMatchCount: 0,
         navigationRevision: state.navigationRevision + 1,
+      };
+    case "renderedMatches":
+      if (state.renderedMatchCount === action.matchCount) {
+        return state;
+      }
+      return {
+        ...state,
+        renderedMatchCount: action.matchCount,
       };
     case "navigate":
       return {
