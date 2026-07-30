@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
+import { ContextMenuItem } from "@/components/ui/context-menu";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { getIsElectron } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
@@ -11,6 +12,7 @@ import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-op
 interface OpenInFileManagerMenuItemProps {
   path?: string | null;
   testID: string;
+  surface?: "context" | "dropdown";
 }
 
 const ThemedFolderOpen = withUnistyles(FolderOpen);
@@ -21,7 +23,11 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 
 const leadingIcon = <ThemedFolderOpen size={14} uniProps={foregroundMutedColorMapping} />;
 
-export function OpenInFileManagerMenuItem({ path, testID }: OpenInFileManagerMenuItemProps) {
+export function OpenInFileManagerMenuItem({
+  path,
+  testID,
+  surface = "dropdown",
+}: OpenInFileManagerMenuItemProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const isElectron = getIsElectron();
@@ -46,9 +52,10 @@ export function OpenInFileManagerMenuItem({ path, testID }: OpenInFileManagerMen
     return null;
   }
 
+  const MenuItem = surface === "context" ? ContextMenuItem : DropdownMenuItem;
   return (
-    <DropdownMenuItem testID={testID} leading={leadingIcon} onSelect={openInFileManager}>
+    <MenuItem testID={testID} leading={leadingIcon} onSelect={openInFileManager}>
       {t("sidebar.project.actions.openFolder")}
-    </DropdownMenuItem>
+    </MenuItem>
   );
 }

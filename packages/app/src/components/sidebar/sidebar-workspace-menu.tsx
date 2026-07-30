@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
 
@@ -62,6 +63,137 @@ interface SidebarWorkspaceMenuProps {
   openInFileManagerPath?: string | null;
 }
 
+type SidebarWorkspaceMenuSurface = "context" | "dropdown";
+
+interface SidebarWorkspaceMenuItemProps {
+  surface: SidebarWorkspaceMenuSurface;
+  children: ReactNode;
+  testID: string;
+  leading: ReactElement;
+  trailing?: ReactElement | null;
+  status?: "idle" | "pending" | "success";
+  pendingLabel?: string;
+  onSelect?: () => void;
+}
+
+function SidebarWorkspaceMenuItem({
+  surface,
+  children,
+  testID,
+  leading,
+  trailing,
+  status,
+  pendingLabel,
+  onSelect,
+}: SidebarWorkspaceMenuItemProps) {
+  const itemProps = {
+    testID,
+    leading,
+    trailing,
+    status,
+    pendingLabel,
+    onSelect,
+  };
+  if (surface === "context") {
+    return <ContextMenuItem {...itemProps}>{children}</ContextMenuItem>;
+  }
+  return <DropdownMenuItem {...itemProps}>{children}</DropdownMenuItem>;
+}
+
+function SidebarWorkspaceMenuItems({
+  surface,
+  workspaceKey,
+  onCopyPath,
+  onCopyBranchName,
+  onRename,
+  onMarkAsRead,
+  onArchive,
+  archiveLabel,
+  archiveStatus,
+  archivePendingLabel,
+  archiveShortcutKeys,
+  isPinned,
+  onTogglePin,
+  openInFileManagerPath,
+}: SidebarWorkspaceMenuProps & { surface: SidebarWorkspaceMenuSurface }) {
+  const { t } = useTranslation();
+  const archiveTrailing = useMemo(
+    () => (archiveShortcutKeys && !isNative ? <Shortcut chord={archiveShortcutKeys} /> : null),
+    [archiveShortcutKeys],
+  );
+
+  return (
+    <>
+      {onCopyPath ? (
+        <SidebarWorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-copy-path-${workspaceKey}`}
+          leading={copyLeadingIcon}
+          onSelect={onCopyPath}
+        >
+          {t("sidebar.workspace.actions.copyPath")}
+        </SidebarWorkspaceMenuItem>
+      ) : null}
+      {onCopyBranchName ? (
+        <SidebarWorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-copy-branch-name-${workspaceKey}`}
+          leading={copyLeadingIcon}
+          onSelect={onCopyBranchName}
+        >
+          {t("sidebar.workspace.actions.copyBranchName")}
+        </SidebarWorkspaceMenuItem>
+      ) : null}
+      {onRename ? (
+        <SidebarWorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-rename-${workspaceKey}`}
+          leading={renameLeadingIcon}
+          onSelect={onRename}
+        >
+          {t("sidebar.workspace.actions.rename")}
+        </SidebarWorkspaceMenuItem>
+      ) : null}
+      {onMarkAsRead ? (
+        <SidebarWorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-mark-as-read-${workspaceKey}`}
+          leading={markAsReadLeadingIcon}
+          onSelect={onMarkAsRead}
+        >
+          Mark as read
+        </SidebarWorkspaceMenuItem>
+      ) : null}
+      {onTogglePin ? (
+        <SidebarWorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-pin-${workspaceKey}`}
+          leading={isPinned ? unpinLeadingIcon : pinLeadingIcon}
+          onSelect={onTogglePin}
+        >
+          {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
+        </SidebarWorkspaceMenuItem>
+      ) : null}
+      <OpenInFileManagerMenuItem
+        path={openInFileManagerPath}
+        testID={`sidebar-workspace-menu-open-folder-${workspaceKey}`}
+        surface={surface}
+      />
+      <SidebarWorkspaceMenuItem
+        surface={surface}
+        testID={`sidebar-workspace-menu-archive-${workspaceKey}`}
+        leading={archiveLeadingIcon}
+        trailing={archiveTrailing}
+        status={archiveStatus}
+        pendingLabel={archivePendingLabel}
+        onSelect={onArchive}
+      >
+        {archiveLabel ?? t("sidebar.workspace.actions.archive")}
+      </SidebarWorkspaceMenuItem>
+    </>
+  );
+}
+
 export function SidebarWorkspaceMenu({
   workspaceKey,
   onCopyPath,
@@ -78,10 +210,6 @@ export function SidebarWorkspaceMenu({
   openInFileManagerPath,
 }: SidebarWorkspaceMenuProps) {
   const { t } = useTranslation();
-  const archiveTrailing = useMemo(
-    () => (archiveShortcutKeys && !isNative ? <Shortcut chord={archiveShortcutKeys} /> : null),
-    [archiveShortcutKeys],
-  );
 
   return (
     <DropdownMenu>
@@ -95,67 +223,36 @@ export function SidebarWorkspaceMenu({
         {renderTriggerIcon}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" width={260}>
-        {onCopyPath ? (
-          <DropdownMenuItem
-            testID={`sidebar-workspace-menu-copy-path-${workspaceKey}`}
-            leading={copyLeadingIcon}
-            onSelect={onCopyPath}
-          >
-            {t("sidebar.workspace.actions.copyPath")}
-          </DropdownMenuItem>
-        ) : null}
-        {onCopyBranchName ? (
-          <DropdownMenuItem
-            testID={`sidebar-workspace-menu-copy-branch-name-${workspaceKey}`}
-            leading={copyLeadingIcon}
-            onSelect={onCopyBranchName}
-          >
-            {t("sidebar.workspace.actions.copyBranchName")}
-          </DropdownMenuItem>
-        ) : null}
-        {onRename ? (
-          <DropdownMenuItem
-            testID={`sidebar-workspace-menu-rename-${workspaceKey}`}
-            leading={renameLeadingIcon}
-            onSelect={onRename}
-          >
-            {t("sidebar.workspace.actions.rename")}
-          </DropdownMenuItem>
-        ) : null}
-        {onMarkAsRead ? (
-          <DropdownMenuItem
-            testID={`sidebar-workspace-menu-mark-as-read-${workspaceKey}`}
-            leading={markAsReadLeadingIcon}
-            onSelect={onMarkAsRead}
-          >
-            Mark as read
-          </DropdownMenuItem>
-        ) : null}
-        {onTogglePin ? (
-          <DropdownMenuItem
-            testID={`sidebar-workspace-menu-pin-${workspaceKey}`}
-            leading={isPinned ? unpinLeadingIcon : pinLeadingIcon}
-            onSelect={onTogglePin}
-          >
-            {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
-          </DropdownMenuItem>
-        ) : null}
-        <OpenInFileManagerMenuItem
-          path={openInFileManagerPath}
-          testID={`sidebar-workspace-menu-open-folder-${workspaceKey}`}
+        <SidebarWorkspaceMenuItems
+          surface="dropdown"
+          workspaceKey={workspaceKey}
+          onCopyPath={onCopyPath}
+          onCopyBranchName={onCopyBranchName}
+          onRename={onRename}
+          onMarkAsRead={onMarkAsRead}
+          onArchive={onArchive}
+          archiveLabel={archiveLabel}
+          archiveStatus={archiveStatus}
+          archivePendingLabel={archivePendingLabel}
+          archiveShortcutKeys={archiveShortcutKeys}
+          isPinned={isPinned}
+          onTogglePin={onTogglePin}
+          openInFileManagerPath={openInFileManagerPath}
         />
-        <DropdownMenuItem
-          testID={`sidebar-workspace-menu-archive-${workspaceKey}`}
-          leading={archiveLeadingIcon}
-          trailing={archiveTrailing}
-          status={archiveStatus}
-          pendingLabel={archivePendingLabel}
-          onSelect={onArchive}
-        >
-          {archiveLabel ?? t("sidebar.workspace.actions.archive")}
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+export function SidebarWorkspaceContextMenuContent(props: SidebarWorkspaceMenuProps) {
+  return (
+    <ContextMenuContent
+      align="start"
+      width={260}
+      testID={`sidebar-workspace-context-menu-${props.workspaceKey}`}
+    >
+      <SidebarWorkspaceMenuItems surface="context" {...props} />
+    </ContextMenuContent>
   );
 }
 
