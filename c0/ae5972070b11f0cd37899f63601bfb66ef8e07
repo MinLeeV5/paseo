@@ -1,0 +1,30 @@
+packages/app/e2e/sidebar-workspace-context-menu.spec.ts
+  6039c28954282ecd 1-78
+packages/app/src/components/sidebar/sidebar-workspace-menu.tsx
+  6039c28954282ecd 1,15,64-102,115,122-204,217-231,237-245
+packages/app/src/components/sidebar/sidebar-status-list.tsx
+  6039c28954282ecd 43-47,649-666,668-718
+packages/app/src/components/sidebar-workspace-list.tsx
+  6039c28954282ecd 75,94-97,1183-1184,1226,1377-1418
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "c0ae5972070b11f0cd37899f63601bfb66ef8e07",
+  "prompts": {
+    "6039c28954282ecd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fb0e6-2f0e-79f1-8daf-d67feafbd7a6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 354,
+      "total_deletions": 139,
+      "accepted_lines": 354,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/cfacaa8fdf9a1af31bb770fcc4e0111f491694dd7f1e23e10805de2da5acc091"
+    }
+  }
+}
