@@ -1,0 +1,173 @@
+packages/app/src/components/conversation-search.web.tsx
+  9bc86d5f73c245e3 1-40,42-171,173-186,188-326,328,368,378,388-400,402,405,416,418-435,437-438,440-450,453-468
+  8aa773fdf7537037 41,172,187,327,329-367,369-377,379-387,401,403-404,406-415,417,436,439,451-452
+packages/client/src/daemon-client.ts
+  8aa773fdf7537037 29,424,4227-4239
+packages/app/src/file-pane/search.test.ts
+  8aa773fdf7537037 1-50
+packages/app/src/file-pane/search-bar.tsx
+  8aa773fdf7537037 1-62,64-125,134-151,153-154,156-177
+packages/app/src/panels/file-panel.tsx
+  8aa773fdf7537037 6,33-34,50-51
+packages/server/src/utils/directory-suggestions.ts
+  8aa773fdf7537037 23,162,194,304,308,312
+packages/client/src/daemon-client.test.ts
+  8aa773fdf7537037 1681-1734
+packages/app/src/components/conversation-search-context.ts
+  9bc86d5f73c245e3 1-7
+packages/app/src/i18n/resources/fr.ts
+  8aa773fdf7537037 1965
+  4ad26f80bc63d250 1013
+  9bc86d5f73c245e3 193-200
+docs/file-icons.md
+  8aa773fdf7537037 18
+packages/server/src/server/session.ts
+  8aa773fdf7537037 2163-2164
+packages/app/src/i18n/resources/ja.ts
+  8aa773fdf7537037 1929
+  9bc86d5f73c245e3 191-198
+  4ad26f80bc63d250 992
+packages/app/e2e/agent-conversation-search.spec.ts
+  9bc86d5f73c245e3 1-74
+packages/app/src/agent-stream/search-navigation.ts
+  9bc86d5f73c245e3 1
+packages/app/src/panels/agent-panel.tsx
+  9bc86d5f73c245e3 24,1236-1242
+packages/server/src/server/session/files/workspace-files-session.ts
+  8aa773fdf7537037 11,25,141-201
+packages/app/src/components/conversation-search-model.ts
+  9bc86d5f73c245e3 1-16
+packages/app/src/keyboard/browser-shortcuts.test.ts
+  9bc86d5f73c245e3 182-200
+packages/app/src/keyboard/route-shortcut.ts
+  8aa773fdf7537037 43
+packages/app/src/file-pane/editor/view.tsx
+  8aa773fdf7537037 6,20-22,29
+packages/app/src/i18n/resources/ar.ts
+  9bc86d5f73c245e3 191-198
+  8aa773fdf7537037 1912
+  4ad26f80bc63d250 980
+packages/app/src/i18n/resources/pt-BR.ts
+  4ad26f80bc63d250 1004
+  9bc86d5f73c245e3 191-198
+  8aa773fdf7537037 1945
+packages/protocol/src/messages.ts
+  9bc86d5f73c245e3 4801-4804
+docs/architecture.md
+  8aa773fdf7537037 318
+packages/app/src/keyboard/keyboard-action-dispatcher.ts
+  8aa773fdf7537037 5,40
+packages/app/e2e/file-explorer-search.spec.ts
+  8aa773fdf7537037 1-43
+packages/app/src/file-pane/use-search.ts
+  8aa773fdf7537037 1-148
+packages/app/src/file-pane/editor/view.web.tsx
+  8aa773fdf7537037 6,11,22,43,116-144
+packages/app/src/file-pane/search.ts
+  8aa773fdf7537037 3-115
+packages/server/src/server/file-explorer/service.ts
+  8aa773fdf7537037 6,22-27,64-68,108-110,207-233
+packages/server/src/utils/directory-suggestions.test.ts
+  8aa773fdf7537037 324-340
+packages/app/src/keyboard/route-shortcut.test.ts
+  8aa773fdf7537037 31
+packages/app/src/styles/install-conversation-search-highlight-styles.ts
+  9bc86d5f73c245e3 1-3
+packages/server/src/server/file-explorer/service.test.ts
+  8aa773fdf7537037 1,4,8,378-408
+packages/app/src/i18n/resources/es.ts
+  9bc86d5f73c245e3 191-198
+  8aa773fdf7537037 1962
+  4ad26f80bc63d250 1013
+packages/app/e2e/file-pane-search.spec.ts
+  8aa773fdf7537037 1-30,34-53
+packages/app/src/components/conversation-search.tsx
+  9bc86d5f73c245e3 1-11
+packages/app/src/file-pane/bar.tsx
+  8aa773fdf7537037 4,6,11,27,39,112-122,188-190
+packages/app/src/agent-stream/strategy-web.tsx
+  9bc86d5f73c245e3 33-34,78-83,169,173,190,436-459,540,591,757-763,807,812-819,865,886
+packages/app/src/file-pane/editor/extensions.web.ts
+  8aa773fdf7537037 8,18-23,32-34,90-95
+packages/app/src/i18n/resources/ru.ts
+  8aa773fdf7537037 1950
+  4ad26f80bc63d250 1002
+  9bc86d5f73c245e3 191-198
+packages/app/src/keyboard/actions.ts
+  8aa773fdf7537037 21
+packages/app/src/keyboard/keyboard-shortcuts.test.ts
+  9bc86d5f73c245e3 135-136,138-139,141-142,144,427-436
+  8aa773fdf7537037 134,137,140,143
+packages/protocol/src/messages.workspace-file-search.test.ts
+  8aa773fdf7537037 1-73
+packages/app/src/components/file-explorer-pane.tsx
+  8aa773fdf7537037 17,38,449-456,468-470,484-485,494-495,509-510,520-521,534-535,606,608-611,613-615,617-618,620-624,665-666,674,681-682,694-695,708-709,713,715,738
+packages/app/src/i18n/resources/zh-CN.ts
+  9bc86d5f73c245e3 191-198
+  8aa773fdf7537037 420,1891
+  4ad26f80bc63d250 971
+packages/app/src/styles/install-conversation-search-highlight-styles.web.ts
+  9bc86d5f73c245e3 1-28
+packages/app/src/agent-stream/strategy-web.test.tsx
+  9bc86d5f73c245e3 11,151-242
+packages/app/src/file-explorer/search.tsx
+  8aa773fdf7537037 1-397
+packages/app/src/keyboard/keyboard-shortcuts.ts
+  9bc86d5f73c245e3 72-73,184-185,187-192,194-198,200-205,207-210,1230
+  8aa773fdf7537037 171,182-183,186,193,199,206
+packages/app/src/file-pane/pane.tsx
+  8aa773fdf7537037 9,59,63-64,77-78,95,99,338-339,354-361,407,411-421,437-443,474-516,526,580-581,693-694,769-770,776-777,886-887,934-935,955-956,984-985,990-1045,1054,1057-1062,1064-1087,1092-1109,1123-1124,1138-1139,1202-1204,1215-1217,1255-1260,1277,1279-1290
+packages/app/src/i18n/resources/en.ts
+  8aa773fdf7537037 1922
+  9bc86d5f73c245e3 189-196
+packages/app/src/components/conversation-search-model.test.ts
+  9bc86d5f73c245e3 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "7ec0990f6eb1f140c2fadb992d94611c76803d7e",
+  "prompts": {
+    "4ad26f80bc63d250": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fb0d8-5bce-7683-b3dc-c02ae561cd02",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 9,
+      "total_deletions": 9,
+      "accepted_lines": 9,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/e41f0003efbc039f63b42c9ac6f29322e933fc79f024b8944e50dc124957c55c"
+    },
+    "8aa773fdf7537037": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fad7d-13b5-7bb1-a99f-f5e5d6e29880",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 2453,
+      "total_deletions": 607,
+      "accepted_lines": 2068,
+      "overriden_lines": 45,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/3e8b868cca3370b490e7ff2acd3f3befd211160c0de50ced255019d3c9ee8cd2"
+    },
+    "9bc86d5f73c245e3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fad77-dcb5-7a10-9246-f8193f5daefc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 9475,
+      "total_deletions": 1127,
+      "accepted_lines": 9372,
+      "overriden_lines": 1
+    }
+  }
+}
