@@ -72,7 +72,7 @@ import {
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { useShowShortcutBadges } from "@/hooks/use-show-shortcut-badges";
-import { ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -91,7 +91,10 @@ import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { SidebarStatusWorkspaceList } from "@/components/sidebar/sidebar-status-list";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
-import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
+import {
+  SidebarWorkspaceContextMenuContent,
+  SidebarWorkspaceMenu,
+} from "@/components/sidebar/sidebar-workspace-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
@@ -1177,7 +1180,8 @@ function WorkspaceRowInner({
             style={styles.workspaceRowContainer}
             {...hoverHandlers}
           >
-            <Pressable
+            <ContextMenuTrigger
+              enabledOnMobile={false}
               disabled={isArchiving}
               aria-selected={selected}
               accessibilityRole="button"
@@ -1219,7 +1223,7 @@ function WorkspaceRowInner({
                   onTogglePin={onTogglePin}
                 />
               </SidebarWorkspaceRowContent>
-            </Pressable>
+            </ContextMenuTrigger>
           </View>
         );
       }}
@@ -1370,32 +1374,48 @@ function WorkspaceRowWithMenu({
 
   return (
     <>
-      <WorkspaceRowInner
-        workspace={workspace}
-        subtitle={subtitle}
-        selected={selected}
-        shortcutNumber={shortcutNumber}
-        showShortcutBadge={showShortcutBadge}
-        onPress={onPress}
-        drag={drag}
-        isDragging={isDragging}
-        isArchiving={isArchiving}
-        isCreating={isCreating}
-        dragHandleProps={dragHandleProps}
-        menuController={null}
-        archiveLabel={t("sidebar.workspace.actions.archive")}
-        archiveStatus={isArchiving ? "pending" : "idle"}
-        archivePendingLabel={t("sidebar.workspace.actions.archiving")}
-        onArchive={handleArchive}
-        onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
-        onCopyPath={handleCopyPath}
-        onRename={handleOpenRename}
-        onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
-        archiveShortcutKeys={selected ? archiveShortcutKeys : null}
-        isPinned={isPinned}
-        onTogglePin={onTogglePin}
-        reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
-      />
+      <ContextMenu>
+        <WorkspaceRowInner
+          workspace={workspace}
+          subtitle={subtitle}
+          selected={selected}
+          shortcutNumber={shortcutNumber}
+          showShortcutBadge={showShortcutBadge}
+          onPress={onPress}
+          drag={drag}
+          isDragging={isDragging}
+          isArchiving={isArchiving}
+          isCreating={isCreating}
+          dragHandleProps={dragHandleProps}
+          menuController={null}
+          archiveLabel={t("sidebar.workspace.actions.archive")}
+          archiveStatus={isArchiving ? "pending" : "idle"}
+          archivePendingLabel={t("sidebar.workspace.actions.archiving")}
+          onArchive={handleArchive}
+          onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
+          onCopyPath={handleCopyPath}
+          onRename={handleOpenRename}
+          onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
+          archiveShortcutKeys={selected ? archiveShortcutKeys : null}
+          isPinned={isPinned}
+          onTogglePin={onTogglePin}
+          reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
+        />
+        <SidebarWorkspaceContextMenuContent
+          workspaceKey={workspace.workspaceKey}
+          onCopyPath={handleCopyPath}
+          onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
+          onRename={handleOpenRename}
+          onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
+          onArchive={handleArchive}
+          archiveLabel={t("sidebar.workspace.actions.archive")}
+          archiveStatus={isArchiving ? "pending" : "idle"}
+          archivePendingLabel={t("sidebar.workspace.actions.archiving")}
+          archiveShortcutKeys={selected ? archiveShortcutKeys : null}
+          isPinned={isPinned}
+          onTogglePin={onTogglePin}
+        />
+      </ContextMenu>
       <AdaptiveRenameModal
         visible={isRenameOpen}
         title={t("sidebar.workspace.rename.title")}
