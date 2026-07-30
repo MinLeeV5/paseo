@@ -4,9 +4,14 @@ import { mkdtemp, open as openFile, readFile, rm, stat as statFile } from "fs/pr
 import { tmpdir } from "os";
 import { TTLCache } from "@isaacs/ttlcache";
 import type { CheckoutCommit, CheckoutCommitFile } from "@getpaseo/protocol/messages";
+import { maxBase64EncryptedPlaintextByteLength } from "@getpaseo/relay";
 import type { Logger } from "pino";
 import type { ParsedDiffFile } from "../server/utils/diff-highlighter.js";
-import { parseAndHighlightDiff } from "../server/utils/diff-highlighter.js";
+import {
+  highlightDiffWithFileContent,
+  parseAndHighlightDiff,
+  parseDiff,
+} from "../server/utils/diff-highlighter.js";
 import { parseGitHubRepoFromRemote } from "../server/workspace-git-metadata.js";
 import { createGitHubService } from "../services/github-service.js";
 import type {
@@ -694,6 +699,7 @@ function joinGitPath(...parts: string[]): string {
 }
 
 const TRACKED_DIFF_NUMSTAT_MAX_BYTES = 2 * 1024 * 1024; // 2MB
+const TRACKED_DIFF_BATCH_SIZE = 8;
 const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 function isUnbornHeadDiffError(error: unknown): boolean {
@@ -1643,55 +1649,56 @@ async function resolveSubmoduleTrackedDiffGroup(
 interface AppendSubmoduleTooLargeInput {
   displayedChange: DisplayedSubmoduleTrackedChange;
   includeStructured: boolean;
-  structured: ParsedDiffFile[];
+  structured: StructuredDiffAccumulator;
   output: DiffOutputAccumulator;
 }
 
-function appendSubmoduleTooLarge(input: AppendSubmoduleTooLargeInput): void {
+function appendSubmoduleTooLarge(input: AppendSubmoduleTooLargeInput): boolean {
   const { displayedChange, includeStructured, structured, output } = input;
   const { change } = displayedChange.trackedChange;
   if (includeStructured) {
-    structured.push(
-      buildPlaceholderParsedDiffFile(
-        {
-          path: displayedChange.path,
-          ...(displayedChange.submodulePath !== undefined
-            ? { submodulePath: displayedChange.submodulePath }
-            : null),
-          status: change.status,
-          isNew: change.isNew,
-          isDeleted: change.isDeleted,
-        },
-        { status: "too_large", stat: null },
-      ),
+    const placeholder = buildPlaceholderParsedDiffFile(
+      {
+        path: displayedChange.path,
+        ...(displayedChange.submodulePath !== undefined
+          ? { submodulePath: displayedChange.submodulePath }
+          : null),
+        status: change.status,
+        isNew: change.isNew,
+        isDeleted: change.isDeleted,
+      },
+      { status: "too_large", stat: null },
     );
+    if (!appendStructuredFile(structured, placeholder)) {
+      return false;
+    }
   }
   output.tryAppend(`# ${displayedChange.path}: diff too large omitted\n`);
+  return true;
 }
 
 interface AppendRenderedSubmoduleTrackedDiffInput {
   cwd: string;
   fileDiff: RenderedSubmoduleTrackedDiff;
   includeStructured: boolean;
-  structured: ParsedDiffFile[];
+  structured: StructuredDiffAccumulator;
   output: DiffOutputAccumulator;
 }
 
 async function appendRenderedSubmoduleTrackedDiff(
   input: AppendRenderedSubmoduleTrackedDiffInput,
-): Promise<void> {
+): Promise<boolean> {
   const { cwd, fileDiff, includeStructured, structured, output } = input;
   if (output.remainingBytes() === 0 || fileDiff.truncated || !output.tryAppend(fileDiff.text)) {
-    appendSubmoduleTooLarge({
+    return appendSubmoduleTooLarge({
       displayedChange: fileDiff,
       includeStructured,
       structured,
       output,
     });
-    return;
   }
   if (!includeStructured) {
-    return;
+    return true;
   }
 
   const { change } = fileDiff.trackedChange;
@@ -1699,9 +1706,17 @@ async function appendRenderedSubmoduleTrackedDiff(
   const nestedParsedFiles = getNestedParsedFilesForPath(parsed, fileDiff.path);
   if (nestedParsedFiles.length > 0) {
     for (const nestedFile of nestedParsedFiles) {
-      structured.push({ ...nestedFile, submodulePath: fileDiff.path, status: "ok" });
+      if (
+        !appendStructuredFile(structured, {
+          ...nestedFile,
+          submodulePath: fileDiff.path,
+          status: "ok",
+        })
+      ) {
+        return false;
+      }
     }
-    return;
+    return true;
   }
   const parsedFile =
     parsed[0] ??
@@ -1713,7 +1728,7 @@ async function appendRenderedSubmoduleTrackedDiff(
       deletions: 0,
       hunks: [],
     } satisfies ParsedDiffFile);
-  structured.push({
+  return appendStructuredFile(structured, {
     ...parsedFile,
     path: fileDiff.path,
     ...(fileDiff.submodulePath !== undefined ? { submodulePath: fileDiff.submodulePath } : null),
@@ -1728,16 +1743,16 @@ interface ProcessSubmoduleTrackedChangesInput {
   trackedChanges: SubmoduleTrackedFileChange[];
   ignoreWhitespace: boolean;
   includeStructured: boolean;
-  structured: ParsedDiffFile[];
+  structured: StructuredDiffAccumulator;
   output: DiffOutputAccumulator;
 }
 
 async function processSubmoduleTrackedChanges(
   input: ProcessSubmoduleTrackedChangesInput,
-): Promise<void> {
+): Promise<boolean> {
   const { cwd, trackedChanges, ignoreWhitespace, includeStructured, structured, output } = input;
   if (trackedChanges.length === 0) {
-    return;
+    return true;
   }
 
   const trackedChangeGroups = groupSubmoduleTrackedChanges(trackedChanges);
@@ -1747,15 +1762,19 @@ async function processSubmoduleTrackedChanges(
       ignoreWhitespace,
     });
     for (const fileDiff of trackedDiffs) {
-      await appendRenderedSubmoduleTrackedDiff({
+      const didAppend = await appendRenderedSubmoduleTrackedDiff({
         cwd,
         fileDiff,
         includeStructured,
         structured,
         output,
       });
+      if (!didAppend) {
+        return false;
+      }
     }
   }
+  return true;
 }
 
 export class NotGitRepoError extends Error {
@@ -1842,10 +1861,9 @@ export type CheckoutStatusGit = CheckoutStatusGitNonPaseo | CheckoutStatusGitPas
 
 export type CheckoutStatusResult = CheckoutStatus | CheckoutStatusGit;
 
-export interface CheckoutDiffResult {
-  diff: string;
-  structured?: ParsedDiffFile[];
-}
+export type CheckoutDiffResult =
+  | { diff: string; structured?: ParsedDiffFile[]; diffTooLarge?: false }
+  | { diff: ""; structured: []; diffTooLarge: true };
 
 export interface CheckoutDiffCompare {
   mode: "uncommitted" | "base" | "snapshot";
@@ -2908,6 +2926,37 @@ export async function getCheckoutSnapshotFacts(
 const PER_FILE_DIFF_MAX_BYTES = 1024 * 1024; // 1MB
 const LIVE_TOTAL_DIFF_MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const COMMITTED_TOTAL_DIFF_MAX_BYTES = 20 * 1024 * 1024; // 20MB
+const RELAY_MAX_FRAME_BYTES = 32 * 1024 * 1024;
+const CHECKOUT_DIFF_FRAME_HEADROOM_BYTES = 1024 * 1024;
+// Temporary until diffs load lazily per file. The Paseo relay's 32 MiB frame limit is
+// binding: string frames are encrypted and base64-encoded. Reserve 1 MiB plaintext for
+// the surrounding WebSocket JSON envelope after inverting that exact wire expansion.
+export const CHECKOUT_DIFF_MAX_STRUCTURED_BYTES =
+  maxBase64EncryptedPlaintextByteLength(RELAY_MAX_FRAME_BYTES) - CHECKOUT_DIFF_FRAME_HEADROOM_BYTES;
+
+interface StructuredDiffAccumulator {
+  files: ParsedDiffFile[];
+  serializedBytes: number;
+}
+
+function createStructuredDiffAccumulator(): StructuredDiffAccumulator {
+  return { files: [], serializedBytes: Buffer.byteLength("[]", "utf8") };
+}
+
+function appendStructuredFile(
+  structured: StructuredDiffAccumulator,
+  file: ParsedDiffFile,
+): boolean {
+  const separatorBytes = structured.files.length > 0 ? 1 : 0;
+  const fileBytes = Buffer.byteLength(JSON.stringify(file), "utf8");
+  const nextBytes = structured.serializedBytes + separatorBytes + fileBytes;
+  if (nextBytes > CHECKOUT_DIFF_MAX_STRUCTURED_BYTES) {
+    return false;
+  }
+  structured.files.push(file);
+  structured.serializedBytes = nextBytes;
+  return true;
+}
 const UNTRACKED_BINARY_SNIFF_BYTES = 16 * 1024;
 
 let committedTotalDiffMaxBytesForTests: number | null = null;
@@ -3658,27 +3707,62 @@ export function warmCheckoutShortstatInBackground(
 interface AppendStructuredTrackedDiffsInput {
   cwd: string;
   trackedChanges: CheckoutFileChange[];
-  trackedChangeByPath: Map<string, CheckoutFileChange>;
   trackedNumstatByPath: Map<string, FileStat>;
   trackedPlaceholderByPath: Map<string, { status: "binary" | "too_large"; stat: FileStat }>;
   trackedDiffText: string;
   refsForDiff: CheckoutDiffRefs;
   ignoreWhitespace: boolean;
-  structured: ParsedDiffFile[];
-  appendDiff: (text: string) => void;
+  structured: StructuredDiffAccumulator;
   appendTrackedPlaceholderComment: (
     change: CheckoutFileChange,
     status: "binary" | "too_large",
   ) => void;
 }
 
+async function buildHighlightedTrackedDiffFile(input: {
+  cwd: string;
+  change: CheckoutFileChange;
+  parsedFile: ParsedDiffFile;
+  refsForDiff: CheckoutDiffRefs;
+}): Promise<ParsedDiffFile> {
+  const { cwd, change, parsedFile, refsForDiff } = input;
+  const refPath = change.oldPath ?? change.path;
+  const [oldFileContent, newFileContent] = await Promise.all([
+    change.isNew ? null : readGitFileContentAtRef(cwd, refsForDiff.baseRef, refPath),
+    refsForDiff.targetRef ? readGitFileContentAtRef(cwd, refsForDiff.targetRef, change.path) : null,
+  ]);
+  const highlightedFile = await highlightDiffWithFileContent(parsedFile, cwd, {
+    oldFileContent,
+    newFileContent,
+  });
+  return {
+    ...highlightedFile,
+    path: change.path,
+    isNew: change.isNew,
+    isDeleted: change.isDeleted,
+    status: "ok",
+  };
+}
+
+function isWhitespaceOnlyTrackedChange(input: {
+  change: CheckoutFileChange;
+  stat: FileStat;
+  ignoreWhitespace: boolean;
+}): boolean {
+  const { change, stat, ignoreWhitespace } = input;
+  return (
+    ignoreWhitespace &&
+    change.status.startsWith("M") &&
+    (!stat || (!stat.isBinary && stat.additions === 0 && stat.deletions === 0))
+  );
+}
+
 async function appendStructuredTrackedDiffs(
   input: AppendStructuredTrackedDiffsInput,
-): Promise<void> {
+): Promise<boolean> {
   const {
     cwd,
     trackedChanges,
-    trackedChangeByPath,
     trackedNumstatByPath,
     trackedPlaceholderByPath,
     trackedDiffText,
@@ -3688,36 +3772,19 @@ async function appendStructuredTrackedDiffs(
     appendTrackedPlaceholderComment,
   } = input;
 
-  const parsedTrackedFiles =
-    trackedDiffText.length > 0
-      ? await parseAndHighlightDiff(trackedDiffText, cwd, {
-          getOldFileContent: async (file) => {
-            const change = trackedChangeByPath.get(file.path);
-            if (!change || change.isNew) {
-              return null;
-            }
-            const refPath = change.oldPath ?? change.path;
-            return readGitFileContentAtRef(cwd, refsForDiff.baseRef, refPath);
-          },
-          getNewFileContent: async (file) => {
-            if (!refsForDiff.targetRef) {
-              return null;
-            }
-            return readGitFileContentAtRef(cwd, refsForDiff.targetRef, file.path);
-          },
-        })
-      : [];
+  const parsedTrackedFiles = trackedDiffText.length > 0 ? parseDiff(trackedDiffText) : [];
   const parsedTrackedByPath = new Map(parsedTrackedFiles.map((file) => [file.path, file]));
 
   for (const change of trackedChanges) {
     const placeholder = trackedPlaceholderByPath.get(change.path);
     if (placeholder) {
-      structured.push(
-        buildPlaceholderParsedDiffFile(change, {
-          status: placeholder.status,
-          stat: placeholder.stat,
-        }),
-      );
+      const file = buildPlaceholderParsedDiffFile(change, {
+        status: placeholder.status,
+        stat: placeholder.stat,
+      });
+      if (!appendStructuredFile(structured, file)) {
+        return false;
+      }
       appendTrackedPlaceholderComment(change, placeholder.status);
       continue;
     }
@@ -3725,20 +3792,30 @@ async function appendStructuredTrackedDiffs(
     const stat = trackedNumstatByPath.get(change.path) ?? null;
     const parsedFile = parsedTrackedByPath.get(change.path);
     if (parsedFile) {
-      structured.push({
-        ...parsedFile,
-        path: change.path,
-        isNew: change.isNew,
-        isDeleted: change.isDeleted,
-        status: "ok",
+      const file = await buildHighlightedTrackedDiffFile({
+        cwd,
+        change,
+        parsedFile,
+        refsForDiff,
       });
+      if (!appendStructuredFile(structured, file)) {
+        return false;
+      }
       continue;
     }
 
     const nestedParsedFiles = getNestedParsedFilesForPath(parsedTrackedFiles, change.path);
     if (nestedParsedFiles.length > 0) {
       for (const nestedFile of nestedParsedFiles) {
-        structured.push({ ...nestedFile, submodulePath: change.path, status: "ok" });
+        if (
+          !appendStructuredFile(structured, {
+            ...nestedFile,
+            submodulePath: change.path,
+            status: "ok",
+          })
+        ) {
+          return false;
+        }
       }
       continue;
     }
@@ -3746,15 +3823,11 @@ async function appendStructuredTrackedDiffs(
     // `git diff -w --name-status` can still report a modified path even when the
     // whitespace-filtered patch and numstat are both empty. Skip emitting a
     // structured placeholder in that case so whitespace-only edits truly disappear.
-    if (
-      ignoreWhitespace &&
-      change.status.startsWith("M") &&
-      (!stat || (!stat.isBinary && stat.additions === 0 && stat.deletions === 0))
-    ) {
+    if (isWhitespaceOnlyTrackedChange({ change, stat, ignoreWhitespace })) {
       continue;
     }
 
-    structured.push({
+    const file = {
       path: change.path,
       isNew: change.isNew,
       isDeleted: change.isDeleted,
@@ -3762,8 +3835,13 @@ async function appendStructuredTrackedDiffs(
       deletions: stat?.deletions ?? 0,
       hunks: [],
       status: "ok",
-    });
+    } satisfies ParsedDiffFile;
+    if (!appendStructuredFile(structured, file)) {
+      return false;
+    }
   }
+
+  return true;
 }
 
 interface ProcessUntrackedChangeInput {
@@ -3771,35 +3849,53 @@ interface ProcessUntrackedChangeInput {
   change: CheckoutFileChange;
   ignoreWhitespace: boolean;
   includeStructured: boolean;
-  structured: ParsedDiffFile[];
+  structured: StructuredDiffAccumulator;
   output: DiffOutputAccumulator;
 }
 
-async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promise<void> {
+async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promise<boolean> {
   const { cwd, change, ignoreWhitespace, includeStructured, structured, output } = input;
   if (output.remainingBytes() === 0) {
-    if (includeStructured) {
-      structured.push(buildPlaceholderParsedDiffFile(change, { status: "too_large", stat: null }));
+    if (
+      includeStructured &&
+      !appendStructuredFile(
+        structured,
+        buildPlaceholderParsedDiffFile(change, { status: "too_large", stat: null }),
+      )
+    ) {
+      return false;
     }
-    return;
+    return true;
   }
 
   const { text, truncated, stat } = await getUntrackedDiffText(cwd, change, ignoreWhitespace);
   if (stat?.isBinary) {
-    if (includeStructured) {
-      structured.push(buildPlaceholderParsedDiffFile(change, { status: "binary", stat }));
+    if (
+      includeStructured &&
+      !appendStructuredFile(
+        structured,
+        buildPlaceholderParsedDiffFile(change, { status: "binary", stat }),
+      )
+    ) {
+      return false;
     }
     output.tryAppend(`# ${change.path}: binary diff omitted\n`);
-    return;
+    return true;
   }
   if (truncated || !output.tryAppend(text)) {
-    if (includeStructured) {
-      structured.push(buildPlaceholderParsedDiffFile(change, { status: "too_large", stat }));
+    if (
+      includeStructured &&
+      !appendStructuredFile(
+        structured,
+        buildPlaceholderParsedDiffFile(change, { status: "too_large", stat }),
+      )
+    ) {
+      return false;
     }
     output.tryAppend(`# ${change.path}: diff too large omitted\n`);
-    return;
+    return true;
   }
-  if (!includeStructured) return;
+  if (!includeStructured) return true;
 
   const parsed = await parseAndHighlightDiff(text, cwd);
   const parsedFile =
@@ -3813,14 +3909,15 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
       hunks: [],
     } satisfies ParsedDiffFile);
 
-  structured.push({
+  const file = {
     ...parsedFile,
     path: change.path,
     ...(change.submodulePath !== undefined ? { submodulePath: change.submodulePath } : null),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     status: "ok",
-  });
+  } satisfies ParsedDiffFile;
+  return appendStructuredFile(structured, file);
 }
 
 interface ProcessTrackedChangesInput {
@@ -3833,7 +3930,6 @@ interface ProcessTrackedChangesInput {
 }
 
 interface ProcessTrackedChangesResult {
-  trackedChangeByPath: Map<string, CheckoutFileChange>;
   trackedNumstatByPath: Map<string, FileStat>;
   trackedPlaceholderByPath: Map<string, { status: "binary" | "too_large"; stat: FileStat }>;
   trackedDiffText: string;
@@ -3844,7 +3940,6 @@ async function processTrackedChanges(
 ): Promise<ProcessTrackedChangesResult> {
   const { cwd, refsForDiff, trackedChanges, ignoreWhitespace, totalDiffMaxBytes, appendDiff } =
     input;
-  const trackedChangeByPath = new Map(trackedChanges.map((change) => [change.path, change]));
   const trackedNumstatByPath =
     trackedChanges.length > 0
       ? await getTrackedNumstatByPath(cwd, refsForDiff, ignoreWhitespace)
@@ -3866,9 +3961,10 @@ async function processTrackedChanges(
 
   let trackedDiffText = "";
   let trackedDiffBytes = 0;
-  if (trackedDiffPaths.length > 0) {
+  for (let start = 0; start < trackedDiffPaths.length; start += TRACKED_DIFF_BATCH_SIZE) {
+    const paths = trackedDiffPaths.slice(start, start + TRACKED_DIFF_BATCH_SIZE);
     const trackedDiffs = await Promise.all(
-      trackedDiffPaths.map((path) =>
+      paths.map((path) =>
         getTrackedDiffTextForPath({
           cwd,
           refsForDiff,
@@ -3878,7 +3974,6 @@ async function processTrackedChanges(
       ),
     );
 
-    const visibleTrackedDiffs: string[] = [];
     for (const fileDiff of trackedDiffs) {
       if (fileDiff.truncated) {
         trackedPlaceholderByPath.set(fileDiff.path, {
@@ -3896,19 +3991,113 @@ async function processTrackedChanges(
         continue;
       }
       trackedDiffBytes += diffBytes;
-      visibleTrackedDiffs.push(fileDiff.text);
+      trackedDiffText += fileDiff.text;
     }
-
-    trackedDiffText = visibleTrackedDiffs.join("");
-    appendDiff(trackedDiffText);
   }
+  appendDiff(trackedDiffText);
 
   return {
-    trackedChangeByPath,
     trackedNumstatByPath,
     trackedPlaceholderByPath,
     trackedDiffText,
   };
+}
+
+interface AppendCheckoutDiffChangesInput {
+  cwd: string;
+  refsForDiff: CheckoutDiffRefs;
+  trackedChanges: CheckoutFileChange[];
+  untrackedChanges: CheckoutFileChange[];
+  submoduleTrackedChanges: SubmoduleTrackedFileChange[];
+  trackedDiff: ProcessTrackedChangesResult;
+  ignoreWhitespace: boolean;
+  includeStructured: boolean;
+  structured: StructuredDiffAccumulator;
+  output: DiffOutputAccumulator;
+}
+
+async function appendCheckoutDiffChanges(input: AppendCheckoutDiffChangesInput): Promise<boolean> {
+  const {
+    cwd,
+    refsForDiff,
+    trackedChanges,
+    untrackedChanges,
+    submoduleTrackedChanges,
+    trackedDiff,
+    ignoreWhitespace,
+    includeStructured,
+    structured,
+    output,
+  } = input;
+  const appendTrackedPlaceholderComment = (
+    change: CheckoutFileChange,
+    status: "binary" | "too_large",
+  ) => {
+    const description = status === "binary" ? "binary diff omitted" : "diff too large omitted";
+    output.tryAppend(`# ${change.path}: ${description}\n`);
+  };
+
+  if (includeStructured) {
+    const didAppendTrackedDiffs = await appendStructuredTrackedDiffs({
+      cwd,
+      trackedChanges,
+      trackedNumstatByPath: trackedDiff.trackedNumstatByPath,
+      trackedPlaceholderByPath: trackedDiff.trackedPlaceholderByPath,
+      trackedDiffText: trackedDiff.trackedDiffText,
+      refsForDiff,
+      ignoreWhitespace,
+      structured,
+      appendTrackedPlaceholderComment,
+    });
+    if (!didAppendTrackedDiffs) {
+      return false;
+    }
+  } else {
+    for (const change of trackedChanges) {
+      const placeholder = trackedDiff.trackedPlaceholderByPath.get(change.path);
+      if (placeholder) {
+        appendTrackedPlaceholderComment(change, placeholder.status);
+      }
+    }
+  }
+
+  const didAppendSubmoduleDiffs = await processSubmoduleTrackedChanges({
+    cwd,
+    trackedChanges: submoduleTrackedChanges,
+    ignoreWhitespace,
+    includeStructured,
+    structured,
+    output,
+  });
+  if (!didAppendSubmoduleDiffs) {
+    return false;
+  }
+
+  for (const change of untrackedChanges) {
+    if (output.remainingBytes() === 0) {
+      const placeholder = buildPlaceholderParsedDiffFile(change, {
+        status: "too_large",
+        stat: null,
+      });
+      if (includeStructured && !appendStructuredFile(structured, placeholder)) {
+        return false;
+      }
+      continue;
+    }
+    const didAppendUntrackedDiff = await processUntrackedChange({
+      cwd,
+      change,
+      ignoreWhitespace,
+      includeStructured,
+      structured,
+      output,
+    });
+    if (!didAppendUntrackedDiff) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 async function resolveCheckoutDiffRefs(
@@ -3982,7 +4171,7 @@ export async function getCheckoutDiff(
       return a.path < b.path ? -1 : 1;
     });
 
-    const structured: ParsedDiffFile[] = [];
+    const structured = createStructuredDiffAccumulator();
     // Live diffs refresh on every edit, while committed diffs can cover a long-lived
     // branch. Give the stable committed snapshot enough room to remain reviewable.
     const totalDiffMaxBytes = refsForDiff.targetRef
@@ -4040,70 +4229,24 @@ export async function getCheckoutDiff(
       appendDiff,
     });
 
-    const appendTrackedPlaceholderComment = (
-      change: CheckoutFileChange,
-      status: "binary" | "too_large",
-    ) => {
-      if (status === "binary") {
-        appendDiff(`# ${change.path}: binary diff omitted\n`);
-        return;
-      }
-      appendDiff(`# ${change.path}: diff too large omitted\n`);
-    };
-
-    if (compare.includeStructured) {
-      await appendStructuredTrackedDiffs({
-        cwd,
-        trackedChanges,
-        trackedChangeByPath: trackedDiff.trackedChangeByPath,
-        trackedNumstatByPath: trackedDiff.trackedNumstatByPath,
-        trackedPlaceholderByPath: trackedDiff.trackedPlaceholderByPath,
-        trackedDiffText: trackedDiff.trackedDiffText,
-        refsForDiff: effectiveRefsForDiff,
-        ignoreWhitespace,
-        structured,
-        appendDiff,
-        appendTrackedPlaceholderComment,
-      });
-    } else {
-      for (const change of trackedChanges) {
-        const placeholder = trackedDiff.trackedPlaceholderByPath.get(change.path);
-        if (placeholder) {
-          appendTrackedPlaceholderComment(change, placeholder.status);
-        }
-      }
-    }
-
-    await processSubmoduleTrackedChanges({
+    const didAppendChanges = await appendCheckoutDiffChanges({
       cwd,
-      trackedChanges: submoduleFileChanges.tracked,
+      refsForDiff: effectiveRefsForDiff,
+      trackedChanges,
+      untrackedChanges,
+      submoduleTrackedChanges: submoduleFileChanges.tracked,
+      trackedDiff,
       ignoreWhitespace,
       includeStructured: compare.includeStructured === true,
       structured,
       output,
     });
-
-    for (const change of untrackedChanges) {
-      if (output.remainingBytes() === 0) {
-        if (compare.includeStructured) {
-          structured.push(
-            buildPlaceholderParsedDiffFile(change, { status: "too_large", stat: null }),
-          );
-        }
-        continue;
-      }
-      await processUntrackedChange({
-        cwd,
-        change,
-        ignoreWhitespace,
-        includeStructured: compare.includeStructured === true,
-        structured,
-        output,
-      });
+    if (!didAppendChanges) {
+      return { diff: "", structured: [], diffTooLarge: true };
     }
 
     if (compare.includeStructured) {
-      return { diff: output.getText(), structured };
+      return { diff: output.getText(), structured: structured.files };
     }
     return { diff: output.getText() };
   } finally {

@@ -133,6 +133,7 @@ import { resolvePreferredEditorTarget, usePreferredEditor } from "@/hooks/use-pr
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 import { planWorkspaceOpenTargets } from "@/workspace/open-target-planner";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { DiffTooLargeState } from "@/git/diff-too-large-state";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -1949,6 +1950,7 @@ interface DiffBodyContentProps {
   notGit: boolean;
   isDiffLoading: boolean;
   diffErrorMessage: string | null;
+  diffTooLarge: boolean;
   hasChanges: boolean;
   emptyMessage: string;
   children: ReactElement;
@@ -1962,6 +1964,7 @@ function DiffBodyContent({
   notGit,
   isDiffLoading,
   diffErrorMessage,
+  diffTooLarge,
   hasChanges,
   emptyMessage,
   children,
@@ -1996,6 +1999,9 @@ function DiffBodyContent({
         <ThemedLoadingSpinner size="large" uniProps={foregroundMutedIconColorMapping} />
       </View>
     );
+  }
+  if (diffTooLarge) {
+    return <DiffTooLargeState />;
   }
   if (diffErrorMessage) {
     return (
@@ -3211,6 +3217,7 @@ export function GitDiffPane({
     selectBase: selectCheckoutBase,
     files: checkoutFiles,
     diffPayloadError: checkoutDiffPayloadError,
+    diffTooLarge: checkoutDiffTooLarge,
     isDiffLoading: isCheckoutDiffLoading,
     reviewActions,
     reviewAttachment,
@@ -3247,6 +3254,7 @@ export function GitDiffPane({
     },
     session: agentSessionChangesQuery,
   });
+  const diffTooLarge = activeChangesSource === "checkout" && checkoutDiffTooLarge;
   usePublishWorkingDiffAttachment({
     serverId,
     workspaceId: workspaceId ?? undefined,
@@ -3620,6 +3628,7 @@ export function GitDiffPane({
       notGit={notGit}
       isDiffLoading={isDiffLoading}
       diffErrorMessage={diffErrorMessage}
+      diffTooLarge={diffTooLarge}
       hasChanges={hasChanges}
       emptyMessage={emptyMessage}
       checkingRepositoryLabel={t("workspace.git.diff.checkingRepository")}

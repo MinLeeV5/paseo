@@ -47,6 +47,7 @@ import type { GeneratedWorkspaceName } from "./worktree-branch-name-generator.js
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
 import type { ForgeService } from "../services/forge-service.js";
 import { createNoopWorkspaceGitService } from "./test-utils/workspace-git-service-stub.js";
+import { deriveProjectKey } from "./project-key.js";
 import {
   asSessionLogger,
   asAgentManager,
@@ -851,6 +852,7 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
     const session = asTestSession(
       new Session({
         clientId: "test-client",
+        serverId: "test-server",
         scopes: ["*"],
         appVersion: null,
         onMessage: (message) => emitted.push(message),
@@ -902,10 +904,21 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
 
     const [createdAgent] = agentManager.listAgents();
     expect(createdAgent?.cwd).toBe(child);
+    const createdWorkspace = await workspaceRegistry.get(createdAgent!.workspaceId!);
+    expect(createdWorkspace).not.toBeNull();
+    await expect(projectRegistry.get(createdWorkspace!.projectId)).resolves.toMatchObject({
+      projectKey: deriveProjectKey({
+        rootPath: child,
+        remoteUrl: null,
+        worktreeRoot: null,
+        mainRepoRoot: null,
+        serverId: "test-server",
+      }),
+    });
     await expect(
       session.buildProjectPlacementForWorkspaceId(createdAgent!.workspaceId!),
     ).resolves.toMatchObject({
-      projectKey: expect.stringMatching(/^prj_[0-9a-f]{16}$/),
+      projectKey: createdWorkspace!.projectId,
       checkout: { cwd: child },
     });
     expect(findByType(emitted, "status")?.payload).toMatchObject({
@@ -3706,6 +3719,7 @@ test("project.remove.request archives active workspaces and removes the project 
   });
   const project = createPersistedProjectRecord({
     projectId: "proj-remove-with-workspace",
+    projectKey: "remote:github.com/acme/remove-with-workspace",
     rootPath: REPO_CWD,
     kind: "git",
     displayName: "repo",
@@ -4011,7 +4025,15 @@ test("create paseo worktree response preserves an explicit non-Git project", asy
   expect(response?.payload.workspace?.id).toMatch(/^wks_[0-9a-f]{16}$/);
   expect(response?.payload.workspace?.workspaceDirectory).toContain(path.join("worktree-123"));
   expect(workspaces.has(response?.payload.workspace?.id ?? "")).toBe(true);
-  expect(projects.get(explicitProject.projectId)).toEqual(explicitProject);
+  expect(projects.get(explicitProject.projectId)).toEqual({
+    ...explicitProject,
+    projectKey: deriveProjectKey({
+      rootPath: explicitProject.rootPath,
+      remoteUrl: null,
+      worktreeRoot: null,
+      mainRepoRoot: null,
+    }),
+  });
 });
 
 test("workspace updates stay scoped to the matching cwd", async () => {
@@ -7700,7 +7722,8 @@ test("project.rename.request stores customName and emits an updated workspace de
   );
 
   const project = createPersistedProjectRecord({
-    projectId: "remote:github.com/acme/repo",
+    projectId: "prj_rename",
+    projectKey: "remote:github.com/acme/repo",
     rootPath: REPO_CWD,
     kind: "git",
     displayName: "acme/repo",
