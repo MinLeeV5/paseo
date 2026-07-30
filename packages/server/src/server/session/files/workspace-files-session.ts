@@ -8,6 +8,7 @@ import {
 import type {
   FileDownloadTokenRequest,
   FileExplorerRequest,
+  WorkspaceFileSearchRequest,
   FileUploadRequest,
   FileSubscribeRequest,
   FileUnsubscribeRequest,
@@ -21,6 +22,7 @@ import {
   getDownloadableFileInfo,
   listDirectoryEntries,
   readExplorerFile,
+  searchExplorerFiles,
   streamExplorerFile,
   writeExplorerFile,
 } from "../../file-explorer/service.js";
@@ -134,6 +136,69 @@ export class WorkspaceFilesSession {
   dispose(): void {
     for (const unsubscribe of this.fileSubscriptions.values()) unsubscribe();
     this.fileSubscriptions.clear();
+  }
+
+  async handleWorkspaceFileSearchRequest(
+    request: WorkspaceFileSearchRequest,
+    source?: object,
+  ): Promise<void> {
+    const cwd = request.cwd.trim();
+    const query = request.query.trim();
+    if (!cwd) {
+      this.host.emit(
+        {
+          type: "workspace.files.search.response",
+          payload: {
+            cwd: request.cwd,
+            query,
+            entries: [],
+            error: "cwd is required",
+            requestId: request.requestId,
+          },
+        },
+        source,
+      );
+      return;
+    }
+
+    try {
+      const entries = await searchExplorerFiles({
+        root: cwd,
+        query,
+        includeHidden: request.includeHidden === true,
+      });
+      this.host.emit(
+        {
+          type: "workspace.files.search.response",
+          payload: {
+            cwd,
+            query,
+            entries,
+            error: null,
+            requestId: request.requestId,
+          },
+        },
+        source,
+      );
+    } catch (error) {
+      this.logger.error(
+        { err: error, cwd, query },
+        `Failed to search workspace files for workspace ${cwd}`,
+      );
+      this.host.emit(
+        {
+          type: "workspace.files.search.response",
+          payload: {
+            cwd,
+            query,
+            entries: [],
+            error: getErrorMessage(error),
+            requestId: request.requestId,
+          },
+        },
+        source,
+      );
+    }
   }
 
   async handleFileExplorerRequest(request: FileExplorerRequest, source?: object): Promise<void> {

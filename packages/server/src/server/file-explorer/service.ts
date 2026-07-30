@@ -3,6 +3,7 @@ import type { FileHandle } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { expandUserPath, resolvePathFromBase } from "../path-utils.js";
+import { searchDirectoryEntries } from "../../utils/directory-suggestions.js";
 
 export type ExplorerEntryKind = "file" | "directory";
 export type ExplorerFileKind = "text" | "image" | "binary";
@@ -16,6 +17,12 @@ export interface ListDirectoryParams {
 export interface ReadFileParams {
   root: string;
   relativePath: string;
+}
+
+export interface SearchFilesParams {
+  root: string;
+  query: string;
+  includeHidden?: boolean;
 }
 
 export interface WriteFileParams extends ReadFileParams {
@@ -52,6 +59,11 @@ export interface FileExplorerEntry {
 export interface FileExplorerDirectory {
   path: string;
   entries: FileExplorerEntry[];
+}
+
+export interface FileExplorerSearchEntry {
+  name: string;
+  path: string;
 }
 
 export interface FileExplorerFile {
@@ -93,6 +105,9 @@ const TEXT_MIME_TYPES: Record<string, string> = {
 
 const DEFAULT_TEXT_MIME_TYPE = "text/plain";
 const FILE_TYPE_SAMPLE_BYTES = 8192;
+const FILE_SEARCH_LIMIT = 100;
+const FILE_SEARCH_MAX_DEPTH = 24;
+const FILE_SEARCH_MAX_ENTRIES_SCANNED = 50_000;
 export const FILE_EXPLORER_STREAM_CHUNK_BYTES = 256 * 1024;
 export const MAX_EDITABLE_FILE_BYTES = 1024 * 1024;
 const READ_FILE_OPEN_FLAGS =
@@ -187,6 +202,35 @@ export async function listDirectoryEntries({
     path: normalizeRelativePath({ root, targetPath: directoryPath.requestedPath }),
     entries,
   };
+}
+
+export async function searchExplorerFiles({
+  root,
+  query,
+  includeHidden = false,
+}: SearchFilesParams): Promise<FileExplorerSearchEntry[]> {
+  const normalizedQuery = query.trim();
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const entries = await searchDirectoryEntries({
+    root,
+    query: normalizedQuery,
+    pathFormat: "relative",
+    includeFiles: true,
+    includeDirectories: false,
+    includeHidden,
+    blankQueryBehavior: "none",
+    limit: FILE_SEARCH_LIMIT,
+    maxDepth: FILE_SEARCH_MAX_DEPTH,
+    maxEntriesScanned: FILE_SEARCH_MAX_ENTRIES_SCANNED,
+  });
+
+  return entries.map((entry) => ({
+    name: path.posix.basename(entry.path),
+    path: entry.path,
+  }));
 }
 
 export async function readExplorerFile({

@@ -69,6 +69,8 @@ interface ShortcutWhen {
   editable?: false;
   /** false = disabled when terminal is focused */
   terminal?: false;
+  /** false = disabled when the embedded browser is focused */
+  browser?: false;
   /** false = disabled when command center is open */
   commandCenter?: false;
   /** Exact focus scope match */
@@ -166,6 +168,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "voice-toggle": "settings.shortcuts.help.toggleVoiceMode",
   "dictation-toggle": "settings.shortcuts.help.startStopDictation",
   "agent-interrupt": "settings.shortcuts.help.interruptAgent",
+  "search-conversation": "settings.shortcuts.help.findInCurrentPane",
   "voice-mute-toggle": "settings.shortcuts.help.muteUnmuteVoiceMode",
 };
 
@@ -176,6 +179,35 @@ const SHORTCUT_HELP_NOTE_KEYS: Record<string, string> = {
 // --- Binding definitions ---
 
 const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
+  // These binding ids predate file search. Keep them stable because user
+  // shortcut overrides are keyed by binding id.
+  {
+    id: "agent-search-cmd-f-mac",
+    action: "workspace.find",
+    combo: "Cmd+F",
+    repeat: false,
+    when: { mac: true, browser: false, commandCenter: false, terminal: false },
+    help: {
+      id: "search-conversation",
+      section: "panels",
+      label: "Find in current pane",
+      keys: ["mod", "F"],
+    },
+  },
+  {
+    id: "agent-search-ctrl-f-non-mac",
+    action: "workspace.find",
+    combo: "Ctrl+F",
+    repeat: false,
+    when: { mac: false, browser: false, commandCenter: false, terminal: false },
+    help: {
+      id: "search-conversation",
+      section: "panels",
+      label: "Find in current pane",
+      keys: ["mod", "F"],
+    },
+  },
+
   // --- Open project ---
   // Open project moved from Cmd+Shift+O to Cmd+O. The binding ids intentionally
   // keep their original "cmd-shift-o" / "ctrl-shift-o" names: user shortcut
@@ -1195,6 +1227,7 @@ export function matchesKeyboardShortcutContext(
     return false;
   }
   if (when.terminal === false && context.focusScope === "terminal") return false;
+  if (when.browser === false && context.focusScope === "browser") return false;
   if (when.commandCenter === false && context.commandCenterOpen) return false;
   if (when.focusScope !== undefined && context.focusScope !== when.focusScope) return false;
   return true;

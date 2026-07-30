@@ -1,10 +1,11 @@
-import { appendFile, chmod, mkdtemp, rm, stat, truncate, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, mkdtemp, rm, stat, truncate, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   getExplorerFileVersion,
   readExplorerFile,
+  searchExplorerFiles,
   streamExplorerFile,
   writeExplorerFile,
 } from "./service.js";
@@ -372,5 +373,38 @@ describe("file explorer service", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("searchExplorerFiles", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(os.tmpdir(), "paseo-file-search-"));
+    await mkdir(path.join(root, "src", "nested"), { recursive: true });
+    await mkdir(path.join(root, ".private"), { recursive: true });
+    await mkdir(path.join(root, "node_modules", "dependency"), { recursive: true });
+    await writeFile(path.join(root, "src", "nested", "search-target.ts"), "export {};\n");
+    await writeFile(path.join(root, ".private", ".search-target.md"), "private\n");
+    await writeFile(path.join(root, "node_modules", "dependency", "search-target.js"), "");
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("finds nested workspace files without traversing dependency output", async () => {
+    await expect(searchExplorerFiles({ root, query: "search-target" })).resolves.toEqual([
+      { name: "search-target.ts", path: "src/nested/search-target.ts" },
+    ]);
+  });
+
+  it("includes hidden paths only when requested", async () => {
+    await expect(
+      searchExplorerFiles({ root, query: "search-target", includeHidden: true }),
+    ).resolves.toEqual([
+      { name: "search-target.ts", path: "src/nested/search-target.ts" },
+      { name: ".search-target.md", path: ".private/.search-target.md" },
+    ]);
   });
 });

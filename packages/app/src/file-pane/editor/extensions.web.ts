@@ -5,7 +5,7 @@ import {
   indentOnInput,
   syntaxHighlighting,
 } from "@codemirror/language";
-import { searchKeymap } from "@codemirror/search";
+import { search } from "@codemirror/search";
 import {
   EditorView,
   drawSelection,
@@ -15,6 +15,12 @@ import {
 } from "@codemirror/view";
 import { createCodeMirrorHighlightStyle, type HighlightStyle } from "@getpaseo/highlight";
 
+function createHiddenSearchPanel() {
+  const dom = document.createElement("div");
+  dom.style.display = "none";
+  return { dom, top: true };
+}
+
 export interface EditorVisualTheme {
   colorScheme: "light" | "dark";
   background: string;
@@ -23,6 +29,9 @@ export interface EditorVisualTheme {
   foregroundMuted: string;
   border: string;
   selection: string;
+  searchMatchBackground: string;
+  currentSearchMatchBackground: string;
+  currentSearchMatchForeground: string;
   monoFont: string;
   codeFontSize: number;
   syntax: Record<HighlightStyle, string>;
@@ -36,13 +45,13 @@ export function editorBaseExtensions(onSave: () => void) {
     indentOnInput(),
     bracketMatching(),
     highlightActiveLine(),
+    search({ top: true, createPanel: createHiddenSearchPanel }),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     keymap.of([
       { key: "Mod-s", preventDefault: true, run: () => (onSave(), true) },
       indentWithTab,
       ...defaultKeymap,
       ...historyKeymap,
-      ...searchKeymap,
     ]),
   ];
 }
@@ -77,6 +86,13 @@ export function editorTheme(theme: EditorVisualTheme) {
         },
         ".cm-selectionBackground, ::selection": {
           backgroundColor: theme.selection,
+        },
+        ".cm-searchMatch": {
+          backgroundColor: theme.searchMatchBackground,
+        },
+        ".cm-searchMatch-selected": {
+          color: theme.currentSearchMatchForeground,
+          backgroundColor: theme.currentSearchMatchBackground,
         },
         "&.cm-focused": { outline: "none" },
       },

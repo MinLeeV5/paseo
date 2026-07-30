@@ -188,6 +188,14 @@ export const zhCN: TranslationResources = {
     },
   },
   agentPanel: {
+    search: {
+      placeholder: "搜索会话",
+      previous: "上一个匹配项",
+      next: "下一个匹配项",
+      close: "关闭搜索",
+      matchCount: "{{current}} / {{total}}",
+      noMatches: "无匹配项",
+    },
     states: {
       notFound: "未找到 Agent",
       failedToLoad: "加载 Agent 失败",
@@ -400,6 +408,16 @@ export const zhCN: TranslationResources = {
       context: {
         size: "大小",
         modified: "修改时间",
+      },
+      search: {
+        open: "搜索文件",
+        close: "关闭文件搜索",
+        placeholder: "按名称或路径搜索文件",
+        clear: "清除搜索",
+        hint: "输入内容以搜索 workspace 文件",
+        searching: "正在搜索文件...",
+        noResults: "没有匹配的文件",
+        updateHost: "请更新 Host 以搜索文件。",
       },
       actions: {
         back: "返回",
@@ -950,7 +968,7 @@ export const zhCN: TranslationResources = {
         openSettings: "打开 project 设置",
         openNewWindow: "在新窗口中打开",
         openNewWindowFailed: "无法打开新窗口",
-        openFolder: "Open in file manager",
+        openFolder: "在文件管理器中打开",
         openFolderFailed: "Couldn't open folder",
         remove: "移除 project",
         removing: "正在移除...",
@@ -1510,6 +1528,15 @@ export const zhCN: TranslationResources = {
       binaryPreviewUnavailable: "二进制预览不可用",
       failedToLoad: "加载文件失败",
       failedToLoadPreview: "加载文件预览失败",
+      search: {
+        open: "在文件中查找",
+        close: "关闭文件查找",
+        placeholder: "在文件中查找",
+        previous: "上一个匹配项",
+        next: "下一个匹配项",
+        noMatches: "没有匹配项",
+        matchCount: "第 {{current}} 个，共 {{total}} 个",
+      },
       editor: {
         fileSize: "文件大小 {{size}}",
         lines: "{{count}} 行",
@@ -1861,6 +1888,7 @@ export const zhCN: TranslationResources = {
         toggleVoiceMode: "切换语音模式",
         startStopDictation: "开始/停止听写",
         interruptAgent: "中断 Agent",
+        findInCurrentPane: "在当前面板中查找",
         sendMessage: "发送消息",
         queueMessage: "消息排队",
         muteUnmuteVoiceMode: "静音/取消静音语音模式",

@@ -321,6 +321,23 @@ describe("searchDirectoryEntries", () => {
     ).resolves.toEqual([{ path: "src/search-target.ts", kind: "file" }]);
   });
 
+  it("searches hidden files and directories only when requested", async () => {
+    writeFileSync(path.join(searchRoot, ".hidden", "secret", ".private-search.ts"), "");
+
+    const common = {
+      root: searchRoot,
+      query: "private-search",
+      pathFormat: "relative" as const,
+      includeFiles: true,
+      includeDirectories: false,
+    };
+
+    await expect(searchDirectoryEntries(common)).resolves.toEqual([]);
+    await expect(searchDirectoryEntries({ ...common, includeHidden: true })).resolves.toEqual([
+      { path: ".hidden/secret/.private-search.ts", kind: "file" },
+    ]);
+  });
+
   it.skipIf(isWindows)("rechecks cached symlink children against each search root", async () => {
     const narrowRoot = path.join(searchRoot, "narrow");
     const outsideNarrowRoot = path.join(searchRoot, "outside");

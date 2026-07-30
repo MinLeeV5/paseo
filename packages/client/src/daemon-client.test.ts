@@ -1678,6 +1678,60 @@ test("listDirectory sends a list file explorer request and returns directory ent
   });
 });
 
+test("searchWorkspaceFiles sends a namespaced search request and returns matches", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.searchWorkspaceFiles(
+    { cwd: "/tmp/project", query: "index", includeHidden: false },
+    "req-search",
+  );
+
+  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
+    type: "session",
+    message: {
+      type: "workspace.files.search.request",
+      cwd: "/tmp/project",
+      query: "index",
+      includeHidden: false,
+      requestId: "req-search",
+    },
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.files.search.response",
+      payload: {
+        cwd: "/tmp/project",
+        query: "index",
+        entries: [{ name: "index.ts", path: "src/index.ts" }],
+        error: null,
+        requestId: "req-search",
+      },
+    }),
+  );
+
+  await expect(responsePromise).resolves.toEqual({
+    cwd: "/tmp/project",
+    query: "index",
+    entries: [{ name: "index.ts", path: "src/index.ts" }],
+    error: null,
+    requestId: "req-search",
+  });
+});
+
 test("readFile hides legacy base64 behind bytes", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

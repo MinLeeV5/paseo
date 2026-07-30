@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StreamItem } from "@/types/stream";
 import type { StreamRenderInput, StreamSegmentRenderers, StreamViewportHandle } from "./strategy";
 import { createWebStreamStrategy } from "./strategy-web";
+import { ConversationSearchActiveContext } from "@/components/conversation-search-context";
 
 vi.hoisted(() => {
   Object.defineProperty(window, "matchMedia", {
@@ -145,6 +146,100 @@ describe("createWebStreamStrategy", () => {
 
     expect(rowRenderCount.mock.calls.length).toBeGreaterThan(0);
     expect(rowRenderCount.mock.calls.length).toBeLessThanOrEqual(historyVirtualized.length);
+  });
+
+  it("mounts all virtualized history while conversation search is active", () => {
+    const rowRenderCount = vi.fn();
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: false });
+    const viewportRef = React.createRef<StreamViewportHandle>();
+    const historyVirtualized = Array.from({ length: 16 }, (_, index) => userMessage(index));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <ConversationSearchActiveContext.Provider value>
+          {strategy.render({
+            agentId: "agent",
+            segments: {
+              historyVirtualized,
+              historyMounted: [],
+              liveHead: [],
+            },
+            boundary: {
+              hasVirtualizedHistory: true,
+              hasMountedHistory: false,
+              hasLiveHead: false,
+            },
+            renderers: createRenderers(rowRenderCount),
+            listEmptyComponent: null,
+            viewportRef,
+            routeBottomAnchorRequest: null,
+            isAuthoritativeHistoryReady: true,
+            onNearBottomChange: vi.fn(),
+            onNearHistoryStart: vi.fn().mockReturnValue(true),
+            isLoadingOlderHistory: false,
+            hasOlderHistory: false,
+            olderHistoryProgressKey: null,
+            scrollEnabled: true,
+            listStyle: null,
+            baseListContentContainerStyle: null,
+            forwardListContentContainerStyle: null,
+          })}
+        </ConversationSearchActiveContext.Provider>,
+      );
+    });
+
+    expect(rowRenderCount).toHaveBeenCalledTimes(historyVirtualized.length);
+  });
+
+  it("keeps mounted history anchors full-width so rows can remain centered", () => {
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: false });
+    const viewportRef = React.createRef<StreamViewportHandle>();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        strategy.render({
+          agentId: "agent",
+          segments: {
+            historyVirtualized: [],
+            historyMounted: [userMessage(1)],
+            liveHead: [],
+          },
+          boundary: {
+            hasVirtualizedHistory: false,
+            hasMountedHistory: true,
+            hasLiveHead: false,
+          },
+          renderers: createRenderers(vi.fn()),
+          listEmptyComponent: null,
+          viewportRef,
+          routeBottomAnchorRequest: null,
+          isAuthoritativeHistoryReady: true,
+          onNearBottomChange: vi.fn(),
+          onNearHistoryStart: vi.fn().mockReturnValue(true),
+          isLoadingOlderHistory: false,
+          hasOlderHistory: false,
+          olderHistoryProgressKey: null,
+          scrollEnabled: true,
+          listStyle: null,
+          baseListContentContainerStyle: null,
+          forwardListContentContainerStyle: null,
+        }),
+      );
+    });
+
+    const mountedHistoryAnchor = container.querySelector('[data-history-row-id="message-1"]');
+    if (!(mountedHistoryAnchor instanceof HTMLElement)) {
+      throw new Error("Expected mounted history anchor");
+    }
+    expect(mountedHistoryAnchor.style.display).toBe("flex");
+    expect(mountedHistoryAnchor.style.flexDirection).toBe("column");
+    expect(mountedHistoryAnchor.style.width).toBe("100%");
   });
 
   it("rerenders a stable live-head row when its revision changes", () => {

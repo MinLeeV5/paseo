@@ -26,6 +26,7 @@ import type {
   FileDownloadTokenResponse,
   FileUploadResponse,
   FileExplorerResponse,
+  WorkspaceFileSearchResponse,
   FileVersion,
   FileWriteResult,
   FetchAgentTimelineResponseMessage,
@@ -420,6 +421,7 @@ type WorkspaceCreatePayload = Extract<
 >["payload"];
 type FileExplorerPayload = FileExplorerResponse["payload"];
 export type FileExplorerDirectoryPayload = NonNullable<FileExplorerPayload["directory"]>;
+export type WorkspaceFileSearchPayload = WorkspaceFileSearchResponse["payload"];
 type LegacyFileExplorerFilePayload = NonNullable<FileExplorerPayload["file"]>;
 export interface FileReadResult {
   bytes: Uint8Array;
@@ -4220,6 +4222,21 @@ export class DaemonClient {
       throw new Error("Directory listing unavailable.");
     }
     return payload.directory;
+  }
+
+  async searchWorkspaceFiles(
+    input: { cwd: string; query: string; includeHidden?: boolean },
+    requestId?: string,
+  ): Promise<WorkspaceFileSearchPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"workspace.files.search.response">({
+      requestId,
+      message: {
+        type: "workspace.files.search.request",
+        cwd: input.cwd,
+        query: input.query,
+        ...(input.includeHidden !== undefined ? { includeHidden: input.includeHidden } : {}),
+      },
+    });
   }
 
   async readFile(cwd: string, path: string, requestId?: string): Promise<FileReadResult> {

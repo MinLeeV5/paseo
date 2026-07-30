@@ -178,6 +178,26 @@ describe("buildBrowserKeyboardPolicy", () => {
     }
   });
 
+  it("leaves pane find shortcuts inside the embedded browser", () => {
+    const macPolicy = buildBrowserKeyboardPolicy({
+      bindings: buildEffectiveBindings({}),
+      isMac: true,
+      isDesktop: true,
+    });
+    const nonMacPolicy = buildBrowserKeyboardPolicy({
+      bindings: buildEffectiveBindings({}),
+      isMac: false,
+      isDesktop: true,
+    });
+
+    expect(macPolicy.prefixes).not.toContainEqual(
+      expect.objectContaining({ code: "KeyF", meta: true, shift: false }),
+    );
+    expect(nonMacPolicy.prefixes).not.toContainEqual(
+      expect.objectContaining({ code: "KeyF", control: true, shift: false }),
+    );
+  });
+
   it("marks editable-only exclusions for enforcement inside the guest", () => {
     const bindings = buildEffectiveBindings({});
     const policy = buildBrowserKeyboardPolicy({ bindings, isMac: true, isDesktop: true });

@@ -14,7 +14,7 @@ import {
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import * as Clipboard from "expo-clipboard";
-import { ChevronDown, Eye, EyeOff, RotateCw } from "lucide-react-native";
+import { ChevronDown, Eye, EyeOff, RotateCw, Search, X } from "lucide-react-native";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import {
   TreeChevron,
@@ -35,6 +35,7 @@ import { formatTimeAgo } from "@/utils/time";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { filterVisibleExplorerEntries, isHiddenExplorerPath } from "@/file-explorer/visibility";
 import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
+import { useWorkspaceFileSearch, WorkspaceFileSearchPanel } from "@/file-explorer/search";
 
 const SORT_OPTIONS: { value: SortOption }[] = [
   { value: "name" },
@@ -445,6 +446,14 @@ export function FileExplorerPane({
     });
   }, [requestDirectoryListing]);
 
+  const handleOpenSearchResult = useCallback(
+    (path: string) => {
+      selectExplorerEntry(path);
+      onOpenFile?.(path);
+    },
+    [onOpenFile, selectExplorerEntry],
+  );
+
   if (!hasWorkspaceScope) {
     return (
       <View style={styles.centerState}>
@@ -456,6 +465,9 @@ export function FileExplorerPane({
   return (
     <View style={styles.container}>
       <FileExplorerPaneContent
+        key={workspaceStateKey}
+        serverId={serverId}
+        workspaceRoot={normalizedWorkspaceRoot}
         error={error}
         showInitialLoading={showInitialLoading}
         showBackFromError={showBackFromError}
@@ -469,6 +481,8 @@ export function FileExplorerPane({
         handleRefresh={handleRefresh}
         handleBackFromError={handleBackFromError}
         handleRetry={handleRetry}
+        handleOpenSearchResult={handleOpenSearchResult}
+        selectedEntryPath={selectedEntryPath}
         sortTriggerStyle={sortTriggerStyle}
         iconButtonStyle={iconButtonStyle}
       />
@@ -477,6 +491,8 @@ export function FileExplorerPane({
 }
 
 interface FileExplorerPaneContentProps {
+  serverId: string;
+  workspaceRoot: string;
   error: string | null;
   showInitialLoading: boolean;
   showBackFromError: boolean;
@@ -490,6 +506,8 @@ interface FileExplorerPaneContentProps {
   handleRefresh: () => void;
   handleBackFromError: () => void;
   handleRetry: () => void;
+  handleOpenSearchResult: (path: string) => void;
+  selectedEntryPath: string | null;
   sortTriggerStyle: (state: PressableStateCallbackType) => StyleProp<ViewStyle>;
   iconButtonStyle: (state: PressableStateCallbackType) => StyleProp<ViewStyle>;
 }
@@ -499,6 +517,8 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   const { t } = useTranslation();
   const {
     error,
+    serverId,
+    workspaceRoot,
     showInitialLoading,
     showBackFromError,
     treeRows,
@@ -511,11 +531,14 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
     handleRefresh,
     handleBackFromError,
     handleRetry,
+    handleOpenSearchResult,
+    selectedEntryPath,
     sortTriggerStyle: sortTriggerStyleProp,
     iconButtonStyle: iconButtonStyleProp,
   } = props;
 
   const showHiddenFiles = usePanelStore((state) => state.explorerShowHiddenFiles);
+  const fileSearch = useWorkspaceFileSearch({ serverId, workspaceRoot, showHiddenFiles });
 
   const hiddenFilesToggleAccessibilityLabel = showHiddenFiles
     ? t("workspace.fileExplorer.actions.hideHiddenFiles")
@@ -533,6 +556,10 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   const hiddenFilesToggleAccessibilityState = useMemo(
     () => ({ selected: !showHiddenFiles }),
     [showHiddenFiles],
+  );
+  const searchToggleAccessibilityState = useMemo(
+    () => ({ expanded: fileSearch.isSearchOpen }),
+    [fileSearch.isSearchOpen],
   );
 
   if (error) {
@@ -577,6 +604,25 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         </Pressable>
         <View style={styles.headerActions}>
           <Pressable
+            onPress={fileSearch.toggleSearch}
+            hitSlop={8}
+            style={iconButtonStyleProp}
+            accessibilityRole="button"
+            accessibilityLabel={
+              fileSearch.isSearchOpen
+                ? t("workspace.fileExplorer.search.close")
+                : t("workspace.fileExplorer.search.open")
+            }
+            accessibilityState={searchToggleAccessibilityState}
+            testID="files-search-toggle"
+          >
+            {fileSearch.isSearchOpen ? (
+              <X size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            ) : (
+              <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            )}
+          </Pressable>
+          <Pressable
             onPress={handleToggleHiddenFiles}
             hitSlop={8}
             style={hiddenFilesToggleStyle}
@@ -614,26 +660,82 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           </Pressable>
         </View>
       </View>
-      {treeRows.length === 0 ? (
-        <View style={styles.centerState}>
-          <Text style={styles.emptyText}>{emptyLabel}</Text>
-        </View>
-      ) : (
-        <FlatList
-          ref={treeListRef}
-          style={styles.treeList}
-          data={treeRows}
-          renderItem={renderTreeRow}
-          keyExtractor={treeRowKeyExtractor}
-          testID="file-explorer-tree-scroll"
-          contentContainerStyle={styles.entriesContent}
-          showsVerticalScrollIndicator
-          initialNumToRender={24}
-          maxToRenderPerBatch={40}
-          windowSize={12}
-        />
-      )}
+      <FileExplorerBody
+        fileSearch={fileSearch}
+        iconSize={theme.iconSize.sm}
+        iconColor={theme.colors.foregroundMuted}
+        selectedEntryPath={selectedEntryPath}
+        onOpenSearchResult={handleOpenSearchResult}
+        iconButtonStyle={iconButtonStyleProp}
+        treeRows={treeRows}
+        emptyLabel={emptyLabel}
+        treeListRef={treeListRef}
+        renderTreeRow={renderTreeRow}
+      />
     </View>
+  );
+}
+
+interface FileExplorerBodyProps {
+  fileSearch: ReturnType<typeof useWorkspaceFileSearch>;
+  iconSize: number;
+  iconColor: string;
+  selectedEntryPath: string | null;
+  onOpenSearchResult: (path: string) => void;
+  iconButtonStyle: (state: PressableStateCallbackType) => StyleProp<ViewStyle>;
+  treeRows: TreeRow[];
+  emptyLabel: string;
+  treeListRef: RefObject<FlatList<TreeRow> | null>;
+  renderTreeRow: (info: ListRenderItemInfo<TreeRow>) => ReactElement;
+}
+
+function FileExplorerBody({
+  fileSearch,
+  iconSize,
+  iconColor,
+  selectedEntryPath,
+  onOpenSearchResult,
+  iconButtonStyle: iconButtonStyleProp,
+  treeRows,
+  emptyLabel,
+  treeListRef,
+  renderTreeRow,
+}: FileExplorerBodyProps) {
+  if (fileSearch.isSearchOpen) {
+    return (
+      <WorkspaceFileSearchPanel
+        fileSearch={fileSearch}
+        iconSize={iconSize}
+        iconColor={iconColor}
+        selectedEntryPath={selectedEntryPath}
+        onOpenFile={onOpenSearchResult}
+        iconButtonStyle={iconButtonStyleProp}
+      />
+    );
+  }
+
+  if (treeRows.length === 0) {
+    return (
+      <View style={styles.centerState}>
+        <Text style={styles.emptyText}>{emptyLabel}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      ref={treeListRef}
+      style={styles.treeList}
+      data={treeRows}
+      renderItem={renderTreeRow}
+      keyExtractor={treeRowKeyExtractor}
+      testID="file-explorer-tree-scroll"
+      contentContainerStyle={styles.entriesContent}
+      showsVerticalScrollIndicator
+      initialNumToRender={24}
+      maxToRenderPerBatch={40}
+      windowSize={12}
+    />
   );
 }
 

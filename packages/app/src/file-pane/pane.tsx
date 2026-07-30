@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
   useSyncExternalStore,
+  type RefObject,
 } from "react";
 import type { DaemonClient, FileReadResult } from "@getpaseo/client/internal/daemon-client";
 import type { FileVersion } from "@getpaseo/protocol/messages";
@@ -55,9 +56,12 @@ import { useLiveFile } from "./live-file";
 import { FilePanelBar } from "./bar";
 import { FileEditorModel, type FileEditorFile } from "./editor/model";
 import { FileEditorView } from "./editor/view";
+import { FileSearchToolbar } from "./search-bar";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import type { Theme } from "@/styles/theme";
+import { splitFileSearchTokens, type FileSearchMatch, type FileSearchTokenState } from "./search";
+import { useFileSearch, type FileSearchController } from "./use-search";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -70,6 +74,8 @@ interface CodeLineProps {
   gutterWidth: number;
   highlighted: boolean;
   diffState?: WorkspaceFileDiffLineState;
+  searchMatches: FileSearchMatch[];
+  currentSearchMatchIndex: number;
 }
 
 interface DeletedCodeLineProps {
@@ -86,9 +92,11 @@ interface FilePreviewBodyProps {
   imagePreviewUri: string | null;
   diffDecorations: WorkspaceFileDiffDecorations | null;
   mode?: "preview" | "source";
+  search?: FileSearchController;
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
+const EMPTY_FILE_SEARCH_MATCHES: FileSearchMatch[] = [];
 
 function trimNonEmpty(value: string | null | undefined): string | null {
   if (typeof value !== "string") {
@@ -327,6 +335,8 @@ const CodeLine = React.memo(function CodeLine({
   gutterWidth,
   highlighted,
   diffState,
+  searchMatches,
+  currentSearchMatchIndex,
 }: CodeLineProps) {
   const gutterStyle = useMemo(
     () => [codeLineStyles.gutter, inlineUnistylesStyle({ width: gutterWidth })],
@@ -341,10 +351,14 @@ const CodeLine = React.memo(function CodeLine({
     ],
     [diffState, highlighted],
   );
-  const keyedTokens = useMemo(
-    () => tokens.map((token, index) => ({ key: `${index}-${token.text}`, token })),
-    [tokens],
-  );
+  const keyedTokens = useMemo(() => {
+    const segments = splitFileSearchTokens({
+      tokens,
+      matches: searchMatches,
+      currentMatchIndex: currentSearchMatchIndex,
+    });
+    return segments.map((token, index) => ({ key: `${index}-${token.text}`, token }));
+  }, [currentSearchMatchIndex, searchMatches, tokens]);
   return (
     <View style={lineStyle}>
       <View style={gutterStyle}>
@@ -390,11 +404,21 @@ function DeletedCodeLine({ row, gutterWidth }: DeletedCodeLineProps) {
 }
 
 interface CodeLineTokenProps {
-  token: HighlightToken;
+  token: HighlightToken & { searchState: FileSearchTokenState };
 }
 
 function CodeLineToken({ token }: CodeLineTokenProps) {
-  return <Text style={syntaxTokenStyleFor(token.style)}>{token.text}</Text>;
+  return (
+    <Text
+      style={[
+        syntaxTokenStyleFor(token.style),
+        token.searchState === "match" && codeLineStyles.searchMatch,
+        token.searchState === "current" && codeLineStyles.currentSearchMatch,
+      ]}
+    >
+      {token.text}
+    </Text>
+  );
 }
 
 const codeLineStyles = StyleSheet.create((theme) => ({
@@ -409,6 +433,13 @@ const codeLineStyles = StyleSheet.create((theme) => ({
   },
   modifiedLine: {
     backgroundColor: "rgba(249, 115, 22, 0.16)",
+  },
+  searchMatch: {
+    backgroundColor: theme.colors.accentBorder,
+  },
+  currentSearchMatch: {
+    color: theme.colors.accentForeground,
+    backgroundColor: theme.colors.accent,
   },
   deletedLine: {
     backgroundColor: "rgba(248, 81, 73, 0.1)",
@@ -440,6 +471,49 @@ const codeLineStyles = StyleSheet.create((theme) => ({
   },
 }));
 
+function useFilePreviewSearch(input: {
+  search?: FileSearchController;
+  scrollRef: RefObject<RNScrollView | null>;
+  lineHeight: number;
+}): {
+  matchesByLine: Map<number, FileSearchMatch[]>;
+  currentMatchIndex: number;
+} {
+  const matches = input.search?.matches ?? EMPTY_FILE_SEARCH_MATCHES;
+  const matchesByLine = useMemo(() => {
+    const byLine = new Map<number, FileSearchMatch[]>();
+    for (const match of matches) {
+      const lineMatches = byLine.get(match.lineNumber);
+      if (lineMatches) {
+        lineMatches.push(match);
+      } else {
+        byLine.set(match.lineNumber, [match]);
+      }
+    }
+    return byLine;
+  }, [matches]);
+  const activeLine = input.search?.isOpen ? (input.search.currentMatch?.lineNumber ?? null) : null;
+  const navigationRevision = input.search?.navigationRevision ?? 0;
+
+  useEffect(() => {
+    if (!activeLine) {
+      return;
+    }
+    const timeout = setTimeout(() => {
+      input.scrollRef.current?.scrollTo({
+        y: Math.max(0, (activeLine - 1) * input.lineHeight),
+        animated: false,
+      });
+    }, 0);
+    return () => clearTimeout(timeout);
+  }, [activeLine, input.lineHeight, input.scrollRef, navigationRevision]);
+
+  return {
+    matchesByLine,
+    currentMatchIndex: input.search?.currentIndex ?? -1,
+  };
+}
+
 function FilePreviewBody({
   preview,
   isLoading,
@@ -449,6 +523,7 @@ function FilePreviewBody({
   imagePreviewUri,
   diffDecorations,
   mode,
+  search,
 }: FilePreviewBodyProps) {
   const theme = UnistylesRuntime.getTheme();
   const { t } = useTranslation();
@@ -502,6 +577,8 @@ function FilePreviewBody({
     () => collectDeletedRowsForFallback(diffDecorations),
     [diffDecorations],
   );
+  const { matchesByLine: searchMatchesByLine, currentMatchIndex: currentSearchMatchIndex } =
+    useFilePreviewSearch({ search, scrollRef: previewScrollRef, lineHeight });
 
   useEffect(() => {
     if (!lineSelection) {
@@ -613,6 +690,8 @@ function FilePreviewBody({
                 lineNumber <= (lineSelection?.lineEnd ?? 0)
               }
               diffState={diffDecorations?.lineStatesByLineNumber.get(lineNumber)}
+              searchMatches={searchMatchesByLine.get(lineNumber) ?? EMPTY_FILE_SEARCH_MATCHES}
+              currentSearchMatchIndex={currentSearchMatchIndex}
             />
           </React.Fragment>
         ))}
@@ -687,11 +766,15 @@ export function FilePane({
   workspaceRoot,
   location,
   navigationRevision,
+  isPaneFocused,
+  searchHandlerId,
 }: {
   serverId: string;
   workspaceRoot: string;
   location: WorkspaceFileLocation;
   navigationRevision: number;
+  isPaneFocused: boolean;
+  searchHandlerId: string;
 }) {
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
@@ -800,6 +883,8 @@ export function FilePane({
       navigationRevision={navigationRevision}
       imagePreviewUri={imagePreviewUri}
       diffDecorations={diffDecorations}
+      isPaneFocused={isPaneFocused}
+      searchHandlerId={searchHandlerId}
     />
   );
 }
@@ -846,6 +931,8 @@ function FilePanePresentation({
   navigationRevision,
   imagePreviewUri,
   diffDecorations,
+  isPaneFocused,
+  searchHandlerId,
 }: {
   serverId: string;
   client: DaemonClient | null;
@@ -865,6 +952,8 @@ function FilePanePresentation({
   navigationRevision: number;
   imagePreviewUri: string | null;
   diffDecorations: WorkspaceFileDiffDecorations | null;
+  isPaneFocused: boolean;
+  searchHandlerId: string;
 }) {
   if (!client && readTarget) {
     return (
@@ -892,9 +981,67 @@ function FilePanePresentation({
         isMobile={isMobile}
         location={location}
         navigationRevision={navigationRevision}
+        isPaneFocused={isPaneFocused}
+        searchHandlerId={searchHandlerId}
       />
     );
   }
+
+  return (
+    <ReadOnlyFilePane
+      preview={preview}
+      lineCount={lineCount}
+      markdownMode={markdownMode}
+      onMarkdownModeChange={onMarkdownModeChange}
+      errorMessage={errorMessage}
+      isLoading={isLoading}
+      isMobile={isMobile}
+      location={location}
+      navigationRevision={navigationRevision}
+      imagePreviewUri={imagePreviewUri}
+      diffDecorations={diffDecorations}
+      isPaneFocused={isPaneFocused}
+      searchHandlerId={searchHandlerId}
+    />
+  );
+}
+
+function ReadOnlyFilePane({
+  preview,
+  lineCount,
+  markdownMode,
+  onMarkdownModeChange,
+  errorMessage,
+  isLoading,
+  isMobile,
+  location,
+  navigationRevision,
+  imagePreviewUri,
+  diffDecorations,
+  isPaneFocused,
+  searchHandlerId,
+}: {
+  preview: ExplorerFile | null;
+  lineCount?: number;
+  markdownMode?: "preview" | "source";
+  onMarkdownModeChange?: (mode: "preview" | "source") => void;
+  errorMessage: string | null;
+  isLoading: boolean;
+  isMobile: boolean;
+  location: WorkspaceFileLocation;
+  navigationRevision: number;
+  imagePreviewUri: string | null;
+  diffDecorations: WorkspaceFileDiffDecorations | null;
+  isPaneFocused: boolean;
+  searchHandlerId: string;
+}) {
+  const canSearch = isSearchableTextPreview({ preview, location, mode: markdownMode });
+  const search = useFileSearch({
+    content: preview?.kind === "text" ? (preview.content ?? "") : "",
+    enabled: canSearch,
+    isPaneFocused,
+    handlerId: searchHandlerId,
+  });
 
   return (
     <View style={styles.container} testID="workspace-file-pane">
@@ -904,25 +1051,59 @@ function FilePanePresentation({
           lineCount={lineCount}
           mode={markdownMode}
           onModeChange={onMarkdownModeChange}
+          search={canSearch ? search : undefined}
         />
       ) : null}
-      {errorMessage ? (
-        <View style={styles.centerState}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-        </View>
-      ) : null}
+      <View style={styles.contentLayer}>
+        {errorMessage ? (
+          <View style={styles.centerState}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
 
-      <FilePreviewBody
-        preview={preview}
-        isLoading={isLoading}
-        isMobile={isMobile}
-        location={location}
-        navigationRevision={navigationRevision}
-        imagePreviewUri={imagePreviewUri}
-        diffDecorations={diffDecorations}
-        mode={markdownMode}
-      />
+        <FilePreviewBody
+          preview={preview}
+          isLoading={isLoading}
+          isMobile={isMobile}
+          location={location}
+          navigationRevision={navigationRevision}
+          imagePreviewUri={imagePreviewUri}
+          diffDecorations={diffDecorations}
+          mode={markdownMode}
+          search={canSearch ? search : undefined}
+        />
+        <FileSearchOverlay search={canSearch ? search : undefined} />
+      </View>
     </View>
+  );
+}
+
+function FileSearchOverlay({ search }: { search?: FileSearchController }) {
+  if (!search?.isOpen) {
+    return null;
+  }
+  return (
+    <View style={styles.searchOverlay} pointerEvents="box-none">
+      <FileSearchToolbar search={search} />
+    </View>
+  );
+}
+
+function isSearchableTextPreview(input: {
+  preview: ExplorerFile | null;
+  location: WorkspaceFileLocation;
+  mode?: "preview" | "source";
+}): boolean {
+  if (input.preview?.kind !== "text") {
+    return false;
+  }
+  return (
+    getFilePaneContentRenderMode({
+      filePath: input.location.path,
+      hasLineSelection: Boolean(input.location.lineStart),
+      hasDiffContext: Boolean(input.location.diffContext),
+      mode: input.mode,
+    }) === "code"
   );
 }
 
@@ -939,6 +1120,8 @@ function EditableFilePane({
   isMobile,
   location,
   navigationRevision,
+  isPaneFocused,
+  searchHandlerId,
 }: {
   client: DaemonClient;
   cwd: string;
@@ -952,6 +1135,8 @@ function EditableFilePane({
   isMobile: boolean;
   location: WorkspaceFileLocation;
   navigationRevision: number;
+  isPaneFocused: boolean;
+  searchHandlerId: string;
 }) {
   const { settings } = useAppSettings();
   const { t } = useTranslation();
@@ -1014,6 +1199,9 @@ function EditableFilePane({
       foregroundMuted: theme.colors.foregroundMuted,
       border: theme.colors.border,
       selection: theme.colors.terminal.selectionBackground,
+      searchMatchBackground: theme.colors.accentBorder,
+      currentSearchMatchBackground: theme.colors.accent,
+      currentSearchMatchForeground: theme.colors.accentForeground,
       monoFont: theme.fontFamily.mono,
       codeFontSize: theme.fontSize.code,
       syntax: theme.colors.syntax,
@@ -1024,6 +1212,9 @@ function EditableFilePane({
       theme.colors.foregroundMuted,
       theme.colors.surface0,
       theme.colors.syntax,
+      theme.colors.accent,
+      theme.colors.accentBorder,
+      theme.colors.accentForeground,
       theme.colors.terminal.cursor,
       theme.colors.terminal.selectionBackground,
       theme.colorScheme,
@@ -1061,6 +1252,12 @@ function EditableFilePane({
     [preview, snapshot.content, snapshot.version],
   );
   const showSource = mode !== "preview";
+  const search = useFileSearch({
+    content: snapshot.content,
+    enabled: showSource,
+    isPaneFocused,
+    handlerId: searchHandlerId,
+  });
 
   return (
     <View style={styles.container} testID="workspace-file-pane">
@@ -1077,29 +1274,34 @@ function EditableFilePane({
         onReload={handleReload}
         mode={mode}
         onModeChange={onModeChange}
+        search={showSource ? search : undefined}
       />
-      {showSource ? (
-        <FileEditorView
-          model={model}
-          filename={filename}
-          location={location}
-          navigationRevision={navigationRevision}
-          vimEnabled={settings.vimKeybindings}
-          theme={visualTheme}
-          onCursorChange={setCursor}
-          onVimModeChange={handleVimModeChange}
-        />
-      ) : (
-        <FilePreviewBody
-          preview={renderedPreview}
-          isLoading={isLoading}
-          isMobile={isMobile}
-          location={location}
-          navigationRevision={navigationRevision}
-          imagePreviewUri={null}
-          diffDecorations={null}
-        />
-      )}
+      <View style={styles.contentLayer}>
+        {showSource ? (
+          <FileEditorView
+            model={model}
+            filename={filename}
+            location={location}
+            navigationRevision={navigationRevision}
+            vimEnabled={settings.vimKeybindings}
+            theme={visualTheme}
+            onCursorChange={setCursor}
+            onVimModeChange={handleVimModeChange}
+            search={search}
+          />
+        ) : (
+          <FilePreviewBody
+            preview={renderedPreview}
+            isLoading={isLoading}
+            isMobile={isMobile}
+            location={location}
+            navigationRevision={navigationRevision}
+            imagePreviewUri={null}
+            diffDecorations={null}
+          />
+        )}
+        <FileSearchOverlay search={showSource ? search : undefined} />
+      </View>
     </View>
   );
 }
@@ -1109,6 +1311,17 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
     backgroundColor: theme.colors.surface0,
+  },
+  contentLayer: {
+    position: "relative",
+    flex: 1,
+    minHeight: 0,
+  },
+  searchOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "flex-end",
+    padding: theme.spacing[3],
+    zIndex: 2,
   },
   centerState: {
     flex: 1,

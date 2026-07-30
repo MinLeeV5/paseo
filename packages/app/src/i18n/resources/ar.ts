@@ -188,6 +188,14 @@ export const ar: TranslationResources = {
     },
   },
   agentPanel: {
+    search: {
+      placeholder: "البحث في المحادثة",
+      previous: "التطابق السابق",
+      next: "التطابق التالي",
+      close: "إغلاق البحث",
+      matchCount: "{{current}} من {{total}}",
+      noMatches: "لا توجد نتائج",
+    },
     states: {
       notFound: "لم يتم العثور على Agent",
       failedToLoad: "فشل تحميل الوكيل",
@@ -400,6 +408,16 @@ export const ar: TranslationResources = {
       context: {
         size: "مقاس",
         modified: "معدل",
+      },
+      search: {
+        open: "البحث في الملفات",
+        close: "إغلاق البحث في الملفات",
+        placeholder: "البحث عن الملفات بالاسم أو المسار",
+        clear: "مسح البحث",
+        hint: "اكتب للبحث في ملفات مساحة العمل",
+        searching: "جارٍ البحث في الملفات...",
+        noResults: "لا توجد ملفات مطابقة",
+        updateHost: "حدّث المضيف للبحث في الملفات.",
       },
       actions: {
         back: "خلف",
@@ -959,7 +977,7 @@ export const ar: TranslationResources = {
         openSettings: "افتح إعدادات المشروع",
         openNewWindow: "Open in new window",
         openNewWindowFailed: "Couldn't open a new window",
-        openFolder: "Open in file manager",
+        openFolder: "فتح في مدير الملفات",
         openFolderFailed: "Couldn't open folder",
         remove: "إزالة المشروع",
         removing: "جارٍ الإزالة...",
@@ -1529,6 +1547,15 @@ export const ar: TranslationResources = {
       binaryPreviewUnavailable: "المعاينة الثنائية غير متاحة",
       failedToLoad: "فشل تحميل الملف",
       failedToLoadPreview: "فشل تحميل معاينة الملف",
+      search: {
+        open: "البحث في الملف",
+        close: "إغلاق البحث في الملف",
+        placeholder: "البحث في الملف",
+        previous: "التطابق السابق",
+        next: "التطابق التالي",
+        noMatches: "لا توجد تطابقات",
+        matchCount: "{{current}} من {{total}}",
+      },
       editor: {
         fileSize: "حجم الملف {{size}}",
         lines: "{{count}} سطر",
@@ -1882,6 +1909,7 @@ export const ar: TranslationResources = {
         toggleVoiceMode: "تبديل الوضع الصوتي",
         startStopDictation: "بدء إملاء /stop",
         interruptAgent: "عامل المقاطعة",
+        findInCurrentPane: "البحث في اللوحة الحالية",
         sendMessage: "أرسل رسالة",
         queueMessage: "رسالة قائمة الانتظار",
         muteUnmuteVoiceMode: "كتم وضع الصوت /unmute",

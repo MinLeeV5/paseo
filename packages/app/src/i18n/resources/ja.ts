@@ -188,6 +188,14 @@ export const ja: TranslationResources = {
     },
   },
   agentPanel: {
+    search: {
+      placeholder: "会話を検索",
+      previous: "前の一致",
+      next: "次の一致",
+      close: "検索を閉じる",
+      matchCount: "{{current}} / {{total}}",
+      noMatches: "一致なし",
+    },
     states: {
       notFound: "エージェントが見つかりません",
       failedToLoad: "エージェントの読み込みに失敗しました",
@@ -405,6 +413,16 @@ export const ja: TranslationResources = {
       context: {
         size: "サイズ",
         modified: "更新日時",
+      },
+      search: {
+        open: "ファイルを検索",
+        close: "ファイル検索を閉じる",
+        placeholder: "名前またはパスでファイルを検索",
+        clear: "検索をクリア",
+        hint: "入力してワークスペースのファイルを検索",
+        searching: "ファイルを検索中...",
+        noResults: "一致するファイルはありません",
+        updateHost: "ファイルを検索するにはホストを更新してください。",
       },
       actions: {
         back: "戻る",
@@ -971,7 +989,7 @@ export const ja: TranslationResources = {
         openSettings: "プロジェクト設定を開く",
         openNewWindow: "新しいウィンドウで開く",
         openNewWindowFailed: "新しいウィンドウを開けませんでした",
-        openFolder: "Open in file manager",
+        openFolder: "ファイルマネージャーで開く",
         openFolderFailed: "Couldn't open folder",
         remove: "プロジェクトを削除",
         removing: "削除中...",
@@ -1546,6 +1564,15 @@ export const ja: TranslationResources = {
       binaryPreviewUnavailable: "バイナリプレビューが利用できません",
       failedToLoad: "ファイルの読み込みに失敗しました",
       failedToLoadPreview: "ファイルプレビューの読み込みに失敗しました",
+      search: {
+        open: "ファイル内を検索",
+        close: "ファイル検索を閉じる",
+        placeholder: "ファイル内を検索",
+        previous: "前の一致",
+        next: "次の一致",
+        noMatches: "一致なし",
+        matchCount: "{{current}} / {{total}}",
+      },
       editor: {
         fileSize: "ファイルサイズ {{size}}",
         lines: "{{count}} 行",
@@ -1899,6 +1926,7 @@ export const ja: TranslationResources = {
         toggleVoiceMode: "音声モードを切り替え",
         startStopDictation: "音声入力を開始/停止",
         interruptAgent: "エージェントを中断",
+        findInCurrentPane: "現在のペイン内を検索",
         sendMessage: "メッセージを送信",
         queueMessage: "メッセージをキューに追加",
         muteUnmuteVoiceMode: "音声モードのミュートを切り替え",

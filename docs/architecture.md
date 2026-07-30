@@ -315,6 +315,7 @@ Two workspaces can share the same `cwd` (e.g. a `directory` workspace and a `loc
 | Change request timeline | `prPaneTimelineQueryKey({ serverId, cwd, prNumber })`    | `packages/app/src/git/pull-request-panel/query-keys.ts` |
 | File preview content    | `["workspaceFile", serverId, cwd, path]`                 | `packages/app/src/components/file-pane.tsx`             |
 | File explorer listings  | fetched via `listDirectory(workspaceRoot, path)`         | `packages/app/src/hooks/use-file-explorer-actions.ts`   |
+| File explorer search    | `["workspaceFileSearch", serverId, cwd, query, hidden]`  | `packages/app/src/file-explorer/search.tsx`             |
 
 **Workspace-owned (independent per workspace) — keyed by `workspaceId` (falling back to `cwd` only when no `workspaceId` exists):**
 
@@ -327,6 +328,8 @@ Two workspaces can share the same `cwd` (e.g. a `directory` workspace and a `loc
 | File explorer expanded paths | `expandedPathsByWorkspace[workspaceStateKey]`      | `packages/app/src/stores/panel-store/state.ts`                |
 
 `diff-pane.tsx` is the canonical wiring site: it passes `{ serverId, cwd }` to the git queries and `{ serverId, workspaceId, cwd }` to the draft/override/attachment scope keys.
+
+Opened-file find is transient panel state, not directory or daemon state. It searches the text already loaded by the file pane. The editable web path delegates match decoration and scrolling to CodeMirror, while the cross-platform read-only path decorates the existing syntax tokens and scrolls its source preview. Both paths share `packages/app/src/file-pane/use-search.ts`; images, binary files, and rendered Markdown/Mermaid previews do not expose source find.
 
 **Agent-Prompt-owned:** the Changes panel's “Current session” source is keyed by `(serverId, agentId, turnId, mode, ignoreWhitespace)`. `turnId: null` follows the latest user Prompt; a concrete Paseo turn-record ID selects history. `AgentSessionChangesManager` captures start/end commits under `refs/paseo/turn-snapshots/{agentId}/{recordId}/{start|end}` and streams summaries plus the selected diff through `agent.session_changes.subscribe.request` / `.response` and `agent.session_changes.update`. Running turns compare start-to-working-tree; terminal turns compare start-to-end and remain stable. Live snapshot comparisons use a temporary index seeded from the start snapshot—not the user's current index—so an unchanged file that was untracked at capture does not appear deleted. These are net time-window snapshots, not process attribution: shell commands and external writers are included, and unrelated concurrent edits in the same checkout during the turn are also observable. Isolated worktrees are required when strict agent-only ownership matters. An omitted `turnId` retains the legacy whole-Agent session view for old clients.
 

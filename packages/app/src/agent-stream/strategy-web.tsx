@@ -30,6 +30,8 @@ import {
   createHistoryStartSettleScheduler,
   type HistoryStartSettleScheduler,
 } from "./history-start-settle-scheduler";
+import { CONVERSATION_SEARCH_NAVIGATE_EVENT } from "./search-navigation";
+import { useConversationSearchActive } from "@/components/conversation-search-context";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -71,6 +73,12 @@ const historyStartSlotStyle: CSSProperties = {
   minHeight: 32,
   paddingTop: 4,
   paddingBottom: 8,
+};
+
+const mountedHistoryRowStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  width: "100%",
 };
 
 function isScrollContainerNearBottom(
@@ -158,11 +166,11 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   }, []);
   const [followOutput, setFollowOutputr] = useState(true);
   const followOutputRef = useRef(followOutput);
-  const setFollowOutput = (value: boolean) => {
+  const setFollowOutput = useCallback((value: boolean) => {
     followOutputRef.current = value;
     setFollowOutputr(value);
     return value;
-  };
+  }, []);
   const lastKnownScrollTopRef = useRef(0);
   const pendingUserScrollUpIntentRef = useRef(false);
   const isPointerScrollActiveRef = useRef(false);
@@ -179,6 +187,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const historyStartPrependAnchorRef = useRef<HistoryStartPrependAnchor | null>(null);
   const historyStartPrependAnchorActiveRef = useRef(false);
   const historyStartSettleSchedulerRef = useRef<HistoryStartSettleScheduler | null>(null);
+  const isConversationSearchActive = useConversationSearchActive();
   const shouldUseVirtualizer = segments.historyVirtualized.length > 0;
   const {
     renderHistoryVirtualizedRow,
@@ -424,6 +433,30 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     }
   }, []);
 
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) return;
+    const handleSearchNavigation = () => {
+      cancelPendingStickToBottom();
+      pendingUserScrollUpIntentRef.current = false;
+      setFollowOutput(false);
+    };
+    scrollContainer.addEventListener(CONVERSATION_SEARCH_NAVIGATE_EVENT, handleSearchNavigation);
+    return () => {
+      scrollContainer.removeEventListener(
+        CONVERSATION_SEARCH_NAVIGATE_EVENT,
+        handleSearchNavigation,
+      );
+    };
+  }, [cancelPendingStickToBottom, setFollowOutput]);
+
+  useEffect(() => {
+    if (!isConversationSearchActive) return;
+    cancelPendingStickToBottom();
+    pendingUserScrollUpIntentRef.current = false;
+    setFollowOutput(false);
+  }, [cancelPendingStickToBottom, isConversationSearchActive, setFollowOutput]);
+
   const scrollMessagesToBottom = useCallback(
     (behavior: ScrollBehaviorLike = "auto") => {
       const scrollContainer = scrollContainerRef.current;
@@ -504,7 +537,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     lastKnownScrollTopRef.current = currentScrollTop;
     updateScrollMetrics();
     evaluateHistoryStart();
-  }, [cancelPendingStickToBottom, evaluateHistoryStart, updateScrollMetrics]);
+  }, [cancelPendingStickToBottom, evaluateHistoryStart, setFollowOutput, updateScrollMetrics]);
 
   useEffect(() => {
     const initialHistoryStartState = createHistoryStartPaginationState();
@@ -555,6 +588,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     hasRouteBottomAnchorRequest,
     isActivationReady,
     scheduleStickToBottom,
+    setFollowOutput,
   ]);
 
   useEffect(() => {
@@ -720,7 +754,13 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       }
       cancelPendingStickToBottom();
     };
-  }, [cancelPendingStickToBottom, forceStickToBottom, scheduleStickToBottom, viewportRef]);
+  }, [
+    cancelPendingStickToBottom,
+    forceStickToBottom,
+    scheduleStickToBottom,
+    setFollowOutput,
+    viewportRef,
+  ]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
     return {
@@ -764,11 +804,19 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   );
   const mountedHistoryRows = useMemo(() => {
     return segments.historyMounted.map((item, index) => (
-      <div key={item.id} data-history-row-id={item.id}>
+      <div key={item.id} data-history-row-id={item.id} style={mountedHistoryRowStyle}>
         {renderHistoryMountedRow(item, index, segments.historyMounted)}
       </div>
     ));
   }, [renderHistoryMountedRow, segments.historyMounted]);
+  const searchableVirtualizedHistoryRows = useMemo(() => {
+    if (!isConversationSearchActive) return null;
+    return segments.historyVirtualized.map((item, index) => (
+      <Fragment key={item.id}>
+        {renderHistoryVirtualizedRow(item, index, segments.historyVirtualized)}
+      </Fragment>
+    ));
+  }, [isConversationSearchActive, renderHistoryVirtualizedRow, segments.historyVirtualized]);
   const liveHeadRows = useMemo(() => {
     void liveHeadRowRevision;
     return segments.liveHead.map((item, index) => (
@@ -814,7 +862,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     >
       <div ref={handleContentRef} style={contentContainerStyle}>
         {historyStartSlot}
-        {shouldUseVirtualizer ? (
+        {shouldUseVirtualizer && !isConversationSearchActive ? (
           <div style={virtualRowsContainerStyle}>
             {virtualRows.map((virtualRow) => {
               const item = segments.historyVirtualized[virtualRow.index];
@@ -835,6 +883,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
             })}
           </div>
         ) : null}
+        {searchableVirtualizedHistoryRows}
         {mountedHistoryRows}
         {liveHeadRows}
         {liveAuxiliary}

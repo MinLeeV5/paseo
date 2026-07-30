@@ -188,6 +188,14 @@ export const es: TranslationResources = {
     },
   },
   agentPanel: {
+    search: {
+      placeholder: "Buscar en la conversación",
+      previous: "Coincidencia anterior",
+      next: "Coincidencia siguiente",
+      close: "Cerrar búsqueda",
+      matchCount: "{{current}} de {{total}}",
+      noMatches: "Sin coincidencias",
+    },
     states: {
       notFound: "Agentno encontrado",
       failedToLoad: "No se pudo cargar el agente",
@@ -406,6 +414,16 @@ export const es: TranslationResources = {
       context: {
         size: "Tamaño",
         modified: "Modificado",
+      },
+      search: {
+        open: "Buscar archivos",
+        close: "Cerrar búsqueda de archivos",
+        placeholder: "Buscar archivos por nombre o ruta",
+        clear: "Borrar búsqueda",
+        hint: "Escribe para buscar archivos del espacio de trabajo",
+        searching: "Buscando archivos...",
+        noResults: "No hay archivos coincidentes",
+        updateHost: "Actualiza el host para buscar archivos.",
       },
       actions: {
         back: "Atrás",
@@ -992,7 +1010,7 @@ export const es: TranslationResources = {
         openSettings: "Abrir la configuración del proyecto",
         openNewWindow: "Open in new window",
         openNewWindowFailed: "Couldn't open a new window",
-        openFolder: "Open in file manager",
+        openFolder: "Abrir en el administrador de archivos",
         openFolderFailed: "Couldn't open folder",
         remove: "Eliminar proyecto",
         removing: "Eliminando...",
@@ -1574,6 +1592,15 @@ export const es: TranslationResources = {
       binaryPreviewUnavailable: "Vista previa binaria no disponible",
       failedToLoad: "No se pudo cargar el archivo",
       failedToLoadPreview: "No se pudo cargar la vista previa del archivo",
+      search: {
+        open: "Buscar en el archivo",
+        close: "Cerrar búsqueda en el archivo",
+        placeholder: "Buscar en el archivo",
+        previous: "Coincidencia anterior",
+        next: "Coincidencia siguiente",
+        noMatches: "No hay coincidencias",
+        matchCount: "{{current}} de {{total}}",
+      },
       editor: {
         fileSize: "Tamaño {{size}}",
         lines: "{{count}} líneas",
@@ -1932,6 +1959,7 @@ export const es: TranslationResources = {
         toggleVoiceMode: "Alternar modo de voz",
         startStopDictation: "Iniciar dictado/stop",
         interruptAgent: "agente de interrupción",
+        findInCurrentPane: "Buscar en el panel actual",
         sendMessage: "enviar mensaje",
         queueMessage: "mensaje de cola",
         muteUnmuteVoiceMode: "Silenciar el modo de voz/unmute",

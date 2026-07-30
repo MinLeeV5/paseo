@@ -188,6 +188,14 @@ export const ru: TranslationResources = {
     },
   },
   agentPanel: {
+    search: {
+      placeholder: "Поиск в диалоге",
+      previous: "Предыдущее совпадение",
+      next: "Следующее совпадение",
+      close: "Закрыть поиск",
+      matchCount: "{{current}} из {{total}}",
+      noMatches: "Совпадений нет",
+    },
     states: {
       notFound: "Agent не найден",
       failedToLoad: "Не удалось загрузить агент",
@@ -403,6 +411,16 @@ export const ru: TranslationResources = {
       context: {
         size: "Размер",
         modified: "Модифицированный",
+      },
+      search: {
+        open: "Поиск файлов",
+        close: "Закрыть поиск файлов",
+        placeholder: "Поиск файлов по имени или пути",
+        clear: "Очистить поиск",
+        hint: "Введите текст для поиска файлов рабочей области",
+        searching: "Поиск файлов...",
+        noResults: "Подходящих файлов нет",
+        updateHost: "Обновите хост, чтобы искать файлы.",
       },
       actions: {
         back: "Назад",
@@ -981,7 +999,7 @@ export const ru: TranslationResources = {
         openSettings: "Открыть настройки проекта",
         openNewWindow: "Open in new window",
         openNewWindowFailed: "Couldn't open a new window",
-        openFolder: "Open in file manager",
+        openFolder: "Открыть в файловом менеджере",
         openFolderFailed: "Couldn't open folder",
         remove: "Удалить проект",
         removing: "Удаление...",
@@ -1563,6 +1581,15 @@ export const ru: TranslationResources = {
       binaryPreviewUnavailable: "Предварительный просмотр двоичного файла недоступен.",
       failedToLoad: "Не удалось загрузить файл",
       failedToLoadPreview: "Не удалось загрузить предварительный просмотр файла.",
+      search: {
+        open: "Найти в файле",
+        close: "Закрыть поиск по файлу",
+        placeholder: "Найти в файле",
+        previous: "Предыдущее совпадение",
+        next: "Следующее совпадение",
+        noMatches: "Совпадений нет",
+        matchCount: "{{current}} из {{total}}",
+      },
       editor: {
         fileSize: "Размер файла {{size}}",
         lines: "Строк: {{count}}",
@@ -1920,6 +1947,7 @@ export const ru: TranslationResources = {
         toggleVoiceMode: "Переключить голосовой режим",
         startStopDictation: "Начать диктовку /stop",
         interruptAgent: "Агент прерываний",
+        findInCurrentPane: "Найти в текущей панели",
         sendMessage: "Отправить сообщение",
         queueMessage: "Сообщение в очереди",
         muteUnmuteVoiceMode: "Отключить голосовой режим /unmute",

@@ -186,6 +186,14 @@ export const en = {
     },
   },
   agentPanel: {
+    search: {
+      placeholder: "Search conversation",
+      previous: "Previous match",
+      next: "Next match",
+      close: "Close search",
+      matchCount: "{{current}} of {{total}}",
+      noMatches: "No matches",
+    },
     states: {
       notFound: "Agent not found",
       failedToLoad: "Failed to load agent",
@@ -399,6 +407,16 @@ export const en = {
       context: {
         size: "Size",
         modified: "Modified",
+      },
+      search: {
+        open: "Search files",
+        close: "Close file search",
+        placeholder: "Search files by name or path",
+        clear: "Clear search",
+        hint: "Type to search workspace files",
+        searching: "Searching files...",
+        noResults: "No matching files",
+        updateHost: "Update the host to search files.",
       },
       actions: {
         back: "Back",
@@ -1540,6 +1558,15 @@ export const en = {
       binaryPreviewUnavailable: "Binary preview unavailable",
       failedToLoad: "Failed to load file",
       failedToLoadPreview: "Failed to load file preview",
+      search: {
+        open: "Find in file",
+        close: "Close file search",
+        placeholder: "Find in file",
+        previous: "Previous match",
+        next: "Next match",
+        noMatches: "No matches",
+        matchCount: "{{current}} of {{total}}",
+      },
       editor: {
         fileSize: "File size {{size}}",
         lines: "{{count}} lines",
@@ -1892,6 +1919,7 @@ export const en = {
         toggleVoiceMode: "Toggle voice mode",
         startStopDictation: "Start/stop dictation",
         interruptAgent: "Interrupt agent",
+        findInCurrentPane: "Find in current pane",
         sendMessage: "Send message",
         queueMessage: "Queue message",
         muteUnmuteVoiceMode: "Mute/unmute voice mode",

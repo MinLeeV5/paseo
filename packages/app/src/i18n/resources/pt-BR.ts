@@ -188,6 +188,14 @@ export const ptBR: TranslationResources = {
     },
   },
   agentPanel: {
+    search: {
+      placeholder: "Pesquisar na conversa",
+      previous: "Correspondência anterior",
+      next: "Próxima correspondência",
+      close: "Fechar pesquisa",
+      matchCount: "{{current}} de {{total}}",
+      noMatches: "Nenhuma correspondência",
+    },
     states: {
       notFound: "Agente não encontrado",
       failedToLoad: "Falha ao carregar agente",
@@ -406,6 +414,16 @@ export const ptBR: TranslationResources = {
       context: {
         size: "Tamanho",
         modified: "Modificado",
+      },
+      search: {
+        open: "Pesquisar arquivos",
+        close: "Fechar pesquisa de arquivos",
+        placeholder: "Pesquisar arquivos por nome ou caminho",
+        clear: "Limpar pesquisa",
+        hint: "Digite para pesquisar arquivos do espaço de trabalho",
+        searching: "Pesquisando arquivos...",
+        noResults: "Nenhum arquivo correspondente",
+        updateHost: "Atualize o host para pesquisar arquivos.",
       },
       actions: {
         back: "Voltar",
@@ -983,7 +1001,7 @@ export const ptBR: TranslationResources = {
         openSettings: "Abrir configurações do projeto",
         openNewWindow: "Abrir em nova janela",
         openNewWindowFailed: "Não foi possível abrir uma nova janela",
-        openFolder: "Open in file manager",
+        openFolder: "Abrir no gerenciador de arquivos",
         openFolderFailed: "Couldn't open folder",
         remove: "Remover projeto",
         removing: "Removendo...",
@@ -1560,6 +1578,15 @@ export const ptBR: TranslationResources = {
       binaryPreviewUnavailable: "Prévia binária indisponível",
       failedToLoad: "Falha ao carregar arquivo",
       failedToLoadPreview: "Falha ao carregar prévia do arquivo",
+      search: {
+        open: "Pesquisar no arquivo",
+        close: "Fechar pesquisa no arquivo",
+        placeholder: "Pesquisar no arquivo",
+        previous: "Correspondência anterior",
+        next: "Próxima correspondência",
+        noMatches: "Nenhuma correspondência",
+        matchCount: "{{current}} de {{total}}",
+      },
       editor: {
         fileSize: "Tamanho {{size}}",
         lines: "{{count}} linhas",
@@ -1915,6 +1942,7 @@ export const ptBR: TranslationResources = {
         toggleVoiceMode: "Alternar modo de voz",
         startStopDictation: "Iniciar/parar ditado",
         interruptAgent: "Interromper agente",
+        findInCurrentPane: "Pesquisar no painel atual",
         sendMessage: "Enviar mensagem",
         queueMessage: "Enfileirar mensagem",
         muteUnmuteVoiceMode: "Silenciar/ativar modo de voz",

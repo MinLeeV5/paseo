@@ -21,6 +21,7 @@ import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view";
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
+import { ConversationSearch } from "@/components/conversation-search";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { SidebarCallout } from "@/components/sidebar-callout";
@@ -1232,7 +1233,13 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   const streamContent = (
     <ReanimatedAnimated.View style={animatedContentStyle}>{streamSection}</ReanimatedAnimated.View>
   );
-  const contentContainer = <View style={styles.contentContainer}>{streamContent}</View>;
+  const contentContainer = (
+    <View style={styles.contentContainer}>
+      <ConversationSearch agentId={agentId} isPaneFocused={isPaneFocused}>
+        {streamContent}
+      </ConversationSearch>
+    </View>
+  );
 
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>

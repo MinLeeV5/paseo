@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import invariant from "tiny-invariant";
 import { useTranslation } from "react-i18next";
 import { FilePane } from "@/file-pane/pane";
-import { usePaneContext } from "@/panels/pane-context";
+import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import type { PanelRegistration } from "@/panels/panel-registry";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import { createMaterialFileIcon } from "@/components/material-file-icon";
@@ -30,7 +30,8 @@ function useFilePanelDescriptor(target: { kind: "file"; path: string }) {
 
 function FilePanel() {
   const { t } = useTranslation();
-  const { serverId, workspaceId, target, fileNavigationRevision } = usePaneContext();
+  const { serverId, workspaceId, tabId, target, fileNavigationRevision } = usePaneContext();
+  const { isInteractive } = usePaneFocus();
   const workspaceDirectory = useWorkspaceDirectory(serverId, workspaceId);
   invariant(target.kind === "file", "FilePanel requires file target");
   if (!workspaceDirectory) {
@@ -46,6 +47,8 @@ function FilePanel() {
       workspaceRoot={workspaceDirectory}
       location={target}
       navigationRevision={fileNavigationRevision ?? 0}
+      isPaneFocused={isInteractive}
+      searchHandlerId={`file-search:${tabId}`}
     />
   );
 }

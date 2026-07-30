@@ -20,6 +20,7 @@ export interface SearchDirectoryEntriesOptions {
   pathFormat: DirectorySuggestionPathFormat;
   includeFiles?: boolean;
   includeDirectories?: boolean;
+  includeHidden?: boolean;
   matchMode?: DirectorySuggestionMatchMode;
   pathQueryPolicy?: PathQueryPolicy;
   rootAliases?: string[];
@@ -158,6 +159,7 @@ function buildSearchInput(
     plan,
     includeDirectories,
     includeFiles,
+    includeHidden: options.includeHidden ?? false,
     matchMode: options.matchMode ?? "fuzzy",
     pathFormat: options.pathFormat,
     hiddenDirectoryNames: new Set(options.traversableHiddenDirectoryNames ?? []),
@@ -189,6 +191,7 @@ interface SearchInput {
   plan: QueryPlan;
   includeDirectories: boolean;
   includeFiles: boolean;
+  includeHidden: boolean;
   matchMode: DirectorySuggestionMatchMode;
   pathFormat: DirectorySuggestionPathFormat;
   hiddenDirectoryNames: Set<string>;
@@ -298,15 +301,15 @@ async function* roundRobin<T>(branches: Array<AsyncGenerator<T>>): AsyncGenerato
 
 function shouldDiscover(entry: ChildEntry, input: SearchInput): boolean {
   if (entry.kind === "file") {
-    return input.includeFiles && !entry.name.startsWith(".");
+    return input.includeFiles && (input.includeHidden || !entry.name.startsWith("."));
   }
   if (IGNORED_DIRECTORY_NAMES.has(entry.name)) return false;
   if (!entry.name.startsWith(".")) return true;
-  return input.hiddenDirectoryNames.has(entry.name);
+  return input.includeHidden || input.hiddenDirectoryNames.has(entry.name);
 }
 
 function shouldSuggest(entry: TraversedEntry, input: SearchInput): boolean {
-  if (entry.name.startsWith(".")) return false;
+  if (!input.includeHidden && entry.name.startsWith(".")) return false;
   if (entry.kind === "directory" && !input.includeDirectories) return false;
   if (entry.kind === "file" && !input.includeFiles) return false;
   if (!input.plan.normalizedQuery) return true;

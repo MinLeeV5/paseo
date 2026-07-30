@@ -2202,6 +2202,14 @@ export const FileExplorerRequestSchema = z.object({
   acceptBinary: z.boolean().optional(),
 });
 
+export const WorkspaceFileSearchRequestSchema = z.object({
+  type: z.literal("workspace.files.search.request"),
+  cwd: z.string(),
+  query: z.string(),
+  includeHidden: z.boolean().optional(),
+  requestId: z.string(),
+});
+
 export const FileVersionSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
@@ -2598,6 +2606,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceCreateRequestSchema,
   WorkspaceClearAttentionRequestSchema,
   FileExplorerRequestSchema,
+  WorkspaceFileSearchRequestSchema,
   FileSubscribeRequestSchema,
   FileUnsubscribeRequestSchema,
   FileWriteRequestSchema,
@@ -2847,6 +2856,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceRecovery: z.boolean().optional(),
         // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
         workspaceFileEditing: z.boolean().optional(),
+        // COMPAT(workspaceFileSearch): added in v1.2.3, remove after 2027-01-29 once daemon floor >= v1.2.3.
+        workspaceFileSearch: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
@@ -4775,6 +4786,22 @@ export const FileExplorerResponseSchema = z.object({
   }),
 });
 
+export const WorkspaceFileSearchResponseSchema = z.object({
+  type: z.literal("workspace.files.search.response"),
+  payload: z.object({
+    cwd: z.string(),
+    query: z.string(),
+    entries: z.array(
+      z.object({
+        name: z.string(),
+        path: z.string(),
+      }),
+    ),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const FileSubscribeResponseSchema = z.object({
   type: z.literal("fs.file.subscribe.response"),
   payload: z.object({
@@ -5386,6 +5413,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   PaseoWorktreeArchiveResponseSchema,
   CreatePaseoWorktreeResponseSchema,
   FileExplorerResponseSchema,
+  WorkspaceFileSearchResponseSchema,
   FileSubscribeResponseSchema,
   FileUnsubscribeResponseSchema,
   FileWriteResponseSchema,
@@ -5810,6 +5838,8 @@ export type ArchiveWorkspaceRequest = z.infer<typeof ArchiveWorkspaceRequestSche
 export type WorkspaceClearAttentionRequest = z.infer<typeof WorkspaceClearAttentionRequestSchema>;
 export type FileExplorerRequest = z.infer<typeof FileExplorerRequestSchema>;
 export type FileExplorerResponse = z.infer<typeof FileExplorerResponseSchema>;
+export type WorkspaceFileSearchRequest = z.infer<typeof WorkspaceFileSearchRequestSchema>;
+export type WorkspaceFileSearchResponse = z.infer<typeof WorkspaceFileSearchResponseSchema>;
 export type FileVersion = z.infer<typeof FileVersionSchema>;
 export type FileSubscribeRequest = z.infer<typeof FileSubscribeRequestSchema>;
 export type FileSubscribeResponse = z.infer<typeof FileSubscribeResponseSchema>;

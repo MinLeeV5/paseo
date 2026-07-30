@@ -3,6 +3,7 @@ import { StyleSheet } from "react-native-unistyles";
 import type { HighlightStyle } from "@getpaseo/highlight";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import type { FileEditorModel } from "./model";
+import type { FileSearchController } from "../use-search";
 
 export function FileEditorView(_props: {
   model: FileEditorModel;
@@ -16,12 +17,16 @@ export function FileEditorView(_props: {
     foregroundMuted: string;
     border: string;
     selection: string;
+    searchMatchBackground: string;
+    currentSearchMatchBackground: string;
+    currentSearchMatchForeground: string;
     monoFont: string;
     codeFontSize: number;
     syntax: Record<HighlightStyle, string>;
   };
   onCursorChange(position: { line: number; column: number }): void;
   onVimModeChange(mode: string | null): void;
+  search: FileSearchController;
 }) {
   return (
     <View style={styles.container}>

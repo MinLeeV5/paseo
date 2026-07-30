@@ -190,6 +190,14 @@ export const fr: TranslationResources = {
     },
   },
   agentPanel: {
+    search: {
+      placeholder: "Rechercher dans la conversation",
+      previous: "Résultat précédent",
+      next: "Résultat suivant",
+      close: "Fermer la recherche",
+      matchCount: "{{current}} sur {{total}}",
+      noMatches: "Aucun résultat",
+    },
     states: {
       notFound: "Agentintrouvable",
       failedToLoad: "Échec du chargement de l'agent",
@@ -405,6 +413,16 @@ export const fr: TranslationResources = {
       context: {
         size: "Taille",
         modified: "Modifié",
+      },
+      search: {
+        open: "Rechercher des fichiers",
+        close: "Fermer la recherche de fichiers",
+        placeholder: "Rechercher par nom ou chemin",
+        clear: "Effacer la recherche",
+        hint: "Saisissez du texte pour rechercher les fichiers de l’espace de travail",
+        searching: "Recherche de fichiers...",
+        noResults: "Aucun fichier correspondant",
+        updateHost: "Mettez à jour l’hôte pour rechercher des fichiers.",
       },
       actions: {
         back: "Dos",
@@ -992,7 +1010,7 @@ export const fr: TranslationResources = {
         openSettings: "Ouvrir les paramètres du projet",
         openNewWindow: "Open in new window",
         openNewWindowFailed: "Couldn't open a new window",
-        openFolder: "Open in file manager",
+        openFolder: "Ouvrir dans le gestionnaire de fichiers",
         openFolderFailed: "Couldn't open folder",
         remove: "Supprimer le projet",
         removing: "Suppression...",
@@ -1578,6 +1596,15 @@ export const fr: TranslationResources = {
       binaryPreviewUnavailable: "Aperçu binaire indisponible",
       failedToLoad: "Échec du chargement du fichier",
       failedToLoadPreview: "Échec du chargement de l'aperçu du fichier",
+      search: {
+        open: "Rechercher dans le fichier",
+        close: "Fermer la recherche dans le fichier",
+        placeholder: "Rechercher dans le fichier",
+        previous: "Correspondance précédente",
+        next: "Correspondance suivante",
+        noMatches: "Aucune correspondance",
+        matchCount: "{{current}} sur {{total}}",
+      },
       editor: {
         fileSize: "Taille {{size}}",
         lines: "{{count}} lignes",
@@ -1935,6 +1962,7 @@ export const fr: TranslationResources = {
         toggleVoiceMode: "Changer le mode vocal",
         startStopDictation: "Démarrer la dictée/stop",
         interruptAgent: "Agent d'interruption",
+        findInCurrentPane: "Rechercher dans le panneau actuel",
         sendMessage: "Envoyer un message",
         queueMessage: "Message de file d'attente",
         muteUnmuteVoiceMode: "Mode vocal/unmutemuet",

@@ -1,11 +1,14 @@
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { Search } from "lucide-react-native";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { Theme } from "@/styles/theme";
 import { FileConflictAlert } from "./conflict-alert";
 import type { FileEditorStatus } from "./editor/model";
+import type { FileSearchController } from "./use-search";
 
 const ThemedSpinner = withUnistyles(LoadingSpinner);
 const spinnerMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -21,6 +24,7 @@ export function FilePanelBar({
   conflictUnavailable,
   onOverwrite,
   onReload,
+  search,
 }: {
   size: number;
   lineCount?: number;
@@ -32,6 +36,7 @@ export function FilePanelBar({
   conflictUnavailable?: boolean;
   onOverwrite?(): void;
   onReload?(): void;
+  search?: FileSearchController;
 }) {
   const { t } = useTranslation();
   const markdownModes = [
@@ -104,6 +109,17 @@ export function FilePanelBar({
             </Text>
           ) : null}
         </View>
+        {search ? (
+          <Button
+            variant="ghost"
+            size="xs"
+            leftIcon={Search}
+            style={styles.iconButton}
+            accessibilityLabel={t("panels.file.search.open")}
+            onPress={search.open}
+            testID="file-search-open"
+          />
+        ) : null}
         {mode && onModeChange ? (
           <SegmentedControl
             size="xs"
@@ -168,6 +184,10 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  iconButton: {
+    width: 28,
+    paddingHorizontal: 0,
   },
   vim: {
     color: theme.colors.foregroundMuted,

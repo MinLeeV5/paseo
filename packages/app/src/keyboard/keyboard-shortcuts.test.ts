@@ -131,6 +131,18 @@ describe("keyboard-shortcuts", () => {
       action: "agent.new",
     },
     {
+      name: "matches Cmd+F to find in the current pane on mac",
+      event: { key: "f", code: "KeyF", metaKey: true },
+      context: { isMac: true, focusScope: "editable" },
+      action: "workspace.find",
+    },
+    {
+      name: "matches Ctrl+F to find in the current pane on non-mac",
+      event: { key: "f", code: "KeyF", ctrlKey: true },
+      context: { isMac: false, focusScope: "message-input" },
+      action: "workspace.find",
+    },
+    {
       name: "matches Cmd+N to create new workspace on mac",
       event: { key: "n", code: "KeyN", metaKey: true },
       context: { isMac: true, commandCenterOpen: false },
@@ -412,6 +424,16 @@ describe("keyboard-shortcuts", () => {
   );
 
   const nonMatchingCases: NonMatchingShortcutCase[] = [
+    {
+      name: "keeps Cmd+F available inside the embedded browser",
+      event: { key: "f", code: "KeyF", metaKey: true },
+      context: { isMac: true, focusScope: "browser" },
+    },
+    {
+      name: "keeps Ctrl+F available inside the terminal",
+      event: { key: "f", code: "KeyF", ctrlKey: true },
+      context: { isMac: false, focusScope: "terminal" },
+    },
     {
       name: "does not keep old Mod+Alt+N binding",
       event: { key: "n", code: "KeyN", metaKey: true, altKey: true },

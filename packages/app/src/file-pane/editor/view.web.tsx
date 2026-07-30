@@ -3,10 +3,12 @@ import { Annotation, Compartment, EditorState, Transaction } from "@codemirror/s
 import { EditorView } from "@codemirror/view";
 import { getLanguageForFile } from "@getpaseo/highlight";
 import { getCM, vim } from "@replit/codemirror-vim";
+import { closeSearchPanel, openSearchPanel, SearchQuery, setSearchQuery } from "@codemirror/search";
 import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import type { FileEditorModel } from "./model";
 import { editorBaseExtensions, editorTheme, type EditorVisualTheme } from "./extensions.web";
+import type { FileSearchController } from "../use-search";
 
 interface FileEditorViewProps {
   model: FileEditorModel;
@@ -17,6 +19,7 @@ interface FileEditorViewProps {
   theme: EditorVisualTheme;
   onCursorChange(position: { line: number; column: number }): void;
   onVimModeChange(mode: string | null): void;
+  search: FileSearchController;
 }
 
 const languageCompartment = new Compartment();
@@ -37,6 +40,7 @@ export function FileEditorView({
   theme,
   onCursorChange,
   onVimModeChange,
+  search,
 }: FileEditorViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -108,6 +112,36 @@ export function FileEditorView({
       effects: EditorView.scrollIntoView(from, { y: "center" }),
     });
   }, [location.lineEnd, location.lineStart, navigationRevision]);
+
+  const isSearchOpen = search.isOpen;
+  const activeSearchQuery = isSearchOpen ? search.query : "";
+  const activeSearchMatch = isSearchOpen ? search.currentMatch : null;
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const queryEffect = setSearchQuery.of(
+      new SearchQuery({ search: activeSearchQuery, literal: true }),
+    );
+    if (!isSearchOpen) {
+      closeSearchPanel(view);
+      view.dispatch({ effects: queryEffect });
+      return;
+    }
+    openSearchPanel(view);
+    if (!activeSearchMatch) {
+      view.dispatch({ effects: queryEffect });
+      return;
+    }
+
+    const lineNumber = Math.min(activeSearchMatch.lineNumber, view.state.doc.lines);
+    const line = view.state.doc.line(lineNumber);
+    const from = Math.min(line.to, line.from + activeSearchMatch.fromColumn);
+    const to = Math.min(line.to, line.from + activeSearchMatch.toColumn);
+    view.dispatch({
+      selection: { anchor: from, head: to },
+      effects: [queryEffect, EditorView.scrollIntoView(from, { y: "center" })],
+    });
+  }, [activeSearchMatch, activeSearchQuery, isSearchOpen, search.navigationRevision]);
 
   useEffect(() => {
     viewRef.current?.dispatch({
