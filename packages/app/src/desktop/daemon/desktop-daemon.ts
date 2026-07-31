@@ -39,6 +39,33 @@ export interface DesktopPairingOffer {
   qr: string | null;
 }
 
+export interface DesktopDirectConnectionEndpoint {
+  interfaceName: string;
+  address: string;
+  endpoint: string;
+}
+
+export type DesktopDirectConnectionUnavailableReason =
+  | "external_daemon"
+  | "management_disabled"
+  | "secure_storage";
+
+export interface DesktopDirectConnectionInfo {
+  available: boolean;
+  unavailableReason: DesktopDirectConnectionUnavailableReason | null;
+  enabled: boolean;
+  port: number;
+  endpoints: DesktopDirectConnectionEndpoint[];
+  passwordConfigured: boolean;
+  password: string | null;
+  suggestedPassword: string;
+}
+
+export interface DesktopDirectConnectionConfiguration {
+  info: DesktopDirectConnectionInfo;
+  daemon: DesktopDaemonStatus;
+}
+
 export interface LocalTransportTarget {
   [key: string]: unknown;
   transportType: "socket" | "pipe";
@@ -123,6 +150,44 @@ function parseDesktopPairingOffer(raw: unknown): DesktopPairingOffer {
   };
 }
 
+function parseDesktopDirectConnectionEndpoint(
+  raw: unknown,
+): DesktopDirectConnectionEndpoint | null {
+  if (!isRecord(raw)) return null;
+  const interfaceName = toStringOrNull(raw.interfaceName);
+  const address = toStringOrNull(raw.address);
+  const endpoint = toStringOrNull(raw.endpoint);
+  if (!interfaceName || !address || !endpoint) return null;
+  return { interfaceName, address, endpoint };
+}
+
+function parseDesktopDirectConnectionInfo(raw: unknown): DesktopDirectConnectionInfo {
+  if (!isRecord(raw)) {
+    throw new Error("Unexpected desktop direct connection response.");
+  }
+  const port = toNumberOrNull(raw.port);
+  const unavailableReason =
+    raw.unavailableReason === "external_daemon" ||
+    raw.unavailableReason === "management_disabled" ||
+    raw.unavailableReason === "secure_storage"
+      ? raw.unavailableReason
+      : null;
+  return {
+    available: raw.available === true,
+    unavailableReason,
+    enabled: raw.enabled === true,
+    port: port && Number.isInteger(port) ? port : 6767,
+    endpoints: Array.isArray(raw.endpoints)
+      ? raw.endpoints
+          .map(parseDesktopDirectConnectionEndpoint)
+          .filter((endpoint): endpoint is DesktopDirectConnectionEndpoint => endpoint !== null)
+      : [],
+    passwordConfigured: raw.passwordConfigured === true,
+    password: toStringOrNull(raw.password),
+    suggestedPassword: toStringOrNull(raw.suggestedPassword) ?? "",
+  };
+}
+
 export function shouldUseDesktopDaemon(): boolean {
   return isElectronRuntime();
 }
@@ -162,6 +227,27 @@ export async function getDesktopAppLogs(): Promise<DesktopAppLogs> {
 
 export async function getDesktopDaemonPairing(): Promise<DesktopPairingOffer> {
   return parseDesktopPairingOffer(await invokeDesktopCommand("desktop_daemon_pairing"));
+}
+
+export async function getDesktopDaemonDirectConnection(): Promise<DesktopDirectConnectionInfo> {
+  return parseDesktopDirectConnectionInfo(
+    await invokeDesktopCommand("desktop_daemon_direct_connection"),
+  );
+}
+
+export async function configureDesktopDaemonDirectConnection(
+  password: string,
+): Promise<DesktopDirectConnectionConfiguration> {
+  const raw = await invokeDesktopCommand<unknown>("configure_desktop_daemon_direct_connection", {
+    password,
+  });
+  if (!isRecord(raw)) {
+    throw new Error("Unexpected desktop direct connection configuration response.");
+  }
+  return {
+    info: parseDesktopDirectConnectionInfo(raw.info),
+    daemon: parseDesktopDaemonStatus(raw.daemon),
+  };
 }
 
 export async function getCliDaemonStatus(): Promise<string> {

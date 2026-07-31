@@ -473,6 +473,53 @@ class BrowserClientLifecycle {
 }
 
 describe("HostRuntimeController", () => {
+  it("replaces the active direct client when its password changes", async () => {
+    const oldDirect: HostConnection = {
+      id: "direct:localhost:6767",
+      type: "directTcp",
+      endpoint: "localhost:6767",
+      password: "old-password",
+    };
+    const newDirect: HostConnection = {
+      ...oldDirect,
+      password: "new-password",
+    };
+    const createdClients: Array<{ client: FakeDaemonClient; connection: HostConnection }> = [];
+    const controller = new HostRuntimeController({
+      host: makeHost({
+        connections: [oldDirect],
+        preferredConnectionId: oldDirect.id,
+      }),
+      deps: {
+        createClient: ({ connection }) => {
+          const client = new FakeDaemonClient();
+          createdClients.push({ client, connection });
+          return client as unknown as DaemonClient;
+        },
+        connectToDaemon: async ({ host, connection }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: connection.id,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    await controller.activateConnection({ connectionId: oldDirect.id });
+    expect(controller.getSnapshot().client).toBe(createdClients[0]?.client);
+
+    await controller.updateHost(
+      makeHost({
+        connections: [newDirect],
+        preferredConnectionId: newDirect.id,
+      }),
+    );
+
+    expect(createdClients.map((entry) => entry.connection)).toEqual([oldDirect, newDirect]);
+    expect(createdClients[0]?.client.isDisposed()).toBe(true);
+    expect(controller.getSnapshot().client).toBe(createdClients[1]?.client);
+  });
+
   it("replaces the active relay client when re-pairing changes the daemon public key", async () => {
     const oldRelay: HostConnection = {
       id: "relay:wss:relay.paseo.sh:443",

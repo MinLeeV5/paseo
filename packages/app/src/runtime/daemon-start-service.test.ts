@@ -7,6 +7,7 @@ interface RecordedUpsert {
   listenAddress: string;
   serverId: string;
   hostname: string | null;
+  password?: string;
 }
 
 function createFakeStore(): {
@@ -54,6 +55,60 @@ describe("DaemonStartService", () => {
     ]);
     expect(service.getLastError()).toBeNull();
     expect(service.isRunning()).toBe(false);
+  });
+
+  it("uses the saved credential and localhost route for a LAN-enabled daemon", async () => {
+    const fake = createFakeStore();
+    const service = new DaemonStartService({
+      store: fake.store,
+      startDesktopDaemon: async () => makeStatus({ listen: "0.0.0.0:6767" }),
+      getDesktopDaemonDirectConnection: async () => ({
+        available: true,
+        unavailableReason: null,
+        enabled: true,
+        port: 6767,
+        endpoints: [
+          { interfaceName: "en0", address: "192.168.1.20", endpoint: "192.168.1.20:6767" },
+        ],
+        passwordConfigured: true,
+        password: "mobile-secret",
+        suggestedPassword: "mobile-secret",
+      }),
+    });
+
+    await expect(service.start()).resolves.toEqual({ ok: true });
+    expect(fake.upserts).toEqual([
+      {
+        listenAddress: "0.0.0.0:6767",
+        serverId: "srv_desktop",
+        hostname: "desktop",
+        password: "mobile-secret",
+      },
+    ]);
+  });
+
+  it("fails clearly when a configured direct password cannot be recovered", async () => {
+    const fake = createFakeStore();
+    const service = new DaemonStartService({
+      store: fake.store,
+      startDesktopDaemon: async () => makeStatus({ listen: "0.0.0.0:6767" }),
+      getDesktopDaemonDirectConnection: async () => ({
+        available: true,
+        unavailableReason: null,
+        enabled: true,
+        port: 6767,
+        endpoints: [],
+        passwordConfigured: true,
+        password: null,
+        suggestedPassword: "replacement-secret",
+      }),
+    });
+
+    const result = await service.start();
+
+    expect(result.ok).toBe(false);
+    expect(service.getLastError()).toContain("password that is unavailable");
+    expect(fake.upserts).toEqual([]);
   });
 
   it("reports lastError after a missing listen address and clears running state when done", async () => {

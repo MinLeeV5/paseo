@@ -1477,6 +1477,38 @@ export const ar: TranslationResources = {
       unableToPair: "غير قادر على إقران المضيف",
       errorTitle: "خطأ",
     },
+    directSetup: {
+      title: "اتصال مباشر",
+      description: "صِل Paseo على هاتفك عبر الشبكة المحلية نفسها أو عبر شبكة VPN خاصة.",
+      loadFailed: "تعذّر تحميل إعدادات الاتصال المباشر",
+      ready: "الاتصال المباشر جاهز",
+      addressLabel: "العنوان · {{interfaceName}}",
+      noAddress: "لم يتم العثور على عنوان IPv4 يمكن الوصول إليه. تحقّق من اتصال الشبكة.",
+      configureTitle: "تفعيل الاتصال المباشر",
+      changePassword: "تغيير كلمة مرور الاتصال المباشر",
+      passwordHint: "استخدم 8 أحرف على الأقل. يحفظ Paseo تجزئة كلمة المرور فقط في إعدادات daemon.",
+      enableAction: "تفعيل daemon وإعادة تشغيله",
+      updateAction: "تحديث كلمة المرور وإعادة التشغيل",
+      configuring: "جارٍ الإعداد...",
+      configureFailed: "تعذّر إعداد الاتصال المباشر.",
+      passwordUnavailableTitle: "عيّن كلمة مرور جديدة لإكمال الإعداد",
+      passwordUnavailableBody:
+        "لدى daemon كلمة مرور لا يستطيع Paseo استعادتها. استبدلها أدناه لإنشاء بيانات اعتماد قابلة للنسخ للهاتف.",
+      securityTitle: "استخدمه على شبكة موثوقة فقط",
+      securityBody:
+        "الاتصالات المباشرة غير مشفّرة. استخدم شبكة LAN خاصة أو VPN، واستخدم الاقتران المشفّر عبر Relay على الشبكات العامة أو غير الموثوقة.",
+      tutorialTitle: "توصيل هاتفك",
+      tutorialStep1: "صِل هاتفك وهذا الكمبيوتر بشبكة Wi-Fi نفسها أو بشبكة VPN خاصة.",
+      tutorialStep2: "في تطبيق Paseo للهاتف، اختر إضافة اتصال ← اتصال مباشر.",
+      tutorialStep3: "أدخل أحد عناوين IP الظاهرة أعلاه والمنفذ وكلمة المرور، ثم اضغط اتصال.",
+      relayAlternative: "أو اقترن عبر Relay المشفّر",
+      unavailableTitle: "إعداد الاتصال المباشر غير متاح",
+      externalDaemon:
+        "تتم إدارة هذا daemon خارج تطبيق سطح المكتب. اضبط عنوان الاستماع وكلمة المرور من CLI.",
+      managementDisabled: "فعّل إدارة daemon المدمج قبل إعداد الوصول المباشر.",
+      secureStorageUnavailable:
+        "تخزين بيانات الاعتماد الآمن في النظام غير متاح، لذلك لا يستطيع Paseo الاحتفاظ بكلمة المرور بأمان لإعادة الاتصال.",
+    },
     device: {
       loadingOffer: "جارٍ تحميل عرض الإقران...",
       failedToLoadOffer: "فشل تحميل عرض الاقتران.",
@@ -1989,7 +2021,7 @@ export const ar: TranslationResources = {
       pairDevices: {
         title: "إقران الأجهزة",
         rowTitle: "إقران جهاز",
-        rowHint: "امسح رمز QR ضوئيًا أو انسخ رابطًا لتوصيل هاتفك بهذا المضيف",
+        rowHint: "صِل هاتفك مباشرة أو عبر Relay المشفّر",
       },
       orchestration: {
         title: "التنسيق",

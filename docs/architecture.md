@@ -397,3 +397,14 @@ $PASEO_HOME/
 1. **Local daemon** (default): `paseo daemon start` on `127.0.0.1:6767`
 2. **Managed desktop**: Electron app spawns daemon as subprocess, and stops it again on quit so that "restart the app" is a complete reset. Settings > Host > "Keep daemon running after quit" opts out. Only a daemon the desktop started is stopped — a daemon you started yourself with `paseo daemon start` is left alone (`paseo.pid` records `desktopManaged`).
 3. **Remote + relay**: Daemon behind firewall, relay bridges with E2E encryption
+
+The desktop Pair a device flow can make the managed daemon reachable for a LAN/VPN direct
+connection. It writes a wildcard TCP listener and bcrypt password hash to daemon `config.json`,
+then restarts through the normal managed lifecycle. The plaintext password needed for the desktop
+client to reconnect is kept separately in Electron OS-encrypted credential storage; it is never
+written to daemon config. This configuration surface refuses to modify a running daemon that the
+desktop app did not start. The direct transport is password-authenticated but not encrypted, so the
+UI limits its recommendation to trusted LANs and private VPNs and keeps encrypted relay pairing as
+the public-network path. After a password update and managed restart, the renderer replaces the
+same local connection id with the new credential; `HostRuntimeController.updateHost()` closes the
+old client and reconnects automatically instead of leaving duplicate connection ids behind.

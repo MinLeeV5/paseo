@@ -1,9 +1,18 @@
 import { type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 import path from "node:path";
-import { app, ipcMain, powerMonitor } from "electron";
+import { app, ipcMain, powerMonitor, safeStorage } from "electron";
 import log from "electron-log/main";
-import { resolvePaseoHome, spawnProcess } from "@getpaseo/server";
+import {
+  hashDaemonPassword,
+  isBearerTokenValid,
+  loadPersistedConfig,
+  resolvePaseoHome,
+  savePersistedConfig,
+  spawnProcess,
+} from "@getpaseo/server";
 import {
   copyAttachmentFileToManagedStorage,
   deleteManagedAttachmentFile,
@@ -45,6 +54,14 @@ import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.j
 import { isRunningUnderARM64Translation } from "../system/arm64-translation.js";
 import { getDesktopAppLogs } from "../diagnostics/app-logs.js";
 import { tailFile } from "../diagnostics/tail-file.js";
+import {
+  buildDirectConnectionListen,
+  createDirectConnectionPasswordStore,
+  isDirectConnectionListen,
+  listDirectConnectionEndpoints,
+  resolveDirectConnectionPort,
+  type DirectConnectionEndpoint,
+} from "./direct-connection.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
 const STARTUP_POLL_INTERVAL_MS = 200;
@@ -87,6 +104,22 @@ interface DesktopPairingOffer {
   relayEnabled: boolean;
   url: string | null;
   qr: string | null;
+}
+
+interface DesktopDirectConnectionInfo {
+  available: boolean;
+  unavailableReason: "external_daemon" | "management_disabled" | "secure_storage" | null;
+  enabled: boolean;
+  port: number;
+  endpoints: DirectConnectionEndpoint[];
+  passwordConfigured: boolean;
+  password: string | null;
+  suggestedPassword: string;
+}
+
+interface DesktopDirectConnectionConfiguration {
+  info: DesktopDirectConnectionInfo;
+  daemon: DesktopDaemonStatus;
 }
 
 function parseReleaseChannel(
@@ -544,6 +577,116 @@ async function getDaemonPairing(): Promise<DesktopPairingOffer> {
   }
 }
 
+function getDirectConnectionPasswordStore() {
+  return createDirectConnectionPasswordStore({
+    userDataPath: app.getPath("userData"),
+    safeStorage,
+  });
+}
+
+function createSuggestedDirectConnectionPassword(): string {
+  return randomBytes(18).toString("base64url");
+}
+
+async function getDaemonDirectConnectionInfo(
+  knownStatus?: DesktopDaemonStatus,
+): Promise<DesktopDirectConnectionInfo> {
+  const settings = await getDesktopSettingsStore().get();
+  const status = knownStatus ?? (await resolveDesktopDaemonStatus());
+  const persisted = loadPersistedConfig(getPaseoHome());
+  const configuredListen = persisted.daemon?.listen ?? status.listen;
+  const effectiveListen = status.status === "running" ? status.listen : configuredListen;
+  const port = resolveDirectConnectionPort(effectiveListen, configuredListen, status.listen);
+  const passwordHash = persisted.daemon?.auth?.password;
+  const passwordStore = getDirectConnectionPasswordStore();
+  const storedPassword = passwordStore.load();
+  const password =
+    passwordHash &&
+    storedPassword &&
+    isBearerTokenValid({ password: passwordHash, token: storedPassword })
+      ? storedPassword
+      : null;
+
+  let unavailableReason: DesktopDirectConnectionInfo["unavailableReason"] = null;
+  if (!settings.daemon.manageBuiltInDaemon) {
+    unavailableReason = "management_disabled";
+  } else if (status.status === "running" && !status.desktopManaged) {
+    unavailableReason = "external_daemon";
+  } else if (!passwordStore.isAvailable()) {
+    unavailableReason = "secure_storage";
+  }
+
+  return {
+    available: unavailableReason === null,
+    unavailableReason,
+    enabled: isDirectConnectionListen(effectiveListen) && Boolean(passwordHash),
+    port,
+    endpoints: listDirectConnectionEndpoints(networkInterfaces(), port),
+    passwordConfigured: Boolean(passwordHash),
+    password,
+    suggestedPassword: password ?? createSuggestedDirectConnectionPassword(),
+  };
+}
+
+async function configureDaemonDirectConnection(
+  args: Record<string, unknown> | undefined,
+): Promise<DesktopDirectConnectionConfiguration> {
+  assertBuiltInDaemonManagementEnabled(await getDesktopSettingsStore().get());
+  const status = await resolveDesktopDaemonStatus();
+  if (status.status === "running" && !status.desktopManaged) {
+    throw new Error("Only the desktop-managed daemon can be configured for direct connections.");
+  }
+  if (toTrimmedString(process.env.PASEO_LISTEN)) {
+    throw new Error(
+      "Remove the PASEO_LISTEN environment override before configuring direct connections.",
+    );
+  }
+  if (toTrimmedString(process.env.PASEO_PASSWORD)) {
+    throw new Error(
+      "Remove the PASEO_PASSWORD environment override before configuring the daemon password.",
+    );
+  }
+
+  const password = toTrimmedString(args?.password);
+  if (!password) {
+    throw new Error("A daemon password is required.");
+  }
+  if (password.length < 8) {
+    throw new Error("The daemon password must contain at least 8 characters.");
+  }
+
+  const passwordStore = getDirectConnectionPasswordStore();
+  if (!passwordStore.isAvailable()) {
+    throw new Error("Secure credential storage is unavailable.");
+  }
+
+  const persisted = loadPersistedConfig(getPaseoHome());
+  const port = resolveDirectConnectionPort(status.listen, persisted.daemon?.listen);
+  passwordStore.save(password);
+  savePersistedConfig(getPaseoHome(), {
+    ...persisted,
+    daemon: {
+      ...persisted.daemon,
+      listen: buildDirectConnectionListen(port),
+      auth: {
+        ...persisted.daemon?.auth,
+        password: hashDaemonPassword(password),
+      },
+    },
+  });
+
+  const daemon = await restartDaemon();
+  if (!isDirectConnectionListen(daemon.listen)) {
+    throw new Error(
+      "The daemon restarted without the configured LAN listener. Remove PASEO_LISTEN overrides and try again.",
+    );
+  }
+  return {
+    daemon,
+    info: await getDaemonDirectConnectionInfo(daemon),
+  };
+}
+
 async function getLocalDaemonVersion(): Promise<{ version: string | null; error: string | null }> {
   const status = await resolveDesktopDaemonStatus();
   if (status.status !== "running") {
@@ -579,6 +722,8 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     desktop_daemon_logs: () => getDaemonLogs(),
     desktop_app_logs: () => getDesktopAppLogs(),
     desktop_daemon_pairing: () => getDaemonPairing(),
+    desktop_daemon_direct_connection: () => getDaemonDirectConnectionInfo(),
+    configure_desktop_daemon_direct_connection: (args) => configureDaemonDirectConnection(args),
     desktop_get_system_idle_time: () => powerMonitor.getSystemIdleTime() * 1000,
     cli_daemon_status: () => getCliDaemonStatus(),
     write_attachment_base64: (args) => writeAttachmentBase64(args ?? {}),

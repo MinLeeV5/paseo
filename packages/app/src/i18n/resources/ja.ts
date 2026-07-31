@@ -1493,6 +1493,43 @@ export const ja: TranslationResources = {
       unableToPair: "ホストをペアリングできません",
       errorTitle: "エラー",
     },
+    directSetup: {
+      title: "直接接続",
+      description:
+        "同じローカルネットワークまたはプライベート VPN 経由でスマートフォンの Paseo を接続します。",
+      loadFailed: "直接接続設定を読み込めませんでした",
+      ready: "直接接続の準備ができました",
+      addressLabel: "アドレス · {{interfaceName}}",
+      noAddress: "到達可能な IPv4 アドレスが見つかりません。ネットワーク接続を確認してください。",
+      configureTitle: "直接接続を有効にする",
+      changePassword: "直接接続パスワードを変更",
+      passwordHint:
+        "8 文字以上を使用してください。daemon 設定にはパスワードのハッシュのみ保存されます。",
+      enableAction: "有効にして daemon を再起動",
+      updateAction: "パスワードを更新して再起動",
+      configuring: "設定中...",
+      configureFailed: "直接接続を設定できませんでした。",
+      passwordUnavailableTitle: "新しいパスワードを設定して完了してください",
+      passwordUnavailableBody:
+        "daemon には Paseo が復元できないパスワードが設定されています。下で置き換えると、スマートフォン用のコピー可能な資格情報を作成できます。",
+      securityTitle: "信頼できるネットワークでのみ使用してください",
+      securityBody:
+        "直接接続は暗号化されません。プライベート LAN または VPN を使用し、公共または信頼できないネットワークでは暗号化された Relay ペアリングを使用してください。",
+      tutorialTitle: "スマートフォンを接続",
+      tutorialStep1:
+        "スマートフォンとこのコンピューターを同じ Wi-Fi またはプライベート VPN に接続します。",
+      tutorialStep2: "Paseo モバイルアプリで「接続を追加」→「直接接続」を選択します。",
+      tutorialStep3:
+        "上に表示された IP の 1 つ、ポート、パスワードを入力し、「接続」をタップします。",
+      relayAlternative: "または暗号化された Relay でペアリング",
+      unavailableTitle: "直接接続の設定を利用できません",
+      externalDaemon:
+        "この daemon はデスクトップアプリの外部で管理されています。CLI からリッスンアドレスとパスワードを設定してください。",
+      managementDisabled:
+        "直接アクセスを設定する前に、組み込み daemon の管理を有効にしてください。",
+      secureStorageUnavailable:
+        "OS の安全な資格情報ストレージを利用できないため、デスクトップの再接続用パスワードを安全に保持できません。",
+    },
     device: {
       loadingOffer: "ペアリングオファーを読み込み中...",
       failedToLoadOffer: "ペアリングオファーの読み込みに失敗しました。",
@@ -2008,7 +2045,7 @@ export const ja: TranslationResources = {
       pairDevices: {
         title: "デバイスをペアリング",
         rowTitle: "デバイスをペアリング",
-        rowHint: "QRコードをスキャンするかリンクをコピーしてスマートフォンをこのホストに接続",
+        rowHint: "直接接続または暗号化 Relay でスマートフォンを接続",
       },
       orchestration: {
         title: "オーケストレーション",

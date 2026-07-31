@@ -1508,6 +1508,40 @@ export const ptBR: TranslationResources = {
       unableToPair: "Não foi possível parear host",
       errorTitle: "Erro",
     },
+    directSetup: {
+      title: "Conexão direta",
+      description: "Conecte o Paseo no celular pela mesma rede local ou por uma VPN privada.",
+      loadFailed: "Não foi possível carregar as configurações de conexão direta",
+      ready: "Conexão direta pronta",
+      addressLabel: "Endereço · {{interfaceName}}",
+      noAddress: "Nenhum endereço IPv4 acessível foi encontrado. Verifique sua rede.",
+      configureTitle: "Ativar conexão direta",
+      changePassword: "Alterar senha da conexão direta",
+      passwordHint:
+        "Use pelo menos 8 caracteres. O Paseo armazena apenas um hash na configuração do daemon.",
+      enableAction: "Ativar e reiniciar o daemon",
+      updateAction: "Atualizar senha e reiniciar",
+      configuring: "Configurando...",
+      configureFailed: "Não foi possível configurar a conexão direta.",
+      passwordUnavailableTitle: "Defina uma nova senha para concluir",
+      passwordUnavailableBody:
+        "O daemon tem uma senha que o Paseo não consegue recuperar. Substitua-a abaixo para criar credenciais copiáveis para o celular.",
+      securityTitle: "Use somente em uma rede confiável",
+      securityBody:
+        "Conexões diretas não são criptografadas. Use uma LAN privada ou VPN; em redes públicas ou não confiáveis, use o pareamento criptografado por Relay.",
+      tutorialTitle: "Conecte seu celular",
+      tutorialStep1: "Conecte o celular e este computador ao mesmo Wi-Fi ou VPN privada.",
+      tutorialStep2: "No app móvel do Paseo, escolha Adicionar conexão → Conexão direta.",
+      tutorialStep3: "Digite um dos IPs acima, a porta e a senha, depois toque em Conectar.",
+      relayAlternative: "Ou faça o pareamento pelo Relay criptografado",
+      unavailableTitle: "A configuração direta não está disponível",
+      externalDaemon:
+        "Este daemon é gerenciado fora do app para desktop. Configure o endereço e a senha pela CLI.",
+      managementDisabled:
+        "Ative o gerenciamento do daemon integrado antes de configurar o acesso direto.",
+      secureStorageUnavailable:
+        "O armazenamento seguro de credenciais do sistema não está disponível; o Paseo não pode guardar a senha com segurança para reconectar.",
+    },
     device: {
       loadingOffer: "Carregando oferta de pareamento...",
       failedToLoadOffer: "Falha ao carregar oferta de pareamento.",
@@ -2024,7 +2058,7 @@ export const ptBR: TranslationResources = {
       pairDevices: {
         title: "Parear dispositivos",
         rowTitle: "Parear um dispositivo",
-        rowHint: "Escaneie um QR code ou copie um link para conectar seu celular a este host",
+        rowHint: "Conecte seu celular diretamente ou pelo Relay criptografado",
       },
       orchestration: {
         title: "Orquestração",

@@ -142,6 +142,23 @@ function dedupeHostConnections(connections: HostConnection[]): HostConnection[] 
   return next;
 }
 
+function upsertHostConnectionById(
+  connections: HostConnection[],
+  connection: HostConnection,
+): HostConnection[] {
+  const deduped = dedupeHostConnections(connections);
+  const existingIndex = deduped.findIndex((existing) => existing.id === connection.id);
+  if (existingIndex === -1) {
+    return [...deduped, connection];
+  }
+
+  const next = deduped.filter(
+    (existing, index) => existing.id !== connection.id || index === existingIndex,
+  );
+  next[existingIndex] = connection;
+  return next;
+}
+
 export function upsertHostConnectionInProfiles(input: {
   profiles: HostProfile[];
   serverId: string;
@@ -183,10 +200,10 @@ export function upsertHostConnectionInProfiles(input: {
 
   const matchedProfiles = matchingIndexes.map((index) => existing[index]);
   const prev = matchedProfiles.find((daemon) => daemon.serverId === serverId) ?? matchedProfiles[0];
-  const nextConnections = dedupeHostConnections([
-    ...matchedProfiles.flatMap((daemon) => daemon.connections),
+  const nextConnections = upsertHostConnectionById(
+    matchedProfiles.flatMap((daemon) => daemon.connections),
     input.connection,
-  ]);
+  );
   const nextLifecycle = prev.lifecycle;
   const nextLabel = prev.label === prev.serverId ? derivedLabel : prev.label;
   const nextPreferredConnectionId =
@@ -233,7 +250,7 @@ export function upsertHostConnectionInProfiles(input: {
   return next;
 }
 
-export function connectionFromListen(listen: string): HostConnection | null {
+export function connectionFromListen(listen: string, password?: string): HostConnection | null {
   const normalizedListen = listen.trim();
   if (!normalizedListen) {
     return null;
@@ -266,15 +283,26 @@ export function connectionFromListen(listen: string): HostConnection | null {
   }
 
   try {
-    const endpoint = normalizeLoopbackToLocalhost(normalizeHostPort(normalizedListen));
+    const localListen = normalizeWildcardListenForLocalClient(normalizedListen);
+    const endpoint = normalizeLoopbackToLocalhost(normalizeHostPort(localListen));
+    const normalizedPassword = password?.trim();
     return {
       id: `direct:${endpoint}`,
       type: "directTcp",
       endpoint,
+      ...(normalizedPassword ? { password: normalizedPassword } : {}),
     };
   } catch {
     return null;
   }
+}
+
+function normalizeWildcardListenForLocalClient(listen: string): string {
+  const ipv4Match = listen.match(/^0\.0\.0\.0:(\d+)$/);
+  if (ipv4Match) return `127.0.0.1:${ipv4Match[1]}`;
+  const ipv6Match = listen.match(/^\[?::\]?:(\d+)$/);
+  if (ipv6Match) return `127.0.0.1:${ipv6Match[1]}`;
+  return listen;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

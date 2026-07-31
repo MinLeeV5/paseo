@@ -1765,10 +1765,11 @@ export class HostRuntimeStore {
     listenAddress: string;
     serverId: string;
     hostname: string | null;
+    password?: string;
   }): Promise<HostProfile> {
     const normalizedListenAddress = input.listenAddress.trim();
     const serverId = input.serverId.trim();
-    const connection = connectionFromListen(normalizedListenAddress);
+    const connection = connectionFromListen(normalizedListenAddress, input.password);
     if (!connection) {
       throw new Error(`Unsupported listen address: ${input.listenAddress}`);
     }

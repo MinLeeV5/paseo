@@ -1,4 +1,9 @@
-import { startDesktopDaemon, type DesktopDaemonStatus } from "@/desktop/daemon/desktop-daemon";
+import {
+  getDesktopDaemonDirectConnection,
+  startDesktopDaemon,
+  type DesktopDaemonStatus,
+  type DesktopDirectConnectionInfo,
+} from "@/desktop/daemon/desktop-daemon";
 import { connectionFromListen } from "@/types/host-connection";
 import type { HostRuntimeStore } from "@/runtime/host-runtime";
 
@@ -14,11 +19,13 @@ type DaemonConnectionStore = Pick<HostRuntimeStore, "upsertConnectionFromListen"
 export interface DaemonStartServiceDeps {
   store: DaemonConnectionStore;
   startDesktopDaemon?: () => Promise<DesktopDaemonStatus>;
+  getDesktopDaemonDirectConnection?: () => Promise<DesktopDirectConnectionInfo>;
 }
 
 export async function upsertDesktopDaemonConnection(
   store: DaemonConnectionStore,
   daemon: DesktopDaemonStatus,
+  password?: string,
 ): Promise<DaemonStartResult> {
   const listenAddress = daemon.listen?.trim() ?? "";
   const serverId = daemon.serverId.trim();
@@ -28,7 +35,7 @@ export async function upsertDesktopDaemonConnection(
   if (!serverId) {
     return { ok: false, error: "Desktop daemon did not return a server id." };
   }
-  if (!connectionFromListen(listenAddress)) {
+  if (!connectionFromListen(listenAddress, password)) {
     return {
       ok: false,
       error: `Desktop daemon returned an unsupported listen address: ${listenAddress}`,
@@ -38,6 +45,7 @@ export async function upsertDesktopDaemonConnection(
     listenAddress,
     serverId,
     hostname: daemon.hostname,
+    ...(password ? { password } : {}),
   });
   return { ok: true };
 }
@@ -45,6 +53,7 @@ export async function upsertDesktopDaemonConnection(
 export class DaemonStartService {
   private readonly store: DaemonConnectionStore;
   private readonly invokeStartDesktopDaemon: () => Promise<DesktopDaemonStatus>;
+  private readonly readDesktopDaemonDirectConnection: () => Promise<DesktopDirectConnectionInfo>;
   private readonly listeners = new Set<() => void>();
   private lastError: string | null = null;
   private inFlightCount = 0;
@@ -52,6 +61,8 @@ export class DaemonStartService {
   constructor(deps: DaemonStartServiceDeps) {
     this.store = deps.store;
     this.invokeStartDesktopDaemon = deps.startDesktopDaemon ?? startDesktopDaemon;
+    this.readDesktopDaemonDirectConnection =
+      deps.getDesktopDaemonDirectConnection ?? getDesktopDaemonDirectConnection;
   }
 
   async start(): Promise<DaemonStartResult> {
@@ -77,7 +88,17 @@ export class DaemonStartService {
       }
 
       const daemon = await this.invokeStartDesktopDaemon();
-      const result = await upsertDesktopDaemonConnection(this.store, daemon);
+      let password: string | undefined;
+      if (isWildcardTcpListen(daemon.listen)) {
+        const directConnection = await this.readDesktopDaemonDirectConnection();
+        if (directConnection.enabled && !directConnection.password) {
+          return this.fail(
+            "The desktop daemon requires a direct-connection password that is unavailable. Open Pair a device to set a new password.",
+          );
+        }
+        password = directConnection.password ?? undefined;
+      }
+      const result = await upsertDesktopDaemonConnection(this.store, daemon, password);
       return result.ok ? result : this.fail(result.error);
     } catch (error) {
       return this.fail(error instanceof Error ? error.message : String(error));
@@ -136,6 +157,15 @@ export class DaemonStartService {
       listener();
     }
   }
+}
+
+function isWildcardTcpListen(listen: string | null): boolean {
+  const normalized = listen?.trim().toLowerCase() ?? "";
+  return (
+    normalized.startsWith("0.0.0.0:") ||
+    normalized.startsWith("[::]:") ||
+    normalized.startsWith(":::")
+  );
 }
 
 let singletonDaemonStartService: DaemonStartService | null = null;

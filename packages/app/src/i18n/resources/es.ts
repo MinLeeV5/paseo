@@ -1522,6 +1522,40 @@ export const es: TranslationResources = {
       unableToPair: "No se puede emparejar el host",
       errorTitle: "Error",
     },
+    directSetup: {
+      title: "Conexión directa",
+      description: "Conecta Paseo en tu teléfono mediante la misma red local o una VPN privada.",
+      loadFailed: "No se pudo cargar la configuración de conexión directa",
+      ready: "Conexión directa lista",
+      addressLabel: "Dirección · {{interfaceName}}",
+      noAddress: "No se encontró una dirección IPv4 accesible. Comprueba la conexión de red.",
+      configureTitle: "Activar conexión directa",
+      changePassword: "Cambiar la contraseña de conexión directa",
+      passwordHint:
+        "Usa al menos 8 caracteres. Paseo solo guarda un hash en la configuración del daemon.",
+      enableAction: "Activar y reiniciar el daemon",
+      updateAction: "Actualizar contraseña y reiniciar",
+      configuring: "Configurando...",
+      configureFailed: "No se pudo configurar la conexión directa.",
+      passwordUnavailableTitle: "Define una contraseña nueva para terminar",
+      passwordUnavailableBody:
+        "El daemon tiene una contraseña que Paseo no puede recuperar. Sustitúyela abajo para crear credenciales copiables para el teléfono.",
+      securityTitle: "Úsala solo en una red de confianza",
+      securityBody:
+        "Las conexiones directas no están cifradas. Usa una LAN privada o VPN; en redes públicas o no fiables, usa el emparejamiento cifrado por Relay.",
+      tutorialTitle: "Conecta tu teléfono",
+      tutorialStep1: "Conecta el teléfono y este ordenador al mismo Wi-Fi o VPN privada.",
+      tutorialStep2: "En Paseo móvil, elige Añadir conexión → Conexión directa.",
+      tutorialStep3: "Introduce una IP de arriba, el puerto y la contraseña, y pulsa Conectar.",
+      relayAlternative: "O empareja mediante el Relay cifrado",
+      unavailableTitle: "La configuración directa no está disponible",
+      externalDaemon:
+        "Este daemon se administra fuera de la aplicación de escritorio. Configura su dirección y contraseña desde la CLI.",
+      managementDisabled:
+        "Activa la administración del daemon integrado antes de configurar el acceso directo.",
+      secureStorageUnavailable:
+        "El almacenamiento seguro de credenciales del sistema no está disponible; Paseo no puede conservar la contraseña de forma segura para reconectar.",
+    },
     device: {
       loadingOffer: "Cargando oferta de maridaje...",
       failedToLoadOffer: "No se pudo cargar la oferta de emparejamiento.",
@@ -2040,7 +2074,7 @@ export const es: TranslationResources = {
       pairDevices: {
         title: "Emparejar dispositivos",
         rowTitle: "Emparejar un dispositivo",
-        rowHint: "Escanee un códigoQRo copie un enlace para conectar su teléfono a este host",
+        rowHint: "Conecte su teléfono directamente o mediante el Relay cifrado",
       },
       orchestration: {
         title: "Orquestación",

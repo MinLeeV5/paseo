@@ -27,16 +27,26 @@ const mocks = vi.hoisted(() => ({
   logError: vi.fn(),
   appLogPath: "/tmp/paseo-desktop-daemon-manager-test-main.log",
   getElectronLogFile: vi.fn(),
+  persistedConfig: {
+    version: 1,
+    daemon: { listen: "127.0.0.1:6767" },
+  } as Record<string, unknown>,
+  savedConfig: null as Record<string, unknown> | null,
 }));
 
 vi.mock("electron", () => ({
   app: {
-    getPath: vi.fn(() => "/tmp/paseo-user-data"),
+    getPath: vi.fn(() => `${mocks.paseoHome}/desktop-user-data`),
     getVersion: vi.fn(() => "1.2.3"),
     isPackaged: true,
   },
   ipcMain: { handle: vi.fn() },
   powerMonitor: { getSystemIdleTime: vi.fn(() => 0) },
+  safeStorage: {
+    isEncryptionAvailable: vi.fn(() => true),
+    encryptString: vi.fn((value: string) => Buffer.from(`encrypted:${value}`, "utf8")),
+    decryptString: vi.fn((value: Buffer) => value.toString("utf8").replace(/^encrypted:/, "")),
+  },
 }));
 
 vi.mock("electron-log/main", () => ({
@@ -54,6 +64,16 @@ vi.mock("electron-log/main", () => ({
 vi.mock("@getpaseo/server", () => ({
   resolvePaseoHome: vi.fn(() => mocks.paseoHome),
   spawnProcess: mocks.spawnProcess,
+  loadPersistedConfig: vi.fn(() => mocks.persistedConfig),
+  savePersistedConfig: vi.fn((_home: string, config: Record<string, unknown>) => {
+    mocks.persistedConfig = config;
+    mocks.savedConfig = config;
+  }),
+  hashDaemonPassword: vi.fn((password: string) => `hashed:${password}`),
+  isBearerTokenValid: vi.fn(
+    ({ password, token }: { password: string; token: string | null }) =>
+      password === `hashed:${token}`,
+  ),
 }));
 
 vi.mock("../settings/desktop-settings-electron.js", () => ({
@@ -121,6 +141,11 @@ describe("daemon-manager commands", () => {
     mocks.logError.mockReset();
     mocks.getElectronLogFile.mockReset();
     mocks.getElectronLogFile.mockReturnValue({ path: mocks.appLogPath });
+    mocks.persistedConfig = {
+      version: 1,
+      daemon: { listen: "127.0.0.1:6767" },
+    };
+    mocks.savedConfig = null;
     rmSync(mocks.paseoHome, { recursive: true, force: true });
     rmSync(mocks.appLogPath, { force: true });
   });
@@ -514,5 +539,88 @@ describe("daemon-manager commands", () => {
         "\n",
       ),
     });
+  });
+
+  it("configures a managed daemon for LAN access and returns the recoverable password", async () => {
+    mocks.runExternalCliJsonCommand
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        connectedDaemon: "reachable",
+        serverId: "server-1",
+        pid: 4242,
+        listen: "127.0.0.1:6767",
+        hostname: "desktop-host",
+        daemonVersion: "1.2.3",
+        desktopManaged: true,
+      })
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        connectedDaemon: "reachable",
+        serverId: "server-1",
+        pid: 4242,
+        listen: "127.0.0.1:6767",
+        daemonVersion: "1.2.3",
+        desktopManaged: true,
+      })
+      .mockResolvedValueOnce({ action: "stopped" })
+      .mockResolvedValueOnce({ localDaemon: "stopped", connectedDaemon: "unreachable" })
+      .mockResolvedValueOnce({ localDaemon: "stopped", connectedDaemon: "unreachable" })
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        connectedDaemon: "reachable",
+        serverId: "server-1",
+        pid: 5252,
+        listen: "0.0.0.0:6767",
+        hostname: "desktop-host",
+        daemonVersion: "1.2.3",
+        desktopManaged: true,
+      });
+    mocks.spawnProcess.mockReturnValue(createMockChildProcess());
+
+    const result = await createDaemonCommandHandlers().configure_desktop_daemon_direct_connection({
+      password: "mobile-secret",
+    });
+
+    expect(mocks.savedConfig).toEqual(
+      expect.objectContaining({
+        daemon: expect.objectContaining({
+          listen: "0.0.0.0:6767",
+          auth: { password: "hashed:mobile-secret" },
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        daemon: expect.objectContaining({ listen: "0.0.0.0:6767", status: "running" }),
+        info: expect.objectContaining({
+          enabled: true,
+          passwordConfigured: true,
+          password: "mobile-secret",
+          port: 6767,
+        }),
+      }),
+    );
+  });
+
+  it("refuses to reconfigure or restart a daemon that the desktop does not manage", async () => {
+    mocks.runExternalCliJsonCommand.mockResolvedValue({
+      localDaemon: "running",
+      connectedDaemon: "reachable",
+      serverId: "external-server",
+      pid: 4242,
+      listen: "127.0.0.1:6767",
+      daemonVersion: "1.2.3",
+      desktopManaged: false,
+    });
+
+    await expect(
+      createDaemonCommandHandlers().configure_desktop_daemon_direct_connection({
+        password: "mobile-secret",
+      }),
+    ).rejects.toThrow("Only the desktop-managed daemon can be configured");
+
+    expect(mocks.savedConfig).toBeNull();
+    expect(mocks.spawnProcess).not.toHaveBeenCalled();
+    expect(mocks.runExternalCliJsonCommand).toHaveBeenCalledTimes(1);
   });
 });

@@ -1488,6 +1488,38 @@ export const en = {
       unableToPair: "Unable to pair host",
       errorTitle: "Error",
     },
+    directSetup: {
+      title: "Direct connection",
+      description: "Connect Paseo on your phone over the same local network or private VPN.",
+      loadFailed: "Unable to load direct connection settings",
+      ready: "Direct connection ready",
+      addressLabel: "Address · {{interfaceName}}",
+      noAddress: "No reachable IPv4 address was found. Check your network connection.",
+      configureTitle: "Enable direct connection",
+      changePassword: "Change direct connection password",
+      passwordHint: "Use at least 8 characters. Paseo stores only a hash in daemon config.",
+      enableAction: "Enable and restart daemon",
+      updateAction: "Update password and restart",
+      configuring: "Configuring...",
+      configureFailed: "Unable to configure direct connection.",
+      passwordUnavailableTitle: "Set a new password to finish setup",
+      passwordUnavailableBody:
+        "The daemon has a password that Paseo cannot recover. Replace it below to create copyable phone credentials.",
+      securityTitle: "Use only on a trusted network",
+      securityBody:
+        "Direct connections are not encrypted. Use your private LAN or VPN; use encrypted relay pairing on public or untrusted networks.",
+      tutorialTitle: "Connect your phone",
+      tutorialStep1: "Put your phone and this computer on the same Wi-Fi or private VPN.",
+      tutorialStep2: "In the Paseo mobile app, choose Add connection → Direct connection.",
+      tutorialStep3: "Enter one IP shown above, the port, and the password, then tap Connect.",
+      relayAlternative: "Or pair through the encrypted relay",
+      unavailableTitle: "Direct setup is unavailable",
+      externalDaemon:
+        "This daemon is managed outside the desktop app. Configure its listen address and password from the CLI.",
+      managementDisabled: "Enable built-in daemon management before configuring direct access.",
+      secureStorageUnavailable:
+        "OS secure credential storage is unavailable, so Paseo cannot safely retain the password for desktop reconnection.",
+    },
     device: {
       loadingOffer: "Loading pairing offer...",
       failedToLoadOffer: "Failed to load pairing offer.",
@@ -2000,7 +2032,7 @@ export const en = {
       pairDevices: {
         title: "Pair devices",
         rowTitle: "Pair a device",
-        rowHint: "Scan a QR code or copy a link to connect your phone to this host",
+        rowHint: "Connect your phone directly or through the encrypted relay",
       },
       orchestration: {
         title: "Orchestration",

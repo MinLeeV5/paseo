@@ -1,10 +1,62 @@
 import { describe, expect, it } from "vitest";
 import {
+  connectionFromListen,
   normalizeStoredHostProfile,
   orderHostsLocalFirst,
   resolveActiveHostServerId,
+  upsertHostConnectionInProfiles,
+  type HostConnection,
   type HostProfile,
 } from "./host-connection";
+
+describe("connectionFromListen", () => {
+  it("uses localhost plus the configured password for a wildcard daemon listener", () => {
+    expect(connectionFromListen("0.0.0.0:6767", "mobile-secret")).toEqual({
+      id: "direct:localhost:6767",
+      type: "directTcp",
+      endpoint: "localhost:6767",
+      password: "mobile-secret",
+    });
+  });
+
+  it("normalizes an IPv6 wildcard listener for the local desktop client", () => {
+    expect(connectionFromListen("[::]:7123")).toEqual({
+      id: "direct:localhost:7123",
+      type: "directTcp",
+      endpoint: "localhost:7123",
+    });
+  });
+});
+
+describe("upsertHostConnectionInProfiles", () => {
+  it("replaces credentials for the same connection id instead of creating a duplicate", () => {
+    const oldConnection: HostConnection = {
+      id: "direct:localhost:6767",
+      type: "directTcp",
+      endpoint: "localhost:6767",
+      password: "old-password",
+    };
+    const newConnection: HostConnection = {
+      ...oldConnection,
+      password: "new-password",
+    };
+    const profile: HostProfile = {
+      ...makeHost("srv_local"),
+      connections: [oldConnection],
+      preferredConnectionId: oldConnection.id,
+    };
+
+    const result = upsertHostConnectionInProfiles({
+      profiles: [profile],
+      serverId: profile.serverId,
+      connection: newConnection,
+      now: "2026-07-31T00:00:00.000Z",
+    });
+
+    expect(result[0]?.connections).toEqual([newConnection]);
+    expect(result[0]?.preferredConnectionId).toBe(newConnection.id);
+  });
+});
 
 function makeHost(serverId: string): HostProfile {
   return {

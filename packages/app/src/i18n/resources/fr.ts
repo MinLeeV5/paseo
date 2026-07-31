@@ -1526,6 +1526,42 @@ export const fr: TranslationResources = {
       unableToPair: "Impossible de coupler l'hôte",
       errorTitle: "Erreur",
     },
+    directSetup: {
+      title: "Connexion directe",
+      description: "Connectez Paseo sur votre téléphone via le même réseau local ou un VPN privé.",
+      loadFailed: "Impossible de charger les réglages de connexion directe",
+      ready: "Connexion directe prête",
+      addressLabel: "Adresse · {{interfaceName}}",
+      noAddress: "Aucune adresse IPv4 accessible n’a été trouvée. Vérifiez votre réseau.",
+      configureTitle: "Activer la connexion directe",
+      changePassword: "Modifier le mot de passe de connexion directe",
+      passwordHint:
+        "Utilisez au moins 8 caractères. Paseo ne stocke qu’un hash dans la configuration du daemon.",
+      enableAction: "Activer et redémarrer le daemon",
+      updateAction: "Mettre à jour le mot de passe et redémarrer",
+      configuring: "Configuration...",
+      configureFailed: "Impossible de configurer la connexion directe.",
+      passwordUnavailableTitle: "Définissez un nouveau mot de passe pour terminer",
+      passwordUnavailableBody:
+        "Le daemon utilise un mot de passe que Paseo ne peut pas récupérer. Remplacez-le ci-dessous pour créer des identifiants copiables sur le téléphone.",
+      securityTitle: "À utiliser uniquement sur un réseau de confiance",
+      securityBody:
+        "Les connexions directes ne sont pas chiffrées. Utilisez un LAN privé ou un VPN ; sur un réseau public ou non fiable, utilisez l’appairage Relay chiffré.",
+      tutorialTitle: "Connecter votre téléphone",
+      tutorialStep1: "Connectez votre téléphone et cet ordinateur au même Wi-Fi ou VPN privé.",
+      tutorialStep2:
+        "Dans l’app mobile Paseo, choisissez Ajouter une connexion → Connexion directe.",
+      tutorialStep3:
+        "Saisissez une IP affichée ci-dessus, le port et le mot de passe, puis touchez Se connecter.",
+      relayAlternative: "Ou appairez via le Relay chiffré",
+      unavailableTitle: "La configuration directe est indisponible",
+      externalDaemon:
+        "Ce daemon est géré en dehors de l’application de bureau. Configurez son adresse d’écoute et son mot de passe via la CLI.",
+      managementDisabled:
+        "Activez la gestion du daemon intégré avant de configurer l’accès direct.",
+      secureStorageUnavailable:
+        "Le stockage sécurisé des identifiants du système est indisponible ; Paseo ne peut pas conserver le mot de passe en toute sécurité pour la reconnexion.",
+    },
     device: {
       loadingOffer: "Chargement de l'offre d'association...",
       failedToLoadOffer: "Échec du chargement de l'offre d'association.",
@@ -2044,7 +2080,7 @@ export const fr: TranslationResources = {
       pairDevices: {
         title: "Associer des appareils",
         rowTitle: "Associer un appareil",
-        rowHint: "Scannez un codeQRou copiez un lien pour connecter votre téléphone à cet hôte",
+        rowHint: "Connectez votre téléphone directement ou via le Relay chiffré",
       },
       orchestration: {
         title: "Orchestration",

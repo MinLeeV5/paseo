@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { getDesktopDaemonPairing, shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { useState } from "react";
 import type { Theme } from "@/styles/theme";
+import { DirectConnectionSection } from "@/desktop/components/direct-connection-section";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -136,6 +137,12 @@ export function PairDeviceSection() {
 
   return (
     <View style={settingsStyles.section} testID="host-page-pair-device-card">
+      <DirectConnectionSection />
+      <View style={styles.methodDivider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.methodDividerText}>{t("pairing.directSetup.relayAlternative")}</Text>
+        <View style={styles.dividerLine} />
+      </View>
       <View style={settingsStyles.card}>
         <PairDeviceBody
           viewState={viewState}
@@ -251,6 +258,21 @@ function PairDeviceQrContent(props: {
 }
 
 const styles = StyleSheet.create((theme) => ({
+  methodDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    marginVertical: theme.spacing[6],
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.colors.border,
+  },
+  methodDividerText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
   centered: {
     alignItems: "center",
     justifyContent: "center",
