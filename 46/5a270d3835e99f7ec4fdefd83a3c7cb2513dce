@@ -1,0 +1,79 @@
+packages/desktop/src/daemon/daemon-manager.test.ts
+  b03ded1ae8b63bdb 30-34,39,45-49,67-76,144-148,543-625
+packages/app/src/i18n/resources/fr.ts
+  b03ded1ae8b63bdb 1529-1554,1556-1564,2083
+packages/app/src/runtime/host-runtime.ts
+  b03ded1ae8b63bdb 1768,1772
+packages/app/src/i18n/resources/zh-CN.ts
+  b03ded1ae8b63bdb 1461-1483,1485-1490,2001
+docs/architecture.md
+  b03ded1ae8b63bdb 400-410
+packages/app/src/desktop/components/pair-device-section.tsx
+  b03ded1ae8b63bdb 15,140-145,261-264,266-275
+packages/app/src/types/host-connection.ts
+  b03ded1ae8b63bdb 145-161,203-204,206,253,286-288,293,300-305
+packages/app/src/i18n/resources/es.ts
+  b03ded1ae8b63bdb 1525-1548,1550-1558,2077
+packages/app/src/desktop/components/direct-connection-section.tsx
+  b03ded1ae8b63bdb 1-6,8-36,38-39,42-81,86-91,101-103,115-118,121-127,129-133,135-141,143-164,171-204,207-212,220-279,281-312,314-541
+packages/app/src/i18n/resources/ja.ts
+  b03ded1ae8b63bdb 1496-1532,2048
+packages/app/src/types/host-connection.test.ts
+  b03ded1ae8b63bdb 3,7-8,12-59
+packages/app/src/i18n/resources/ru.ts
+  b03ded1ae8b63bdb 1514-1538,1540-1547,2064
+packages/desktop/src/daemon/direct-connection.ts
+  b03ded1ae8b63bdb 1-148
+packages/app/src/i18n/resources/ar.ts
+  b03ded1ae8b63bdb 1480-1502,1504-1511,2024
+packages/app/src/runtime/daemon-start-service.ts
+  b03ded1ae8b63bdb 1-6,22,28,38,48,56,64-65,91-101,162-168
+packages/app/src/i18n/resources/pt-BR.ts
+  b03ded1ae8b63bdb 1511-1534,1536-1544,2061
+packages/app/src/i18n/resources/en.ts
+  b03ded1ae8b63bdb 1491-1513,1515-1522,2035
+packages/desktop/src/daemon/daemon-manager.ts
+  b03ded1ae8b63bdb 2,4,6,8-15,57-64,109-124,580-689,725-726
+packages/app/src/desktop/daemon/desktop-daemon.ts
+  b03ded1ae8b63bdb 42-68,153-190,232-250
+packages/app/src/runtime/host-runtime.test.ts
+  b03ded1ae8b63bdb 476-522
+packages/app/src/runtime/daemon-start-service.test.ts
+  b03ded1ae8b63bdb 10,60-111
+packages/desktop/src/daemon/direct-connection.test.ts
+  b03ded1ae8b63bdb 1-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "465a270d3835e99f7ec4fdefd83a3c7cb2513dce",
+  "prompts": {
+    "295779d10ff33127": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fb118-2b5f-79c1-8002-b5ffe9ae682b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 2265,
+      "overriden_lines": 0
+    },
+    "b03ded1ae8b63bdb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fb147-3e60-73b0-8834-1a67a643d045",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 1842,
+      "total_deletions": 130,
+      "accepted_lines": 1687,
+      "overriden_lines": 33,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/f40d83f175ca97ecd8b3341b39c440462f2edb3a7ec67c26b4791f964ba07bac"
+    }
+  }
+}
