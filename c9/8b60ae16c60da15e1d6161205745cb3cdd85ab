@@ -1,0 +1,24 @@
+.github/workflows/desktop-release.yml
+  ec826262c11e320b 202-213
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "c98b60ae16c60da15e1d6161205745cb3cdd85ab",
+  "prompts": {
+    "ec826262c11e320b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc6e6-8e8f-71c2-b2d4-916800cede1e",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 11,
+      "accepted_lines": 204,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/150e1af89d0ccef702b4ee0efe59b7140095b6418aa95f6ddb740b0fd3cc946b"
+    }
+  }
+}
