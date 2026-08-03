@@ -40,6 +40,8 @@ The rule, condensed: text that _names_ a surface or a group is `medium`. Text th
 
 Foreground is for the thing being acted on: row titles, section headings, the selected sidebar item. `foregroundMuted` is for context: hints, descriptions, secondary metadata, idle sidebar items, placeholders, status text.
 
+`surface0` is a background token, never a foreground/contrast token. In Electron with a custom background image, the app deliberately overrides `--colors-surface0` to `transparent`; text or icons on a `foreground`-filled control therefore use `primaryForeground`, while text or icons on an `accent`-filled control use `accentForeground`.
+
 `foregroundExtraMuted` is reserved for passive chrome that must sit behind muted text, such as an always-visible window control. Use the solid token instead of lowering SVG opacity; per-path opacity makes overlapping icon strokes render unevenly. Interactive hover and pressed states return to `foreground`.
 
 Accent is the one CTA per surface. A `<Button variant="default">` filled with `accent` appears at most once on a page. Most pages have zero — settings is mostly toggles and text, the workspace pane is mostly content, the chat composer is the input itself.
