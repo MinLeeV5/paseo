@@ -41,7 +41,7 @@ function SegmentIcon({ icon, iconSize, iconColor }: SegmentIconProps) {
 
 const ThemedSegmentIcon = withUnistyles(SegmentIcon);
 
-const selectedIconMapping = (theme: Theme) => ({ iconColor: theme.colors.surface0 });
+const selectedIconMapping = (theme: Theme) => ({ iconColor: theme.colors.primaryForeground });
 const mutedIconMapping = (theme: Theme) => ({ iconColor: theme.colors.foregroundMuted });
 
 export function SegmentedControl<T extends string>({
@@ -225,7 +225,7 @@ const styles = StyleSheet.create((theme) => {
       ...geometry.segmentedLabelMd,
     },
     labelSelected: {
-      color: theme.colors.surface0,
+      color: theme.colors.primaryForeground,
     },
   };
 });
