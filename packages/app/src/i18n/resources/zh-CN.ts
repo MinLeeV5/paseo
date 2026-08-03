@@ -856,6 +856,12 @@ export const zhCN: TranslationResources = {
         base: "base",
         newFile: "新增",
         deletedFile: "已删除",
+        markFileReviewed: "标记文件为已审阅",
+        markFileUnreviewed: "标记文件为未审阅",
+        reviewProgress: "已审阅 {{reviewed}} / {{total}} 个文件",
+        previousChangedFile: "上一个变更文件",
+        nextChangedFile: "下一个变更文件",
+        noReviewComments: "暂无审阅评论",
         commits: {
           title: "提交",
           countLabel: "{{count}} 个工作区提交",

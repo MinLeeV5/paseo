@@ -888,6 +888,12 @@ export const ptBR: TranslationResources = {
         base: "base",
         newFile: "Novo",
         deletedFile: "Excluído",
+        markFileReviewed: "Marcar arquivo como revisado",
+        markFileUnreviewed: "Marcar arquivo como não revisado",
+        reviewProgress: "{{reviewed}} de {{total}} arquivos revisados",
+        previousChangedFile: "Arquivo alterado anterior",
+        nextChangedFile: "Próximo arquivo alterado",
+        noReviewComments: "Ainda não há comentários de revisão",
         commits: {
           title: "Commits",
           countLabel: "{{count}} commits do espaço de trabalho",

@@ -886,6 +886,12 @@ export const ru: TranslationResources = {
         base: "база",
         newFile: "Новый",
         deletedFile: "Удалено",
+        markFileReviewed: "Отметить файл как проверенный",
+        markFileUnreviewed: "Отметить файл как непроверенный",
+        reviewProgress: "Проверено файлов: {{reviewed}} из {{total}}",
+        previousChangedFile: "Предыдущий изменённый файл",
+        nextChangedFile: "Следующий изменённый файл",
+        noReviewComments: "Комментариев к проверке пока нет",
         commits: {
           title: "Коммиты",
           countLabel: "{{count}} коммитов рабочего пространства",

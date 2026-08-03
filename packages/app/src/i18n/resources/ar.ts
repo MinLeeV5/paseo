@@ -864,6 +864,12 @@ export const ar: TranslationResources = {
         base: "قاعدة",
         newFile: "جديد",
         deletedFile: "تم الحذف",
+        markFileReviewed: "وضع علامة تمت المراجعة على الملف",
+        markFileUnreviewed: "وضع علامة لم تتم المراجعة على الملف",
+        reviewProgress: "تمت مراجعة {{reviewed}} من {{total}} ملفات",
+        previousChangedFile: "الملف السابق الذي تم تغييره",
+        nextChangedFile: "الملف التالي الذي تم تغييره",
+        noReviewComments: "لا توجد تعليقات مراجعة بعد",
         commits: {
           title: "الإيداعات",
           countLabel: "{{count}} من إيداعات مساحة العمل",

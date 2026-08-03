@@ -7,9 +7,13 @@ import {
   buildReviewDraftKey,
   buildReviewDraftScopeKey,
   useInlineReviewController,
+  buildDiffFileReviewRevision,
+  useReviewedDiffFiles,
+  useReviewDraftComments,
   useResolvedDiffMode,
   useReviewAttachmentSnapshot,
   useSetDiffModeOverride,
+  useSetFileReviewed,
 } from "@/review";
 import { useCheckoutDiffQuery } from "@/git/use-diff-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
@@ -103,6 +107,20 @@ export function useWorkingDiff({
     [baseRef, cwd, diffMode, ignoreWhitespace, serverId, workspaceId],
   );
   const reviewActions = useInlineReviewController({ reviewDraftKey });
+  const reviewComments = useReviewDraftComments(reviewDraftKey);
+  const reviewedPaths = useReviewedDiffFiles({ key: reviewDraftKey, files });
+  const setFileReviewed = useSetFileReviewed();
+  const handleSetFileReviewed = useCallback(
+    (file: (typeof files)[number], reviewed: boolean) => {
+      setFileReviewed({
+        key: reviewDraftKey,
+        path: file.path,
+        revision: buildDiffFileReviewRevision(file),
+        reviewed,
+      });
+    },
+    [reviewDraftKey, setFileReviewed],
+  );
   const reviewAttachment = useReviewAttachmentSnapshot({
     key: reviewDraftKey,
     diffFiles: files,
@@ -127,6 +145,10 @@ export function useWorkingDiff({
     diffTooLarge,
     isDiffLoading,
     reviewActions,
+    reviewComments,
+    reviewDraftKey,
+    reviewedPaths,
+    setFileReviewed: handleSetFileReviewed,
     reviewAttachment,
   };
 }

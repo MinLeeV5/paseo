@@ -17,6 +17,7 @@ import {
   type ReviewDraftSide,
   type ReviewDraftStoreState,
   serializeReviewDraftState,
+  setFileReviewedInState,
   setDiffModeOverrideInState,
   updateCommentInState,
 } from "@/review/state";
@@ -31,10 +32,11 @@ export type {
   ReviewDraftSide,
 } from "@/review/state";
 
-// v2 dropped persisted activeModesByScope (diff mode overrides are in-memory only).
-const STORE_VERSION = 2;
+// v3 adds revision-bound reviewed-file markers.
+const STORE_VERSION = 3;
 const CONTEXT_RADIUS = 3;
 const EMPTY_REVIEW_DRAFT_COMMENTS: ReviewDraftComment[] = [];
+const EMPTY_REVIEWED_FILE_REVISIONS: Record<string, string> = {};
 
 type ReviewAttachment = Extract<AgentAttachment, { type: "review" }>;
 type ReviewAttachmentContextLine = ReviewAttachment["comments"][number]["context"]["targetLine"];
@@ -73,6 +75,12 @@ interface ReviewDraftStoreActions {
     updatedAt?: string;
   }) => void;
   deleteComment: (input: { key: string; id: string }) => void;
+  setFileReviewed: (input: {
+    key: string;
+    path: string;
+    revision: string;
+    reviewed: boolean;
+  }) => void;
   clearReview: (input: { key: string }) => void;
 }
 
@@ -139,6 +147,7 @@ export const useReviewDraftStore = create<ReviewDraftStore>()(
   persist(
     (set) => ({
       drafts: {},
+      reviewedFiles: {},
       diffModeOverrides: {},
       setDiffModeOverride: (input) => {
         set((state) => setDiffModeOverrideInState(state, input));
@@ -160,6 +169,9 @@ export const useReviewDraftStore = create<ReviewDraftStore>()(
       },
       deleteComment: (input) => {
         set((state) => deleteCommentFromState(state, input));
+      },
+      setFileReviewed: (input) => {
+        set((state) => setFileReviewedInState(state, input));
       },
       clearReview: (input) => {
         set((state) => clearReviewInState(state, input));
@@ -281,6 +293,57 @@ export function useReviewDraftComments(key: string): ReviewDraftComment[] {
   return useReviewDraftStore((state) => state.drafts[key] ?? EMPTY_REVIEW_DRAFT_COMMENTS);
 }
 
+export function buildDiffFileReviewRevision(file: ParsedDiffFile): string {
+  let hash = 2166136261;
+  const update = (value: string | number | boolean | null | undefined) => {
+    const text = String(value ?? "");
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+  };
+
+  update(file.path);
+  update(file.status);
+  update(file.isNew);
+  update(file.isDeleted);
+  update(file.additions);
+  update(file.deletions);
+  for (const hunk of file.hunks) {
+    update(hunk.oldStart);
+    update(hunk.oldCount);
+    update(hunk.newStart);
+    update(hunk.newCount);
+    for (const line of hunk.lines) {
+      update(line.type);
+      update(line.content);
+    }
+  }
+  return (hash >>> 0).toString(36);
+}
+
+export function useReviewedDiffFiles(input: {
+  key: string;
+  files: readonly ParsedDiffFile[];
+}): ReadonlySet<string> {
+  const reviewedRevisions = useReviewDraftStore(
+    (state) => state.reviewedFiles[input.key] ?? EMPTY_REVIEWED_FILE_REVISIONS,
+  );
+  return useMemo(() => {
+    const paths = new Set<string>();
+    for (const file of input.files) {
+      if (reviewedRevisions[file.path] === buildDiffFileReviewRevision(file)) {
+        paths.add(file.path);
+      }
+    }
+    return paths;
+  }, [input.files, reviewedRevisions]);
+}
+
+export function useSetFileReviewed(): ReviewDraftStoreActions["setFileReviewed"] {
+  return useReviewDraftStore((state) => state.setFileReviewed);
+}
+
 export function useSetDiffModeOverride(): ReviewDraftStoreActions["setDiffModeOverride"] {
   return useReviewDraftStore((state) => state.setDiffModeOverride);
 }
@@ -311,7 +374,7 @@ export function getReviewDraftComments(key: string): ReviewDraftComment[] | unde
 }
 
 export function resetReviewDraftStore(): void {
-  useReviewDraftStore.setState({ drafts: {}, diffModeOverrides: {} });
+  useReviewDraftStore.setState({ drafts: {}, reviewedFiles: {}, diffModeOverrides: {} });
 }
 
 export function useReviewDraftCommentsForAttachment(input: {

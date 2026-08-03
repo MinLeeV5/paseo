@@ -32,13 +32,17 @@ import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/con
 import {
   AlignJustify,
   Archive,
+  ArrowDown,
   ArrowDownUp,
+  ArrowUp,
+  CheckCircle2,
   ChevronDown,
   Columns2,
   Download,
   ExternalLink,
   FolderTree,
   GitCommitHorizontal,
+  GitCompareArrows,
   GitFork,
   GitMerge,
   FileText,
@@ -46,6 +50,7 @@ import {
   ListChevronsDownUp,
   ListChevronsUpDown,
   Maximize2,
+  MessageSquareText,
   Pilcrow,
   RefreshCcw,
   RotateCw,
@@ -60,6 +65,7 @@ import type { CheckoutDiffFileGrouping } from "@/git/diff-order";
 import { buildDiffTree, collectDirPaths, compressSingleChildChains } from "@/git/diff-tree";
 import { DiffFolderRow } from "@/git/diff-folder-row";
 import {
+  TreeChevron,
   TreeIndentGuides,
   treeRowPaddingLeft,
   WORKSPACE_FILE_ROW_VERTICAL_PADDING,
@@ -77,6 +83,7 @@ import { shouldAnchorHeaderBeforeCollapse } from "@/git/diff-scroll";
 import {
   buildSplitDiffRows,
   buildUnifiedDiffLines,
+  buildReviewableDiffTargetKey,
   type ReviewableDiffTarget,
   type SplitDiffDisplayLine,
   type SplitDiffRow,
@@ -126,6 +133,7 @@ import {
   isInlineReviewEditorForTarget,
   type InlineReviewActions,
 } from "@/review";
+import { getAdjacentCircularIndex, sortReviewCommentsForDiff } from "@/review/navigation";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
@@ -144,8 +152,15 @@ export function resolveDiffLayout(
   return canUseSplitLayout ? layout : "unified";
 }
 
-function fileHeaderPressableStyle({ pressed }: PressableStateCallbackType) {
-  return [styles.fileHeader, pressed && styles.fileHeaderPressed];
+function fileHeaderPressableStyle({
+  hovered,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    styles.fileHeader,
+    Boolean(hovered) && styles.fileHeaderHovered,
+    pressed && styles.fileHeaderPressed,
+  ];
 }
 
 function fileOpenButtonStyle({ pressed }: PressableStateCallbackType) {
@@ -239,6 +254,8 @@ interface DiffFileSectionProps {
   onAddToChat?: (path: string) => void;
   onCopyPath?: (path: string) => void;
   onDownload?: (path: string) => void;
+  isReviewed?: boolean;
+  onToggleReviewed?: (file: ParsedDiffFile, reviewed: boolean) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
   testID?: string;
 }
@@ -1005,6 +1022,8 @@ const DiffFileHeader = memo(function DiffFileHeader({
   onAddToChat,
   onCopyPath,
   onDownload,
+  isReviewed = false,
+  onToggleReviewed,
   onHeaderHeightChange,
   testID,
 }: DiffFileSectionProps) {
@@ -1020,6 +1039,7 @@ const DiffFileHeader = memo(function DiffFileHeader({
   const pressHandledRef = useRef(false);
   const pressInRef = useRef<{ ts: number; pageX: number; pageY: number } | null>(null);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const reviewedAccessibilityState = useMemo(() => ({ checked: isReviewed }), [isReviewed]);
 
   const toggleExpanded = useCallback(() => {
     if (!interactive) {
@@ -1060,6 +1080,14 @@ const DiffFileHeader = memo(function DiffFileHeader({
   const handleDownload = useCallback(() => {
     onDownload?.(file.path);
   }, [file.path, onDownload]);
+  const handleToggleReviewed = useCallback(
+    (event: GestureResponderEvent) => {
+      pressHandledRef.current = true;
+      event.stopPropagation();
+      onToggleReviewed?.(file, !isReviewed);
+    },
+    [file, isReviewed, onToggleReviewed],
+  );
 
   const handleContextMenu = useCallback(
     (event: { preventDefault: () => void; stopPropagation: () => void }) => {
@@ -1153,11 +1181,10 @@ const DiffFileHeader = memo(function DiffFileHeader({
   const headerContent = (
     <>
       <View ref={dragSourceRef} style={styles.fileHeaderLeft}>
-        {showDir ? null : (
-          <View style={styles.fileIcon}>
-            <SvgXml xml={getFileIconSvg(fileName)} width={16} height={16} />
-          </View>
-        )}
+        <TreeChevron expanded={isExpanded} />
+        <View style={styles.fileIcon}>
+          <SvgXml xml={getFileIconSvg(fileName)} width={16} height={16} />
+        </View>
         <Text style={styles.fileName} numberOfLines={1}>
           {fileName}
         </Text>
@@ -1182,6 +1209,39 @@ const DiffFileHeader = memo(function DiffFileHeader({
         )}
       </View>
       <View style={styles.fileHeaderRight}>
+        {onToggleReviewed ? (
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={reviewedAccessibilityState}
+                accessibilityLabel={t(
+                  isReviewed
+                    ? "workspace.git.diff.markFileUnreviewed"
+                    : "workspace.git.diff.markFileReviewed",
+                )}
+                hitSlop={8}
+                style={fileOpenButtonStyle}
+                onPress={handleToggleReviewed}
+                testID={testID ? `${testID}-reviewed` : undefined}
+              >
+                <ThemedCheckCircle2
+                  size={14}
+                  uniProps={isReviewed ? successIconColorMapping : foregroundMutedIconColorMapping}
+                />
+              </Pressable>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <Text style={styles.tooltipText}>
+                {t(
+                  isReviewed
+                    ? "workspace.git.diff.markFileUnreviewed"
+                    : "workspace.git.diff.markFileReviewed",
+                )}
+              </Text>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         {onOpenInPreferredTool && openInPreferredToolLabel ? (
           <DiffFileOpenButton
             label={openInPreferredToolLabel}
@@ -1463,11 +1523,13 @@ type PressableStyleFn = (
 ) => StyleProp<ViewStyle>;
 
 const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const successIconColorMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedAlignJustify = withUnistyles(AlignJustify);
 const ThemedColumns2 = withUnistyles(Columns2);
 const ThemedFolderTree = withUnistyles(FolderTree);
+const ThemedGitCompareArrows = withUnistyles(GitCompareArrows);
 const ThemedGitFork = withUnistyles(GitFork);
 const ThemedList = withUnistyles(List);
 const ThemedPilcrow = withUnistyles(Pilcrow);
@@ -1475,6 +1537,7 @@ const ThemedWrapText = withUnistyles(WrapText);
 const ThemedListChevronsDownUp = withUnistyles(ListChevronsDownUp);
 const ThemedListChevronsUpDown = withUnistyles(ListChevronsUpDown);
 const ThemedMaximize2 = withUnistyles(Maximize2);
+const ThemedMessageSquareText = withUnistyles(MessageSquareText);
 const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
 const ThemedDownload = withUnistyles(Download);
 const ThemedUpload = withUnistyles(Upload);
@@ -1482,9 +1545,21 @@ const ThemedArrowDownUp = withUnistyles(ArrowDownUp);
 const ThemedGitMerge = withUnistyles(GitMerge);
 const ThemedRefreshCcw = withUnistyles(RefreshCcw);
 const ThemedArchive = withUnistyles(Archive);
+const ThemedArrowDown = withUnistyles(ArrowDown);
+const ThemedArrowUp = withUnistyles(ArrowUp);
+const ThemedCheckCircle2 = withUnistyles(CheckCircle2);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedFileText = withUnistyles(FileText);
 const ThemedExternalLink = withUnistyles(ExternalLink);
+const REVIEW_PREVIOUS_MENU_ICON = (
+  <ThemedArrowUp size={14} uniProps={foregroundMutedIconColorMapping} />
+);
+const REVIEW_NEXT_MENU_ICON = (
+  <ThemedArrowDown size={14} uniProps={foregroundMutedIconColorMapping} />
+);
+const REVIEW_COMMENT_MENU_ICON = (
+  <ThemedMessageSquareText size={14} uniProps={foregroundMutedIconColorMapping} />
+);
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
 );
@@ -1779,6 +1854,160 @@ export function DiffFilesToolbar({
   );
 }
 
+function ReviewCommentMenuItem({
+  comment,
+  index,
+  selected,
+  onSelectComment,
+}: {
+  comment: ReviewDraftComment;
+  index: number;
+  selected: boolean;
+  onSelectComment: (comment: ReviewDraftComment, index: number) => void;
+}) {
+  const handleSelect = useCallback(
+    () => onSelectComment(comment, index),
+    [comment, index, onSelectComment],
+  );
+  return (
+    <DropdownMenuItem
+      description={`${comment.filePath}:${comment.lineNumber}`}
+      selected={selected}
+      leading={REVIEW_COMMENT_MENU_ICON}
+      onSelect={handleSelect}
+      testID={`changes-review-comment-${comment.id}`}
+    >
+      {comment.body}
+    </DropdownMenuItem>
+  );
+}
+
+function ReviewWorkflowControls({
+  comments,
+  activeCommentIndex,
+  reviewedCount,
+  totalFiles,
+  isMobile,
+  onPreviousFile,
+  onNextFile,
+  onSelectComment,
+}: {
+  comments: readonly ReviewDraftComment[];
+  activeCommentIndex: number;
+  reviewedCount: number;
+  totalFiles: number;
+  isMobile: boolean;
+  onPreviousFile: () => void;
+  onNextFile: () => void;
+  onSelectComment: (comment: ReviewDraftComment, index: number) => void;
+}) {
+  const { t } = useTranslation();
+  const summaryLabel = t("workspace.git.diff.reviewProgress", {
+    reviewed: reviewedCount,
+    total: totalFiles,
+  });
+  const compactButtonStyle = useMemo(
+    () => buildToggleButtonStyle(false, styles.reviewNavigationButton),
+    [],
+  );
+
+  return (
+    <View style={styles.reviewWorkflowControls}>
+      {!isMobile ? (
+        <>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("workspace.git.diff.previousChangedFile")}
+                style={compactButtonStyle}
+                onPress={onPreviousFile}
+                testID="changes-previous-file"
+              >
+                <ThemedArrowUp size={13} uniProps={foregroundMutedIconColorMapping} />
+              </Pressable>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <Text style={styles.tooltipText}>{t("workspace.git.diff.previousChangedFile")}</Text>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("workspace.git.diff.nextChangedFile")}
+                style={compactButtonStyle}
+                onPress={onNextFile}
+                testID="changes-next-file"
+              >
+                <ThemedArrowDown size={13} uniProps={foregroundMutedIconColorMapping} />
+              </Pressable>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <Text style={styles.tooltipText}>{t("workspace.git.diff.nextChangedFile")}</Text>
+            </TooltipContent>
+          </Tooltip>
+        </>
+      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          accessibilityRole="button"
+          accessibilityLabel={summaryLabel}
+          style={styles.reviewDraftCount}
+          testID="changes-review-workflow"
+        >
+          <ThemedCheckCircle2
+            size={isMobile ? 16 : 13}
+            uniProps={
+              reviewedCount === totalFiles
+                ? successIconColorMapping
+                : foregroundMutedIconColorMapping
+            }
+          />
+          <Text style={styles.reviewDraftCountText}>
+            {reviewedCount}/{totalFiles}
+          </Text>
+          {comments.length > 0 ? (
+            <>
+              <View style={styles.reviewSummaryDivider} />
+              <ThemedMessageSquareText
+                size={isMobile ? 16 : 13}
+                uniProps={foregroundMutedIconColorMapping}
+              />
+              <Text style={styles.reviewDraftCountText}>{comments.length}</Text>
+            </>
+          ) : null}
+          <ThemedChevronDown size={11} uniProps={foregroundMutedIconColorMapping} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" width={320} maxHeight={380} scrollable>
+          <DropdownMenuItem leading={REVIEW_PREVIOUS_MENU_ICON} onSelect={onPreviousFile}>
+            {t("workspace.git.diff.previousChangedFile")}
+          </DropdownMenuItem>
+          <DropdownMenuItem leading={REVIEW_NEXT_MENU_ICON} onSelect={onNextFile}>
+            {t("workspace.git.diff.nextChangedFile")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {comments.length > 0 ? (
+            comments.map((comment, index) => (
+              <ReviewCommentMenuItem
+                key={comment.id}
+                comment={comment}
+                index={index}
+                selected={index === activeCommentIndex}
+                onSelectComment={onSelectComment}
+              />
+            ))
+          ) : (
+            <DropdownMenuItem disabled muted>
+              {t("workspace.git.diff.noReviewComments")}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </View>
+  );
+}
+
 interface DiffOptionsMenuProps {
   brand?: string;
   hideWhitespace: boolean;
@@ -1987,11 +2216,7 @@ function DiffBodyContent({
     );
   }
   if (notGit) {
-    return (
-      <View style={styles.emptyContainer} testID="changes-not-git">
-        <Text style={styles.emptyText}>{notRepositoryLabel}</Text>
-      </View>
-    );
+    return <DiffEmptyState label={notRepositoryLabel} testID="changes-not-git" />;
   }
   if (isDiffLoading) {
     return (
@@ -2011,13 +2236,20 @@ function DiffBodyContent({
     );
   }
   if (!hasChanges) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>{emptyMessage}</Text>
-      </View>
-    );
+    return <DiffEmptyState label={emptyMessage} />;
   }
   return children;
+}
+
+function DiffEmptyState({ label, testID }: { label: string; testID?: string }) {
+  return (
+    <View style={styles.emptyContainer} testID={testID}>
+      <View style={styles.emptyIconBadge}>
+        <ThemedGitCompareArrows size={20} uniProps={foregroundMutedIconColorMapping} />
+      </View>
+      <Text style={styles.emptyText}>{label}</Text>
+    </View>
+  );
 }
 
 interface SharedDiffViewProps {
@@ -2036,6 +2268,16 @@ interface SharedDiffViewProps {
         collapsedFolders: string[];
         collapsedGroupKeys: string[];
         reviewActions?: InlineReviewActions;
+        reviewedPaths?: ReadonlySet<string>;
+        onToggleReviewed?: (file: ParsedDiffFile, reviewed: boolean) => void;
+        focusPath?: string;
+        focusRequestId?: number;
+        reviewFocusTarget?: {
+          filePath: string;
+          side: "old" | "new";
+          lineNumber: number;
+          requestId: number;
+        };
         onOpenFile?: (file: ParsedDiffFile) => void;
         onOpenInPreferredTool?: (file: ParsedDiffFile) => void;
         preferredOpenToolLabel?: string;
@@ -2098,9 +2340,12 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   const stickyHeaders = mode.kind !== "commit";
   const interactive = mode.kind !== "commit";
   const reviewActions = mode.kind === "commit" ? undefined : mode.reviewActions;
+  const reviewedPaths = mode.kind === "working_tree" ? mode.reviewedPaths : undefined;
+  const onToggleReviewed = mode.kind === "working_tree" ? mode.onToggleReviewed : undefined;
   const onFilePress = mode.kind === "working_tree" ? mode.onFilePress : undefined;
-  const focusPath = mode.kind === "working_tab" ? mode.focusPath : undefined;
-  const focusRequestId = mode.kind === "working_tab" ? mode.focusRequestId : undefined;
+  const focusPath = mode.kind === "commit" ? undefined : mode.focusPath;
+  const focusRequestId = mode.kind === "commit" ? undefined : mode.focusRequestId;
+  const reviewFocusTarget = mode.kind === "working_tree" ? mode.reviewFocusTarget : undefined;
   const onOpenFile = mode.kind === "working_tree" ? mode.onOpenFile : undefined;
   const onOpenInPreferredTool =
     mode.kind === "working_tree" ? mode.onOpenInPreferredTool : undefined;
@@ -2308,11 +2553,47 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     [computeItemOffset],
   );
 
+  const computeReviewTargetOffset = useCallback(
+    (target: NonNullable<typeof reviewFocusTarget>): number => {
+      const file = files.find((candidate) => candidate.path === target.filePath);
+      if (!file) {
+        return computeHeaderOffset(target.filePath);
+      }
+      const bodyOffset = computeItemOffset(
+        (item) => item.type === "body" && item.file.path === target.filePath,
+      );
+      if (bodyOffset === null) {
+        return computeHeaderOffset(target.filePath);
+      }
+      const targetKey = buildReviewableDiffTargetKey(target);
+      const rowIndex =
+        layout === "split"
+          ? buildSplitDiffRows(file).findIndex(
+              (row) =>
+                row.kind === "pair" &&
+                (row.left?.reviewTarget?.key === targetKey ||
+                  row.right?.reviewTarget?.key === targetKey),
+            )
+          : buildUnifiedDiffLines(file).findIndex((line) => line.reviewTarget?.key === targetKey);
+      if (rowIndex < 0) {
+        return computeHeaderOffset(target.filePath);
+      }
+      const viewportInset = diffListViewportHeightRef.current * 0.28;
+      return Math.max(
+        computeHeaderOffset(target.filePath),
+        bodyOffset + BORDER_WIDTH[1] + rowIndex * diffBodyLineHeight - viewportInset,
+      );
+    },
+    [computeHeaderOffset, computeItemOffset, diffBodyLineHeight, files, layout],
+  );
+
   useEffect(() => {
     if (!focusPath) {
       return;
     }
-    const focusRequestKey = `${focusRequestId ?? "initial"}:${focusPath}`;
+    const focusRequestKey = reviewFocusTarget
+      ? `${reviewFocusTarget.requestId}:${focusPath}:${reviewFocusTarget.side}:${reviewFocusTarget.lineNumber}`
+      : `${focusRequestId ?? "initial"}:${focusPath}`;
     if (
       consumedFocusRequestRef.current === focusRequestKey ||
       pendingFocusRequestRef.current === focusRequestKey
@@ -2328,7 +2609,10 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     pendingFocusRequestRef.current = focusRequestKey;
     const frame = requestAnimationFrame(() => {
       diffListRef.current?.scrollToOffset({
-        offset: computeHeaderOffset(focusPath),
+        offset:
+          reviewFocusTarget?.filePath === focusPath
+            ? computeReviewTargetOffset(reviewFocusTarget)
+            : computeHeaderOffset(focusPath),
         animated: false,
       });
       consumedFocusRequestRef.current = focusRequestKey;
@@ -2340,7 +2624,14 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         pendingFocusRequestRef.current = null;
       }
     };
-  }, [computeHeaderOffset, flatItems, focusPath, focusRequestId]);
+  }, [
+    computeHeaderOffset,
+    computeReviewTargetOffset,
+    flatItems,
+    focusPath,
+    focusRequestId,
+    reviewFocusTarget,
+  ]);
 
   const handleToggleExpanded = useCallback(
     (path: string) => {
@@ -2493,6 +2784,8 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
             onAddToChat={onAddToChat}
             onCopyPath={onCopyPath}
             onDownload={onDownload}
+            isReviewed={reviewedPaths?.has(item.file.path) ?? false}
+            onToggleReviewed={onToggleReviewed}
             onHeaderHeightChange={handleHeaderHeightChange}
             testID={`diff-file-${item.fileIndex}`}
           />
@@ -2535,6 +2828,8 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       onAddToChat,
       onCopyPath,
       onDownload,
+      onToggleReviewed,
+      reviewedPaths,
     ],
   );
 
@@ -2565,6 +2860,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       heightVersion,
       wrapLines,
       reviewActions,
+      reviewedPaths,
       workspaceFileDragScope,
       preferredOpenToolLabel,
       openingPreferredToolPath,
@@ -2577,6 +2873,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       heightVersion,
       layout,
       reviewActions,
+      reviewedPaths,
       typographyKey,
       workspaceFileDragScope,
       preferredOpenToolLabel,
@@ -3123,6 +3420,14 @@ export function GitDiffPane({
     useChangesPreferences();
   const [changesSource, setChangesSource] = useState<ChangesSource>("checkout");
   const [selectedPromptTurnId, setSelectedPromptTurnId] = useState<string | null>(null);
+  const diffFocusRequestIdRef = useRef(0);
+  const [diffFocusRequest, setDiffFocusRequest] = useState<{
+    path: string;
+    requestId: number;
+    reviewTarget?: { side: "old" | "new"; lineNumber: number };
+  } | null>(null);
+  const [activeDiffFileIndex, setActiveDiffFileIndex] = useState(-1);
+  const [activeReviewCommentIndex, setActiveReviewCommentIndex] = useState(-1);
   const wrapLines = changesPreferences.wrapLines;
   // COMPAT(checkoutDiffSubmodulePaths): added in v0.1.103, remove gate after 2027-01-08.
   const submoduleGroupingSupported = useSessionStore(
@@ -3220,6 +3525,10 @@ export function GitDiffPane({
     diffTooLarge: checkoutDiffTooLarge,
     isDiffLoading: isCheckoutDiffLoading,
     reviewActions,
+    reviewComments,
+    reviewDraftKey,
+    reviewedPaths,
+    setFileReviewed,
     reviewAttachment,
   } = useWorkingDiff({
     serverId,
@@ -3254,6 +3563,18 @@ export function GitDiffPane({
     },
     session: agentSessionChangesQuery,
   });
+  const sortedReviewComments = useMemo(
+    () =>
+      activeChangesSource === "checkout" ? sortReviewCommentsForDiff(reviewComments, files) : [],
+    [activeChangesSource, files, reviewComments],
+  );
+  const reviewedFileCount = activeChangesSource === "checkout" ? reviewedPaths.size : 0;
+
+  useEffect(() => {
+    setDiffFocusRequest(null);
+    setActiveDiffFileIndex(-1);
+    setActiveReviewCommentIndex(-1);
+  }, [activeChangesSource, reviewDraftKey]);
   const diffTooLarge = activeChangesSource === "checkout" && checkoutDiffTooLarge;
   usePublishWorkingDiffAttachment({
     serverId,
@@ -3526,6 +3847,72 @@ export function GitDiffPane({
     },
     [setDiffCollapsedGroupsForWorkspace, workspaceStateKey],
   );
+  const focusDiffFile = useCallback(
+    (input: { fileIndex: number; reviewTarget?: { side: "old" | "new"; lineNumber: number } }) => {
+      const file = files[input.fileIndex];
+      if (!file) {
+        return;
+      }
+      if (workspaceStateKey) {
+        // Navigation targets must not remain hidden inside a collapsed grouping.
+        setDiffCollapsedFoldersForWorkspace(workspaceStateKey, []);
+        setDiffCollapsedGroupsForWorkspace(workspaceStateKey, []);
+        if (input.reviewTarget && !expandedPaths.has(file.path)) {
+          setDiffExpandedPathsForWorkspace(workspaceStateKey, [...expandedPaths, file.path]);
+        }
+      }
+      diffFocusRequestIdRef.current += 1;
+      setDiffFocusRequest({
+        path: file.path,
+        requestId: diffFocusRequestIdRef.current,
+        ...(input.reviewTarget ? { reviewTarget: input.reviewTarget } : {}),
+      });
+      setActiveDiffFileIndex(input.fileIndex);
+    },
+    [
+      expandedPaths,
+      files,
+      setDiffCollapsedFoldersForWorkspace,
+      setDiffCollapsedGroupsForWorkspace,
+      setDiffExpandedPathsForWorkspace,
+      workspaceStateKey,
+    ],
+  );
+  const navigateChangedFile = useCallback(
+    (direction: "previous" | "next") => {
+      const nextIndex = getAdjacentCircularIndex({
+        currentIndex: activeDiffFileIndex,
+        itemCount: files.length,
+        direction,
+      });
+      if (nextIndex !== null) {
+        focusDiffFile({ fileIndex: nextIndex });
+      }
+    },
+    [activeDiffFileIndex, files.length, focusDiffFile],
+  );
+  const handlePreviousChangedFile = useCallback(
+    () => navigateChangedFile("previous"),
+    [navigateChangedFile],
+  );
+  const handleNextChangedFile = useCallback(
+    () => navigateChangedFile("next"),
+    [navigateChangedFile],
+  );
+  const handleSelectReviewComment = useCallback(
+    (comment: ReviewDraftComment, commentIndex: number) => {
+      const fileIndex = files.findIndex((file) => file.path === comment.filePath);
+      if (fileIndex < 0) {
+        return;
+      }
+      setActiveReviewCommentIndex(commentIndex);
+      focusDiffFile({
+        fileIndex,
+        reviewTarget: { side: comment.side, lineNumber: comment.lineNumber },
+      });
+    },
+    [files, focusDiffFile],
+  );
   const workingTreeMode = useMemo(
     () => ({
       kind: "working_tree" as const,
@@ -3534,6 +3921,21 @@ export function GitDiffPane({
       collapsedFolders: stableCollapsedFoldersArray,
       collapsedGroupKeys: stableCollapsedGroupKeysArray,
       reviewActions: checkoutOnlyValue(activeChangesSource, reviewActions),
+      reviewedPaths: checkoutOnlyValue(activeChangesSource, reviewedPaths),
+      onToggleReviewed: checkoutOnlyValue(activeChangesSource, setFileReviewed),
+      focusPath: checkoutOnlyValue(activeChangesSource, diffFocusRequest?.path),
+      focusRequestId: checkoutOnlyValue(activeChangesSource, diffFocusRequest?.requestId),
+      reviewFocusTarget: checkoutOnlyValue(
+        activeChangesSource,
+        diffFocusRequest?.reviewTarget
+          ? {
+              filePath: diffFocusRequest.path,
+              side: diffFocusRequest.reviewTarget.side,
+              lineNumber: diffFocusRequest.reviewTarget.lineNumber,
+              requestId: diffFocusRequest.requestId,
+            }
+          : undefined,
+      ),
       onFilePress: checkoutOnlyValue(activeChangesSource, onChangesFilePress),
       workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
       onOpenFile: onOpenWorkspaceFile ? handleOpenDiffFile : undefined,
@@ -3549,6 +3951,7 @@ export function GitDiffPane({
     }),
     [
       activeChangesSource,
+      diffFocusRequest,
       fileGrouping,
       handleCollapsedFoldersChange,
       handleCollapsedGroupKeysChange,
@@ -3563,6 +3966,8 @@ export function GitDiffPane({
       openingPreferredToolPath,
       preferredOpenTarget,
       reviewActions,
+      reviewedPaths,
+      setFileReviewed,
       serverId,
       stableCollapsedFoldersArray,
       stableCollapsedGroupKeysArray,
@@ -3711,6 +4116,18 @@ export function GitDiffPane({
                   onToggleExpandAll={handleToggleExpandAll}
                 />
               ) : null}
+              {activeChangesSource === "checkout" && files.length > 0 && !changesTabOpen ? (
+                <ReviewWorkflowControls
+                  comments={sortedReviewComments}
+                  activeCommentIndex={activeReviewCommentIndex}
+                  reviewedCount={reviewedFileCount}
+                  totalFiles={files.length}
+                  isMobile={isMobile}
+                  onPreviousFile={handlePreviousChangedFile}
+                  onNextFile={handleNextChangedFile}
+                  onSelectComment={handleSelectReviewComment}
+                />
+              ) : null}
               <DiffOptionsMenu
                 brand={getForgePresentation(forge).brandLabel}
                 hideWhitespace={changesPreferences.hideWhitespace}
@@ -3762,6 +4179,7 @@ const styles = StyleSheet.create((theme) => ({
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
   },
   diffStatusInner: {
     flex: 1,
@@ -3788,7 +4206,7 @@ const styles = StyleSheet.create((theme) => ({
       sm: 28,
       md: 24,
     },
-    borderRadius: theme.borderRadius.base,
+    borderRadius: theme.borderRadius.lg,
     flexShrink: 0,
   },
   diffModeTriggerHovered: {
@@ -3822,6 +4240,52 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     flexWrap: "wrap",
   },
+  reviewWorkflowControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  reviewNavigationButton: {
+    minWidth: {
+      xs: 32,
+      sm: 32,
+      md: 24,
+    },
+    height: {
+      xs: 32,
+      sm: 32,
+      md: 24,
+    },
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
+  },
+  reviewDraftCount: {
+    height: {
+      xs: 32,
+      sm: 32,
+      md: 24,
+    },
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface2,
+  },
+  reviewSummaryDivider: {
+    width: theme.borderWidth[1],
+    height: 12,
+    marginHorizontal: theme.spacing[1],
+    backgroundColor: theme.colors.borderAccent,
+  },
+  reviewDraftCountText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    fontVariant: ["tabular-nums"],
+  },
   toggleButtonSelected: {
     backgroundColor: theme.colors.surface2,
   },
@@ -3845,7 +4309,7 @@ const styles = StyleSheet.create((theme) => ({
       sm: theme.spacing[2],
       md: theme.spacing[1],
     },
-    borderRadius: theme.borderRadius.base,
+    borderRadius: theme.borderRadius.lg,
     flexShrink: 0,
   },
   overflowButton: {
@@ -3857,7 +4321,7 @@ const styles = StyleSheet.create((theme) => ({
     },
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.base,
+    borderRadius: theme.borderRadius.lg,
     flexShrink: 0,
   },
   actionErrorText: {
@@ -3873,7 +4337,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.xl,
     backgroundColor: theme.colors.surface1,
   },
   forgeSetupCalloutText: {
@@ -3919,14 +4383,25 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     paddingTop: theme.spacing[16],
+    paddingHorizontal: theme.spacing[6],
+    gap: theme.spacing[3],
+  },
+  emptyIconBadge: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface1,
   },
   emptyText: {
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
+    textAlign: "center",
   },
   fileSection: {
     overflow: "hidden",
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
@@ -3956,7 +4431,10 @@ const styles = StyleSheet.create((theme) => ({
     elevation: 2,
   },
   fileHeaderPressed: {
-    opacity: 0.7,
+    backgroundColor: theme.colors.surface2,
+  },
+  fileHeaderHovered: {
+    backgroundColor: theme.colors.surface1,
   },
   fileHeaderLeft: {
     flexDirection: "row",
@@ -3976,7 +4454,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     width: 24,
     height: 24,
-    borderRadius: theme.borderRadius.base,
+    borderRadius: theme.borderRadius.lg,
   },
   fileOpenButtonPressed: {
     backgroundColor: theme.colors.surface2,
@@ -4011,7 +4489,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "rgba(46, 160, 67, 0.2)",
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.full,
     flexShrink: 0,
   },
   newBadgeText: {
@@ -4023,7 +4501,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "rgba(248, 81, 73, 0.2)",
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.full,
     flexShrink: 0,
   },
   deletedBadgeText: {

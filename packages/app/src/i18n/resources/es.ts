@@ -897,6 +897,12 @@ export const es: TranslationResources = {
         base: "base",
         newFile: "Nuevo",
         deletedFile: "Eliminado",
+        markFileReviewed: "Marcar archivo como revisado",
+        markFileUnreviewed: "Marcar archivo como no revisado",
+        reviewProgress: "{{reviewed}} de {{total}} archivos revisados",
+        previousChangedFile: "Archivo cambiado anterior",
+        nextChangedFile: "Siguiente archivo cambiado",
+        noReviewComments: "Aún no hay comentarios de revisión",
         commits: {
           title: "Commits",
           countLabel: "{{count}} commits del espacio de trabajo",

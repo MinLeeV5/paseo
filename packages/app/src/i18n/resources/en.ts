@@ -874,6 +874,12 @@ export const en = {
         base: "base",
         newFile: "New",
         deletedFile: "Deleted",
+        markFileReviewed: "Mark file as reviewed",
+        markFileUnreviewed: "Mark file as not reviewed",
+        reviewProgress: "{{reviewed}} of {{total}} files reviewed",
+        previousChangedFile: "Previous changed file",
+        nextChangedFile: "Next changed file",
+        noReviewComments: "No review comments yet",
         commits: {
           title: "Commits",
           countLabel: "{{count}} workspace commits",

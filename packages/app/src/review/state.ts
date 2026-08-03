@@ -23,13 +23,16 @@ export interface DiffModeOverride {
 
 export interface ReviewDraftStoreState {
   drafts: Record<string, ReviewDraftComment[]>;
+  // A file is reviewed only while its stored revision matches the visible diff.
+  reviewedFiles: Record<string, Record<string, string>>;
   // In-memory only — not persisted. Keyed by scope key.
   diffModeOverrides: Record<string, DiffModeOverride>;
 }
 
-// Only drafts are persisted; diffModeOverrides is intentionally excluded.
+// Drafts and revision-bound review markers are persisted; diffModeOverrides is excluded.
 export interface SerializedReviewDraftState {
   drafts: Record<string, ReviewDraftComment[]>;
+  reviewedFiles: Record<string, Record<string, string>>;
 }
 
 export function setDiffModeOverrideInState(
@@ -139,16 +142,45 @@ export function deleteCommentFromState(
   };
 }
 
+export function setFileReviewedInState(
+  state: ReviewDraftStoreState,
+  input: { key: string; path: string; revision: string; reviewed: boolean },
+): ReviewDraftStoreState {
+  const currentFiles = state.reviewedFiles[input.key] ?? {};
+  if (input.reviewed && currentFiles[input.path] === input.revision) {
+    return state;
+  }
+  if (!input.reviewed && currentFiles[input.path] === undefined) {
+    return state;
+  }
+
+  const nextFiles = { ...currentFiles };
+  if (input.reviewed) {
+    nextFiles[input.path] = input.revision;
+  } else {
+    delete nextFiles[input.path];
+  }
+  const nextReviewedFiles = { ...state.reviewedFiles };
+  if (Object.keys(nextFiles).length > 0) {
+    nextReviewedFiles[input.key] = nextFiles;
+  } else {
+    delete nextReviewedFiles[input.key];
+  }
+  return { ...state, reviewedFiles: nextReviewedFiles };
+}
+
 export function clearReviewInState(
   state: ReviewDraftStoreState,
   input: { key: string },
 ): ReviewDraftStoreState {
-  if (!state.drafts[input.key]) {
+  if (!state.drafts[input.key] && !state.reviewedFiles[input.key]) {
     return state;
   }
   const nextDrafts = { ...state.drafts };
+  const nextReviewedFiles = { ...state.reviewedFiles };
   delete nextDrafts[input.key];
-  return { ...state, drafts: nextDrafts };
+  delete nextReviewedFiles[input.key];
+  return { ...state, drafts: nextDrafts, reviewedFiles: nextReviewedFiles };
 }
 
 export function serializeReviewDraftState(
@@ -156,18 +188,19 @@ export function serializeReviewDraftState(
 ): SerializedReviewDraftState {
   return {
     drafts: state.drafts,
+    reviewedFiles: state.reviewedFiles,
   };
 }
 
 export function normalizePersistedState(state: unknown): ReviewDraftStoreState {
   if (!state || typeof state !== "object") {
-    return { drafts: {}, diffModeOverrides: {} };
+    return { drafts: {}, reviewedFiles: {}, diffModeOverrides: {} };
   }
   // activeModesByScope may be present in old persisted JSON — tolerate and ignore it.
-  const persisted = state as { drafts?: unknown };
+  const persisted = state as { drafts?: unknown; reviewedFiles?: unknown };
   const drafts = persisted.drafts;
   if (!drafts || typeof drafts !== "object" || Array.isArray(drafts)) {
-    return { drafts: {}, diffModeOverrides: {} };
+    return { drafts: {}, reviewedFiles: {}, diffModeOverrides: {} };
   }
 
   const normalized: Record<string, ReviewDraftComment[]> = {};
@@ -180,7 +213,28 @@ export function normalizePersistedState(state: unknown): ReviewDraftStoreState {
     );
   }
 
-  return { drafts: normalized, diffModeOverrides: {} };
+  const reviewedFiles: Record<string, Record<string, string>> = {};
+  if (
+    persisted.reviewedFiles &&
+    typeof persisted.reviewedFiles === "object" &&
+    !Array.isArray(persisted.reviewedFiles)
+  ) {
+    for (const [key, value] of Object.entries(persisted.reviewedFiles)) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        continue;
+      }
+      const revisions = Object.fromEntries(
+        Object.entries(value).filter((entry): entry is [string, string] => {
+          return typeof entry[1] === "string";
+        }),
+      );
+      if (Object.keys(revisions).length > 0) {
+        reviewedFiles[key] = revisions;
+      }
+    }
+  }
+
+  return { drafts: normalized, reviewedFiles, diffModeOverrides: {} };
 }
 
 export function isReviewDraftComment(value: unknown): value is ReviewDraftComment {

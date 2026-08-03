@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ParsedDiffFile } from "@/git/use-diff-query";
 import {
   buildReviewAttachmentSnapshot,
+  buildDiffFileReviewRevision,
   buildReviewDraftKey,
   buildReviewDraftScopeKey,
 } from "./store";
@@ -16,12 +17,13 @@ import {
   type ReviewDraftComment,
   type ReviewDraftStoreState,
   serializeReviewDraftState,
+  setFileReviewedInState,
   setDiffModeOverrideInState,
   updateCommentInState,
 } from "./state";
 
 function emptyState(): ReviewDraftStoreState {
-  return { drafts: {}, diffModeOverrides: {} };
+  return { drafts: {}, reviewedFiles: {}, diffModeOverrides: {} };
 }
 
 function makeOverride(
@@ -160,17 +162,26 @@ describe("normalizePersistedState", () => {
   });
 
   it("returns empty state for null, non-object, or malformed inputs", () => {
-    expect(normalizePersistedState(null)).toEqual({ drafts: {}, diffModeOverrides: {} });
-    expect(normalizePersistedState("nope")).toEqual({ drafts: {}, diffModeOverrides: {} });
+    expect(normalizePersistedState(null)).toEqual({
+      drafts: {},
+      reviewedFiles: {},
+      diffModeOverrides: {},
+    });
+    expect(normalizePersistedState("nope")).toEqual({
+      drafts: {},
+      reviewedFiles: {},
+      diffModeOverrides: {},
+    });
     expect(normalizePersistedState({ drafts: [] })).toEqual({
       drafts: {},
+      reviewedFiles: {},
       diffModeOverrides: {},
     });
   });
 });
 
 describe("serializeReviewDraftState", () => {
-  it("serialized output does not contain activeModesByScope or diffModeOverrides", () => {
+  it("serializes drafts and reviewed files but not in-memory mode overrides", () => {
     const state = setDiffModeOverrideInState(
       addCommentToState(emptyState(), { key: "review:key", comment: makeComment() }),
       {
@@ -181,10 +192,11 @@ describe("serializeReviewDraftState", () => {
 
     const serialized = serializeReviewDraftState(state);
 
-    expect(Object.keys(serialized)).toEqual(["drafts"]);
+    expect(Object.keys(serialized)).toEqual(["drafts", "reviewedFiles"]);
     expect("activeModesByScope" in serialized).toBe(false);
     expect("diffModeOverrides" in serialized).toBe(false);
     expect(serialized.drafts["review:key"]).toHaveLength(1);
+    expect(serialized.reviewedFiles).toEqual({});
   });
 });
 
@@ -322,6 +334,21 @@ describe("review draft reducers", () => {
 
     state = deleteCommentFromState(state, { key: "review:key", id: comment.id });
     expect(state.drafts["review:key"]).toEqual([]);
+  });
+
+  it("binds reviewed state to the current file revision and clears it with the review", () => {
+    const file = makeFile();
+    const revision = buildDiffFileReviewRevision(file);
+    let state = setFileReviewedInState(emptyState(), {
+      key: "review:key",
+      path: file.path,
+      revision,
+      reviewed: true,
+    });
+    expect(state.reviewedFiles["review:key"]?.[file.path]).toBe(revision);
+
+    state = clearReviewInState(state, { key: "review:key" });
+    expect(state.reviewedFiles["review:key"]).toBeUndefined();
   });
 
   it("keeps state identity on no-op updates, deletes, and clears", () => {

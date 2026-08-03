@@ -876,6 +876,12 @@ export const ja: TranslationResources = {
         base: "ベース",
         newFile: "新規",
         deletedFile: "削除済み",
+        markFileReviewed: "ファイルをレビュー済みにする",
+        markFileUnreviewed: "ファイルを未レビューに戻す",
+        reviewProgress: "{{total}} ファイル中 {{reviewed}} 件レビュー済み",
+        previousChangedFile: "前の変更ファイル",
+        nextChangedFile: "次の変更ファイル",
+        noReviewComments: "レビューコメントはまだありません",
         commits: {
           title: "コミット",
           countLabel: "ワークスペースのコミット数: {{count}}",
