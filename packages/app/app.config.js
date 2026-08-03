@@ -88,7 +88,7 @@ function resolveSecretFile(params) {
 const variants = {
   production: {
     name: "Paseo",
-    packageId: "sh.paseo",
+    packageId: "sh.paseo.minleev5",
     googleServicesFile: resolveSecretFile({
       envKey: "GOOGLE_SERVICES_FILE_PROD",
       fallbackRelativePath: "./.secrets/google-services.prod.json",
@@ -100,7 +100,7 @@ const variants = {
   },
   development: {
     name: "Paseo Debug",
-    packageId: "sh.paseo.debug",
+    packageId: "sh.paseo.minleev5.debug",
     googleServicesFile: resolveSecretFile({
       envKey: "GOOGLE_SERVICES_FILE_DEBUG",
       fallbackRelativePath: "./.secrets/google-services.debug.json",
@@ -118,7 +118,7 @@ const nativeBuildVersionCode = getNativeBuildVersionCode(pkg.version);
 export default {
   expo: {
     name: variant.name,
-    slug: "voice-mobile",
+    slug: "paseo",
     version: pkg.version,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -129,7 +129,7 @@ export default {
       policy: "appVersion",
     },
     updates: {
-      url: "https://u.expo.dev/0e7f65ce-0367-46c8-a238-2b65963d235a",
+      url: "https://u.expo.dev/0f923448-43bd-4b8b-afbf-a9e10ea83ea1",
       ...buildProfile.updates,
     },
     ios: {
@@ -212,9 +212,9 @@ export default {
       fdroidBuild: isFdroidBuild,
       router: {},
       eas: {
-        projectId: "0e7f65ce-0367-46c8-a238-2b65963d235a",
+        projectId: "0f923448-43bd-4b8b-afbf-a9e10ea83ea1",
       },
     },
-    owner: "getpaseo",
+    owner: "minleev5",
   },
 };
