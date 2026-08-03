@@ -54,6 +54,7 @@ import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { reconcileMissingAgentStateWithPresentAgent } from "@/panels/agent-panel-load-state";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { AgentGoalStatus } from "@/panels/agent-goal-status";
+import { AgentWorkflowStatus } from "@/panels/agent-workflow-status";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { RenderProfile } from "@/utils/render-profiler";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
@@ -1547,6 +1548,7 @@ function ActiveAgentComposer({
         onArchiveFinished={handleHideFinishedProviderSubagents}
         onDetachSubagent={canDetachSubagents ? handleDetachSubagent : undefined}
       />
+      <AgentWorkflowStatus serverId={serverId} agentId={agentId} />
       <AgentGoalStatus serverId={serverId} agentId={agentId} />
       <Composer
         agentId={agentId}

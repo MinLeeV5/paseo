@@ -177,6 +177,7 @@ export const zhCN: TranslationResources = {
   agentStream: {
     empty: "开始和这个 Agent 对话...",
     scrollToBottom: "滚动到底部",
+    newActivity: "有 {{count}} 条新动态，滚动到底部",
     permission: {
       plan: "Plan",
       required: "需要权限",
@@ -185,6 +186,7 @@ export const zhCN: TranslationResources = {
       implement: "实施",
       question: "你想如何继续？",
       proposedPlan: "建议计划",
+      responseFailed: "未能发送响应：{{error}}。请重试。",
     },
   },
   agentPanel: {
@@ -218,6 +220,16 @@ export const zhCN: TranslationResources = {
     archived: {
       callout: "此 Agent 已归档",
       unarchive: "取消归档",
+    },
+    workflow: {
+      starting: "正在启动",
+      thinking: "正在思考",
+      runningTool: "正在运行 {{tool}}",
+      working: "正在处理",
+      permission: "等待批准",
+      error: "Agent 已停止",
+      readyForReview: "可供审阅",
+      recoveryHint: "请从标签页菜单重新加载 Agent 后再试",
     },
     goal: {
       status: {

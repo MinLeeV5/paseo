@@ -26,7 +26,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { Check, ChevronDown, X } from "lucide-react-native";
+import { Check, ChevronDown, MessageSquareText, X } from "lucide-react-native";
 import { usePanelStore } from "@/stores/panel-store";
 import {
   AssistantMessage,
@@ -102,6 +102,11 @@ import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { toErrorMessage } from "@/utils/error-messages";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
+import {
+  countUnreadActivity,
+  createUnreadActivityBaseline,
+  type UnreadActivityBaseline,
+} from "./unread-activity";
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -120,6 +125,17 @@ function renderLiveAuxiliaryNode(input: {
       ) : null}
     </>
   );
+}
+
+function scrollToBottomButtonStyle({
+  hovered = false,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    stylesheet.scrollToBottomButton,
+    (hovered || pressed) && stylesheet.scrollToBottomButtonActive,
+    pressed && stylesheet.scrollToBottomButtonPressed,
+  ];
 }
 
 function renderPendingPermissionsNode(input: {
@@ -198,6 +214,9 @@ function renderListEmptyComponent(input: {
 
   return (
     <View style={input.emptyStateStyle}>
+      <View style={stylesheet.emptyStateIconBadge}>
+        <ThemedMessageSquareText size={20} uniProps={mutedColorMapping} />
+      </View>
       <Text style={stylesheet.emptyStateText}>{input.emptyText}</Text>
     </View>
   );
@@ -351,6 +370,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [isMobile],
     );
     const [isNearBottom, setIsNearBottom] = useState(true);
+    const isNearBottomRef = useRef(true);
+    const [unreadActivityBaseline, setUnreadActivityBaseline] =
+      useState<UnreadActivityBaseline | null>(null);
     const [expandedInlineToolCallIds, setExpandedInlineToolCallIds] = useState<Set<string>>(
       new Set(),
     );
@@ -408,7 +430,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       : FadeOut.duration(200);
 
     useEffect(() => {
+      isNearBottomRef.current = true;
       setIsNearBottom(true);
+      setUnreadActivityBaseline(null);
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
     }, [agentId]);
@@ -877,6 +901,34 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       () => Array.from(pendingPermissions.values()).filter((perm) => perm.agentId === agentId),
       [pendingPermissions, agentId],
     );
+    const unreadActivityCount = useMemo(
+      () =>
+        countUnreadActivity({
+          baseline: unreadActivityBaseline,
+          tail: effectiveStreamItems,
+          head: effectiveStreamHead ?? EMPTY_STREAM_HEAD,
+          pendingPermissions: pendingPermissionItems,
+        }),
+      [effectiveStreamHead, effectiveStreamItems, pendingPermissionItems, unreadActivityBaseline],
+    );
+    const handleNearBottomChange = useStableEvent((nearBottom: boolean) => {
+      if (isNearBottomRef.current === nearBottom) {
+        return;
+      }
+      isNearBottomRef.current = nearBottom;
+      setIsNearBottom(nearBottom);
+      if (nearBottom) {
+        setUnreadActivityBaseline(null);
+      } else {
+        setUnreadActivityBaseline(
+          createUnreadActivityBaseline({
+            tail: effectiveStreamItems,
+            head: effectiveStreamHead ?? EMPTY_STREAM_HEAD,
+            pendingPermissions: pendingPermissionItems,
+          }),
+        );
+      }
+    });
 
     const showRunningTurnFooter = baseRenderModel.turnTiming.isActive;
     const pendingPermissionsNode = useMemo(
@@ -1027,7 +1079,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               viewportRef,
               routeBottomAnchorRequest,
               isAuthoritativeHistoryReady,
-              onNearBottomChange: setIsNearBottom,
+              onNearBottomChange: handleNearBottomChange,
               onNearHistoryStart: loadOlder,
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
@@ -1042,13 +1094,24 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             <View style={stylesheet.scrollToBottomContainer} pointerEvents="box-none">
               <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
                 <Pressable
-                  style={stylesheet.scrollToBottomButton}
+                  style={scrollToBottomButtonStyle}
                   onPress={scrollToBottom}
                   accessibilityRole="button"
-                  accessibilityLabel={t("agentStream.scrollToBottom")}
+                  accessibilityLabel={
+                    unreadActivityCount > 0
+                      ? t("agentStream.newActivity", { count: unreadActivityCount })
+                      : t("agentStream.scrollToBottom")
+                  }
                   testID="scroll-to-bottom-button"
                 >
                   <ChevronDown size={24} color={stylesheet.scrollToBottomIcon.color} />
+                  {unreadActivityCount > 0 ? (
+                    <View style={stylesheet.unreadActivityBadge}>
+                      <Text style={stylesheet.unreadActivityBadgeText}>
+                        {unreadActivityCount > 99 ? "99+" : unreadActivityCount}
+                      </Text>
+                    </View>
+                  ) : null}
                 </Pressable>
               </Animated.View>
             </View>
@@ -1200,6 +1263,7 @@ function ToolCallSlot({
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedCheckIcon = withUnistyles(Check);
+const ThemedMessageSquareText = withUnistyles(MessageSquareText);
 const ThemedXIcon = withUnistyles(X);
 
 const primaryColorMapping = (theme: Theme) => ({
@@ -1344,6 +1408,8 @@ function PermissionRequestCard({
     reset: resetPermissionMutation,
     mutateAsync: respondToPermission,
     isPending: isResponding,
+    isError: didResponseFail,
+    error: responseError,
   } = permissionMutation;
 
   const [respondingActionId, setRespondingActionId] = useState<string | null>(null);
@@ -1406,6 +1472,14 @@ function PermissionRequestCard({
       <Text testID="permission-request-question" style={permissionStyles.question}>
         {t("agentStream.permission.question")}
       </Text>
+
+      {didResponseFail ? (
+        <Text accessibilityRole="alert" style={permissionStyles.responseError}>
+          {t("agentStream.permission.responseFailed", {
+            error: toErrorMessage(responseError),
+          })}
+        </Text>
+      ) : null}
 
       <View style={optionsContainerStyle}>
         {resolvedActions.map((action) => {
@@ -1509,6 +1583,15 @@ const stylesheet = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: theme.spacing[12],
+    gap: theme.spacing[3],
+  },
+  emptyStateIconBadge: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface1,
   },
   permissionsContainer: {
     gap: theme.spacing[2],
@@ -1548,12 +1631,41 @@ const stylesheet = StyleSheet.create((theme) => ({
     height: 48,
     borderRadius: 24,
     backgroundColor: theme.colors.surface2,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
     alignItems: "center",
     justifyContent: "center",
     ...theme.shadow.sm,
   },
+  scrollToBottomButtonActive: {
+    backgroundColor: theme.colors.surface3,
+  },
+  scrollToBottomButtonPressed: {
+    transform: [{ scale: 0.94 }],
+  },
   scrollToBottomIcon: {
     color: theme.colors.foreground,
+  },
+  unreadActivityBadge: {
+    position: "absolute",
+    top: -4,
+    right: -6,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: theme.spacing[1],
+    borderRadius: theme.borderRadius.full,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.surface0,
+    backgroundColor: theme.colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unreadActivityBadgeText: {
+    color: theme.colors.accentForeground,
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: theme.fontWeight.semibold,
+    fontVariant: ["tabular-nums"],
   },
 }));
 
@@ -1561,7 +1673,7 @@ const permissionStyles = StyleSheet.create((theme) => ({
   container: {
     marginVertical: theme.spacing[3],
     padding: theme.spacing[3],
-    borderRadius: theme.spacing[2],
+    borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     gap: theme.spacing[2],
     backgroundColor: theme.colors.surface1,
@@ -1588,6 +1700,11 @@ const permissionStyles = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[1],
     marginBottom: theme.spacing[1],
     color: theme.colors.foregroundMuted,
+  },
+  responseError: {
+    fontSize: theme.fontSize.xs,
+    lineHeight: 18,
+    color: theme.colors.statusDanger,
   },
   optionsContainer: {
     gap: theme.spacing[2],

@@ -177,6 +177,7 @@ export const ru: TranslationResources = {
   agentStream: {
     empty: "Начните общаться с этим агентом...",
     scrollToBottom: "Прокрутить вниз",
+    newActivity: "Новых обновлений: {{count}}. Перейти вниз",
     permission: {
       plan: "План",
       required: "Требуется разрешение",
@@ -185,6 +186,7 @@ export const ru: TranslationResources = {
       implement: "Осуществлять",
       question: "Как бы вы хотели продолжить?",
       proposedPlan: "Предлагаемый план",
+      responseFailed: "Не удалось отправить ответ: {{error}}. Повторите попытку.",
     },
   },
   agentPanel: {
@@ -220,6 +222,16 @@ export const ru: TranslationResources = {
     archived: {
       callout: "Этот агент находится в архиве",
       unarchive: "Разархивировать",
+    },
+    workflow: {
+      starting: "Запуск",
+      thinking: "Обдумывание",
+      runningTool: "Выполняется {{tool}}",
+      working: "В работе",
+      permission: "Требуется подтверждение",
+      error: "Агент остановлен",
+      readyForReview: "Готово к проверке",
+      recoveryHint: "Перезагрузите агента из меню вкладки и повторите попытку",
     },
     goal: {
       status: {

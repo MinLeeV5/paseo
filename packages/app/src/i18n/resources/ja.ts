@@ -177,6 +177,7 @@ export const ja: TranslationResources = {
   agentStream: {
     empty: "このエージェントとチャットを始めましょう...",
     scrollToBottom: "下にスクロール",
+    newActivity: "新しい更新が {{count}} 件あります。末尾へ移動",
     permission: {
       plan: "プラン",
       required: "権限が必要です",
@@ -185,6 +186,7 @@ export const ja: TranslationResources = {
       implement: "実装",
       question: "どのように続けますか？",
       proposedPlan: "提案されたプラン",
+      responseFailed: "応答を送信できませんでした: {{error}}。もう一度お試しください。",
     },
   },
   agentPanel: {
@@ -221,6 +223,16 @@ export const ja: TranslationResources = {
     archived: {
       callout: "このエージェントはアーカイブされています",
       unarchive: "アーカイブ解除",
+    },
+    workflow: {
+      starting: "起動中",
+      thinking: "思考中",
+      runningTool: "{{tool}} を実行中",
+      working: "作業中",
+      permission: "承認が必要です",
+      error: "エージェントが停止しました",
+      readyForReview: "レビュー可能",
+      recoveryHint: "タブメニューからエージェントを再読み込みして、もう一度お試しください",
     },
     goal: {
       status: {

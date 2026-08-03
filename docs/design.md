@@ -209,6 +209,8 @@ Status pills are `palette.<color>[300]` foreground on a 10%-alpha background of 
 
 Status dots — the small filled circles next to a host or agent name — are `borderRadius.full` filled with the status color (`statusSuccess`, `statusWarning`, `statusDanger`, or `foregroundMuted`). They sit in the trailing slot of a sidebar row or as a leading marker on a status pill.
 
+Agent workflow and Goal state use full-width status strips above the composer, not pills in the message list. Workflow priority is permission, lifecycle error, active work, then finished attention; permission and error stay visible even when a Goal strip is present. Generic running state is suppressed beside an active Goal unless the live head can identify thinking or a running tool. Retained panels do not animate their activity indicator.
+
 The bespoke pills in `packages/app/src/screens/settings/host-page.tsx:97-116`, `packages/app/src/components/agent-list.tsx:607-632`, and `packages/app/src/components/sidebar-workspace-list.tsx:2889-2894` are drift to be removed. New code uses `<StatusBadge>`.
 
 ---

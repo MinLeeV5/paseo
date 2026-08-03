@@ -179,6 +179,7 @@ export const fr: TranslationResources = {
   agentStream: {
     empty: "Commencez à discuter avec cet agent...",
     scrollToBottom: "Faire défiler vers le bas",
+    newActivity: "{{count}} nouvelles activités. Aller en bas",
     permission: {
       plan: "Plan",
       required: "Autorisation requise",
@@ -187,6 +188,7 @@ export const fr: TranslationResources = {
       implement: "Mettre en œuvre",
       question: "Comment souhaitez-vous procéder?",
       proposedPlan: "Plan proposé",
+      responseFailed: "Impossible d’envoyer la réponse : {{error}}. Réessayez.",
     },
   },
   agentPanel: {
@@ -222,6 +224,16 @@ export const fr: TranslationResources = {
     archived: {
       callout: "Cet agent est archivé",
       unarchive: "Désarchiver",
+    },
+    workflow: {
+      starting: "Démarrage",
+      thinking: "Réflexion",
+      runningTool: "Exécution de {{tool}}",
+      working: "En cours",
+      permission: "Approbation requise",
+      error: "Agent arrêté",
+      readyForReview: "Prêt à réviser",
+      recoveryHint: "Rechargez l’agent depuis le menu de l’onglet, puis réessayez",
     },
     goal: {
       status: {

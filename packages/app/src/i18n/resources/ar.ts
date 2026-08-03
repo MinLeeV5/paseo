@@ -177,6 +177,7 @@ export const ar: TranslationResources = {
   agentStream: {
     empty: "ابدأ الدردشة مع هذا الوكيل...",
     scrollToBottom: "قم بالتمرير إلى الأسفل",
+    newActivity: "{{count}} تحديثات جديدة. انتقل إلى الأسفل",
     permission: {
       plan: "يخطط",
       required: "الإذن مطلوب",
@@ -185,6 +186,7 @@ export const ar: TranslationResources = {
       implement: "ينفذ",
       question: "كيف تريد المتابعة؟",
       proposedPlan: "الخطة المقترحة",
+      responseFailed: "تعذر إرسال الرد: {{error}}. حاول مرة أخرى.",
     },
   },
   agentPanel: {
@@ -218,6 +220,16 @@ export const ar: TranslationResources = {
     archived: {
       callout: "تمت أرشفة هذا الوكيل",
       unarchive: "إلغاء الأرشفة",
+    },
+    workflow: {
+      starting: "جارٍ البدء",
+      thinking: "جارٍ التفكير",
+      runningTool: "تشغيل {{tool}}",
+      working: "جارٍ العمل",
+      permission: "الموافقة مطلوبة",
+      error: "توقف الوكيل",
+      readyForReview: "جاهز للمراجعة",
+      recoveryHint: "أعد تحميل الوكيل من قائمة علامة التبويب ثم حاول مرة أخرى",
     },
     goal: {
       status: {

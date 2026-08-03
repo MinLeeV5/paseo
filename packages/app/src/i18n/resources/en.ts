@@ -175,6 +175,7 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    newActivity: "{{count}} new updates. Scroll to bottom",
     permission: {
       plan: "Plan",
       required: "Permission Required",
@@ -183,6 +184,7 @@ export const en = {
       implement: "Implement",
       question: "How would you like to proceed?",
       proposedPlan: "Proposed plan",
+      responseFailed: "Couldn’t send the response: {{error}}. Try again.",
     },
   },
   agentPanel: {
@@ -217,6 +219,16 @@ export const en = {
     archived: {
       callout: "This agent is archived",
       unarchive: "Unarchive",
+    },
+    workflow: {
+      starting: "Starting",
+      thinking: "Thinking",
+      runningTool: "Running {{tool}}",
+      working: "Working",
+      permission: "Approval needed",
+      error: "Agent stopped",
+      readyForReview: "Ready for review",
+      recoveryHint: "Reload Agent from the tab menu, then try again",
     },
     goal: {
       status: {
