@@ -1,14 +1,14 @@
-import { test, expect } from "./fixtures";
-import { gotoAppShell } from "./helpers/app";
-import { injectDesktopBridge, openDesktopAboutSettings } from "./helpers/desktop-updates";
-import { getServerId } from "./helpers/server-id";
+import { expect, test } from "../../app/e2e/support/fixtures";
+import { gotoAppShell } from "../../app/e2e/support/helpers/app";
+import { getServerId } from "../../app/e2e/support/helpers/server-id";
+import { installDesktopRuntime, openDesktopAboutSettings } from "./support/runtime";
 
 test.skip(process.env.E2E_DESKTOP_RUNTIME !== "1", "requires Metro's Electron platform overlay");
 
 test("keeps the selected release channel label opaque over a custom background", async ({
   page,
 }) => {
-  await injectDesktopBridge(page, { serverId: getServerId() });
+  await installDesktopRuntime(page, { serverId: getServerId() });
   await page.addInitScript(() => {
     localStorage.setItem(
       "@paseo:app-settings",
