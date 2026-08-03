@@ -1,0 +1,135 @@
+packages/desktop/src/daemon/daemon-manager.ts
+  e5e55fc9c04082fb 24,736
+packages/desktop/src/features/background-image.ts
+  e5e55fc9c04082fb 1-42
+packages/app/src/i18n/resources/zh-CN.ts
+  e5e55fc9c04082fb 1841-1847,1854-1857
+  7bfe23a059527afd 1851-1853
+  d20e2e08036057aa 1848,1850
+packages/app/src/hooks/use-settings/storage.test.ts
+  e5e55fc9c04082fb 332-357
+packages/app/src/screens/settings/appearance/appearance-section.tsx
+  b625e1aaa61149d9 51,284-286,289-293,305,307,310-311,333-353,359-360,372-375,378-379,381-382,384-385,398,402-404,407-408,1052-1084
+  d20e2e08036057aa 295-296,386,775-780
+  e5e55fc9c04082fb 19,52-53,211,213-214,216-222,224-228,230-270,272-273,279-281,308-309,312,357,370,387-389,392,418-422,692,700-701,739-742,744-749,751-774,871-873,875-880,882-883,889,900-903,1047-1051,1087-1092
+  7bfe23a059527afd 364,371,415-417,781-790,881,884-888,890-899,1085-1086
+packages/app/src/components/global-background.web.tsx
+  e5e55fc9c04082fb 1-3
+packages/app/src/components/global-background-surface.electron.tsx
+  e5e55fc9c04082fb 9-25,55-57,82
+  7bfe23a059527afd 1-8,26,29-41,44-46,53-54,58-67,69-76,79-81
+packages/app/src/i18n/resources/fr.ts
+  7bfe23a059527afd 1929-1931
+  e5e55fc9c04082fb 1919-1925,1932-1935
+  d20e2e08036057aa 1926,1928
+packages/app/src/navigation/themed-stack.tsx
+  7bfe23a059527afd 1,6-7,16-29,33,35,38-42
+packages/app/src/i18n/resources/pt-BR.ts
+  7bfe23a059527afd 1908-1910
+  e5e55fc9c04082fb 1898-1904,1911-1914
+  d20e2e08036057aa 1905,1907
+packages/app/src/hooks/use-settings/storage.ts
+  d20e2e08036057aa 204-220,284
+  b625e1aaa61149d9 371-374
+  e5e55fc9c04082fb 31-37,54,81-82,347-370
+packages/app/src/desktop/background-image.ts
+  e5e55fc9c04082fb 1-40
+packages/app/src/i18n/resources/ru.ts
+  d20e2e08036057aa 1908,1910
+  7bfe23a059527afd 1911-1913
+  e5e55fc9c04082fb 1901-1907,1914-1917
+packages/app/src/components/global-background.tsx
+  e5e55fc9c04082fb 1-3
+packages/app/src/components/global-background.electron.tsx
+  7bfe23a059527afd 6,59,68,70-71
+  d20e2e08036057aa 53
+  e5e55fc9c04082fb 3-4,10-17,24-31,35-45,47-52,54-58,60-67,69,72-74,77
+packages/app/src/i18n/resources/en.ts
+  e5e55fc9c04082fb 1873-1879,1886-1889
+  d20e2e08036057aa 1880,1882
+  7bfe23a059527afd 1883-1885
+packages/app/src/i18n/resources/es.ts
+  e5e55fc9c04082fb 1914-1920,1927-1930
+  d20e2e08036057aa 1921,1923
+  7bfe23a059527afd 1924-1926
+packages/app/src/app/_layout.tsx
+  e5e55fc9c04082fb 32-33,537
+packages/app/src/i18n/resources/ar.ts
+  d20e2e08036057aa 1870,1872
+  7bfe23a059527afd 1873-1875
+  e5e55fc9c04082fb 1863-1869,1876-1879
+packages/app/src/components/global-background-surface.tsx
+  e5e55fc9c04082fb 1-5
+packages/desktop/src/features/background-image.test.ts
+  e5e55fc9c04082fb 1-42
+packages/app/src/hooks/use-settings/index.ts
+  e5e55fc9c04082fb 18-23,37-38,41,58-63,74-75,78
+  d20e2e08036057aa 172,180,182,185-186
+packages/app/src/i18n/resources/ja.ts
+  e5e55fc9c04082fb 1884-1890,1897-1900
+  d20e2e08036057aa 1891,1893
+  7bfe23a059527afd 1894-1896
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "c4b99d3910774f2804c705ba471abe0431a79037",
+  "prompts": {
+    "7bfe23a059527afd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc6a7-af47-7ee0-ad1d-17bcf1dc1f94",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 149,
+      "total_deletions": 58,
+      "accepted_lines": 138,
+      "overriden_lines": 10,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/78c02318348de718d44854539e3d9ac9c7432b6aa5bf2640f29fcdbfb1a7068f"
+    },
+    "b625e1aaa61149d9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc67d-2c1c-70b0-bfa1-4c9252393f8b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 110,
+      "total_deletions": 58,
+      "accepted_lines": 83,
+      "overriden_lines": 8,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/b9c919fb52ad4b4bb54b05f9a485e1d53f8db22a498f300fee77fb7b7ab2d475"
+    },
+    "d20e2e08036057aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc59c-f344-71d0-a9de-9b73e1ad2a5a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 1622,
+      "total_deletions": 371,
+      "accepted_lines": 1506,
+      "overriden_lines": 33,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/2c0009c367814759f20deb9e754bdef2dfb7be0c52b1d87ec01df6c009ce8879"
+    },
+    "e5e55fc9c04082fb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc5e0-f82e-7223-b206-1807160bfcf6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 1151,
+      "total_deletions": 136,
+      "accepted_lines": 530,
+      "overriden_lines": 43,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/2e8329b4a88370bbff90f1e4cd8f060fd32acae0f99655264a49f4109cf53096"
+    }
+  }
+}
