@@ -33,8 +33,10 @@ const { theme, pressablePropsByLabel } = vi.hoisted(() => {
       fontSize: { xs: 11, sm: 13 },
       fontWeight: { normal: "400", medium: "500" },
       lineHeight: { diff: 18 },
+      motion: { duration: { fast: 120 } },
       colors: {
         accent: "#0a84ff",
+        accentBright: "#409cff",
         accentForeground: "#fff",
         border: "#555",
         destructive: "#ff453a",

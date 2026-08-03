@@ -4,7 +4,7 @@ import {
   Text,
   Image,
   Pressable,
-  type GestureResponderEvent,
+  type PressableStateCallbackType,
   type LayoutChangeEvent,
   StyleProp,
   ViewStyle,
@@ -338,7 +338,10 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
   },
   content: {
     alignItems: "flex-end",
-    maxWidth: "100%",
+    maxWidth: {
+      xs: "94%",
+      md: "82%",
+    },
     cursor: "auto",
   },
   containerSpacing: {
@@ -351,9 +354,9 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[4],
   },
   bubble: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface2,
     borderRadius: theme.borderRadius["2xl"],
-    borderTopRightRadius: theme.borderRadius.sm,
+    borderTopRightRadius: theme.borderRadius.lg,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[4],
     minWidth: 0,
@@ -1212,17 +1215,28 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[4],
   },
   pressable: {
-    borderRadius: theme.borderRadius.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: theme.borderRadius.xl,
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
     overflow: "hidden",
   },
+  togglePressable: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+  },
+  pressableHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
   pressablePressed: {
-    opacity: 0.9,
+    backgroundColor: theme.colors.surface2,
   },
   headerRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -1240,6 +1254,9 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     justifyContent: "center",
     marginRight: theme.spacing[1],
     backgroundColor: "transparent",
+  },
+  iconBadgeActive: {
+    backgroundColor: theme.colors.surface2,
   },
   label: {
     color: theme.colors.foregroundMuted,
@@ -1275,20 +1292,29 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   },
   chevron: {
     flexShrink: 0,
+    width: 18,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
   },
   openFileButton: {
-    marginLeft: theme.spacing[1],
-    padding: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    width: 24,
+    height: 24,
+    marginRight: theme.spacing[1],
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.lg,
     flexShrink: 0,
   },
-  openFileButtonPlaceholderIcon: {
-    width: 14,
-    height: 14,
+  openFileButtonHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
+  openFileButtonHidden: {
+    opacity: 0,
   },
   detailWrapper: {
-    borderBottomLeftRadius: theme.borderRadius.lg,
-    borderBottomRightRadius: theme.borderRadius.lg,
+    borderBottomLeftRadius: theme.borderRadius.xl,
+    borderBottomRightRadius: theme.borderRadius.xl,
     borderWidth: theme.borderWidth[1],
     borderTopWidth: 0,
     borderColor: theme.colors.border,
@@ -2435,7 +2461,6 @@ interface ExpandableBadgeWebShimmerOverlayProps {
   secondaryLabel?: string;
   shimmerLabelTextStyle: StyleProp<TextStyle>;
   shimmerSecondaryTextStyle: StyleProp<TextStyle>;
-  showOpenFileButton: boolean;
 }
 
 function ExpandableBadgeWebShimmerOverlay({
@@ -2443,7 +2468,6 @@ function ExpandableBadgeWebShimmerOverlay({
   secondaryLabel,
   shimmerLabelTextStyle,
   shimmerSecondaryTextStyle,
-  showOpenFileButton,
 }: ExpandableBadgeWebShimmerOverlayProps) {
   return (
     <View style={expandableBadgeStylesheet.shimmerOverlay} pointerEvents="none">
@@ -2455,14 +2479,7 @@ function ExpandableBadgeWebShimmerOverlay({
           {secondaryLabel}
         </Text>
       ) : null}
-      {showOpenFileButton ? (
-        <View style={expandableBadgeStylesheet.openFileButton}>
-          <View style={expandableBadgeStylesheet.openFileButtonPlaceholderIcon} />
-        </View>
-      ) : null}
-      {!secondaryLabel && !showOpenFileButton ? (
-        <View style={expandableBadgeStylesheet.spacer} />
-      ) : null}
+      {!secondaryLabel ? <View style={expandableBadgeStylesheet.spacer} /> : null}
     </View>
   );
 }
@@ -2486,11 +2503,6 @@ interface ExpandableBadgeLabelRowProps {
   onLabelRowLayout: (event: LayoutChangeEvent) => void;
   onLabelLayout: (event: LayoutChangeEvent) => void;
   onSecondaryLayout: (event: LayoutChangeEvent) => void;
-  showOpenFileButton: boolean;
-  isOpenFileHovered: boolean;
-  onOpenFilePress: (event: GestureResponderEvent) => void;
-  onOpenFileHoverIn: () => void;
-  onOpenFileHoverOut: () => void;
 }
 
 function ExpandableBadgeLabelRow({
@@ -2512,13 +2524,7 @@ function ExpandableBadgeLabelRow({
   onLabelRowLayout,
   onLabelLayout,
   onSecondaryLayout,
-  showOpenFileButton,
-  isOpenFileHovered,
-  onOpenFilePress,
-  onOpenFileHoverIn,
-  onOpenFileHoverOut,
 }: ExpandableBadgeLabelRowProps) {
-  const { t } = useTranslation();
   return (
     <View
       style={expandableBadgeStylesheet.labelRow}
@@ -2537,30 +2543,12 @@ function ExpandableBadgeLabelRow({
         shouldMeasureWebShimmer={shouldMeasureWebShimmer}
         onSecondaryLayout={onSecondaryLayout}
       />
-      {showOpenFileButton ? (
-        <Pressable
-          onPress={onOpenFilePress}
-          onHoverIn={onOpenFileHoverIn}
-          onHoverOut={onOpenFileHoverOut}
-          accessibilityRole="button"
-          accessibilityLabel={t("message.actions.openFile")}
-          testID="tool-call-open-file"
-          style={expandableBadgeStylesheet.openFileButton}
-          hitSlop={6}
-        >
-          <ThemedFileSymlinkIcon
-            size={14}
-            uniProps={isOpenFileHovered ? foregroundColorMapping : foregroundMutedColorMapping}
-          />
-        </Pressable>
-      ) : null}
       {isWebShimmer ? (
         <ExpandableBadgeWebShimmerOverlay
           label={label}
           secondaryLabel={secondaryLabel}
           shimmerLabelTextStyle={shimmerLabelTextStyle}
           shimmerSecondaryTextStyle={shimmerSecondaryTextStyle}
-          showOpenFileButton={showOpenFileButton}
         />
       ) : null}
       {isNativeShimmer ? (
@@ -2578,25 +2566,66 @@ function ExpandableBadgeLabelRow({
   );
 }
 
+interface ExpandableBadgeOpenFileButtonProps {
+  isParentHovered: boolean;
+  onOpenFile?: () => void;
+}
+
+function ExpandableBadgeOpenFileButton({
+  isParentHovered,
+  onOpenFile,
+}: ExpandableBadgeOpenFileButtonProps) {
+  const { t } = useTranslation();
+  const [isHovered, setIsHovered] = useState(false);
+  const handleHoverIn = useCallback(() => setIsHovered(true), []);
+  const handleHoverOut = useCallback(() => setIsHovered(false), []);
+  const isVisible = Boolean(onOpenFile && (isParentHovered || isNative));
+  const buttonStyle = useCallback(
+    ({ pressed }: PressableStateCallbackType) => [
+      expandableBadgeStylesheet.openFileButton,
+      !isVisible && expandableBadgeStylesheet.openFileButtonHidden,
+      (isHovered || pressed) && expandableBadgeStylesheet.openFileButtonHovered,
+    ],
+    [isHovered, isVisible],
+  );
+
+  if (!onOpenFile) {
+    return null;
+  }
+
+  return (
+    <Pressable
+      onPress={onOpenFile}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
+      accessibilityRole="button"
+      accessibilityLabel={t("message.actions.openFile")}
+      accessibilityElementsHidden={!isVisible}
+      disabled={!isVisible}
+      testID="tool-call-open-file"
+      style={buttonStyle}
+      hitSlop={6}
+    >
+      <ThemedFileSymlinkIcon
+        size={14}
+        uniProps={isHovered ? foregroundColorMapping : foregroundMutedColorMapping}
+      />
+    </Pressable>
+  );
+}
+
 // HACK: lucide ships every icon inside a 24×24 viewBox where the path
 // doesn't touch the edges — there's per-icon internal padding. The layout
 // already places the SVG element's box on the rail, but the visible glyph
-// inside the SVG sits inset by a few pixels (and the inset amount differs
-// per icon — chevron-right paints only in the right half of its viewBox,
-// regular tool icons paint roughly the full viewBox minus ~1 unit margin).
+// inside the SVG sits inset by a few pixels. Regular tool icons paint roughly
+// the full viewBox minus ~1 unit margin.
 //
 // Lucide has no viewBox knob, so the only way to nudge the visible glyph
-// flush with the rail is a per-icon negative margin. Cosmetic; not exact —
-// every lucide icon has slightly different padding and we're not measuring
-// each one. Two buckets is the compromise:
-//   - LUCIDE_TOOL_ICON_NUDGE_LEFT: regular tool icons (path mostly fills
-//     the viewBox); needs ~1px left shift.
-//   - LUCIDE_CHEVRON_NUDGE_LEFT: chevron-right (path in right half of
-//     viewBox, and we scale it 1.3×); needs ~4px left shift.
+// flush with the rail is a small negative margin. Cosmetic; not exact — every
+// lucide icon has slightly different padding and we're not measuring each one.
 // If we ever want this exact, the principled fix is a custom <Svg> wrapper
 // with a tight viewBox per icon — see option (2) in the design discussion.
 const LUCIDE_TOOL_ICON_NUDGE_LEFT: ViewStyle = { marginLeft: -1 };
-const LUCIDE_CHEVRON_NUDGE_LEFT: ViewStyle = { marginLeft: -4 };
 
 function renderExpandableBadgeIcon({
   isError,
@@ -2625,25 +2654,6 @@ function renderExpandableBadgeIcon({
     );
   }
   return null;
-}
-
-function renderExpandableBadgeIconSlot({
-  showChevron,
-  chevronStyle,
-  iconNode,
-}: {
-  showChevron: boolean;
-  chevronStyle: StyleProp<ViewStyle>;
-  iconNode: ReactNode;
-}): ReactNode {
-  if (showChevron) {
-    return (
-      <View style={chevronStyle}>
-        <ThemedChevronRightIcon size={12} uniProps={foregroundColorMapping} />
-      </View>
-    );
-  }
-  return iconNode;
 }
 
 function computeShimmerMetrics(input: {
@@ -2767,7 +2777,6 @@ export const ExpandableBadge = memo(function ExpandableBadge({
 }: ExpandableBadgeProps) {
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const [isHovered, setIsHovered] = useState(false);
-  const [isOpenFileHovered, setIsOpenFileHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
   const isInteractive = Boolean(onToggle);
   const hasDetailContent = Boolean(renderDetails);
@@ -2786,16 +2795,6 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     () => onDetailHoverChange?.(false),
     [onDetailHoverChange],
   );
-  const handleOpenFilePress = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation?.();
-      onOpenFile?.();
-    },
-    [onOpenFile],
-  );
-  const handleOpenFileHoverIn = useCallback(() => setIsOpenFileHovered(true), []);
-  const handleOpenFileHoverOut = useCallback(() => setIsOpenFileHovered(false), []);
-
   const nativeGradientIdRef = useRef(
     `shimmer-gradient-${Math.random().toString(36).substring(2, 9)}`,
   );
@@ -2931,11 +2930,12 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const pressableStyle = useMemo(
     () => [
       expandableBadgeStylesheet.pressable,
-      isPressed && isInteractive ? expandableBadgeStylesheet.pressablePressed : null,
+      isHovered && isInteractive && expandableBadgeStylesheet.pressableHovered,
       isExpanded && expandableBadgeStylesheet.pressableExpanded,
       isExpanded && !borderlessWhenExpanded && expandableBadgeStylesheet.pressableExpandedAttached,
+      isPressed && isInteractive ? expandableBadgeStylesheet.pressablePressed : null,
     ],
-    [borderlessWhenExpanded, isExpanded, isInteractive, isPressed],
+    [borderlessWhenExpanded, isExpanded, isHovered, isInteractive, isPressed],
   );
 
   const detailWrapperStyle = useMemo(
@@ -2992,9 +2992,8 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const chevronStyle = useMemo(
     () => [
       expandableBadgeStylesheet.chevron,
-      LUCIDE_CHEVRON_NUDGE_LEFT,
       inlineUnistylesStyle({
-        transform: isExpanded ? [{ scale: 1.3 }, { rotate: "90deg" }] : [{ scale: 1.3 }],
+        transform: isExpanded ? [{ rotate: "90deg" }] : [{ rotate: "0deg" }],
       }),
     ],
     [isExpanded],
@@ -3002,12 +3001,13 @@ export const ExpandableBadge = memo(function ExpandableBadge({
 
   const ThemedIcon = useMemo(() => (icon ? withUnistyles(icon) : null), [icon]);
   const iconNode = renderExpandableBadgeIcon({ isError, isActive, ThemedIcon });
-  const iconSlotNode = renderExpandableBadgeIconSlot({
-    showChevron: isInteractive && (isHovered || isExpanded),
-    chevronStyle,
-    iconNode,
-  });
-
+  const iconBadgeStyle = useMemo(
+    () => [
+      expandableBadgeStylesheet.iconBadge,
+      isActive && expandableBadgeStylesheet.iconBadgeActive,
+    ],
+    [isActive],
+  );
   const pressHandlers = isInteractive
     ? {
         onPress: onToggle,
@@ -3024,41 +3024,47 @@ export const ExpandableBadge = memo(function ExpandableBadge({
       onPointerEnter={isWeb ? handleHoverIn : undefined}
       onPointerLeave={isWeb ? handleHoverOut : undefined}
     >
-      <Pressable
-        {...pressHandlers}
-        disabled={!isInteractive}
-        accessibilityState={accessibilityState}
-        style={pressableStyle}
-      >
-        <View style={expandableBadgeStylesheet.headerRow}>
-          <View style={expandableBadgeStylesheet.iconBadge}>{iconSlotNode}</View>
-          <ExpandableBadgeLabelRow
-            label={label}
-            labelStyle={labelStyle}
-            secondaryLabel={secondaryLabel}
-            secondaryLabelStyle={secondaryLabelStyle}
-            shouldMeasureWebShimmer={shouldMeasureWebShimmer}
-            shouldMeasureNativeShimmer={shouldMeasureNativeShimmer}
-            isWebShimmer={isWebShimmer}
-            isNativeShimmer={isNativeShimmer}
-            shimmerLabelTextStyle={shimmerLabelTextStyle}
-            shimmerSecondaryTextStyle={shimmerSecondaryTextStyle}
-            labelRowWidth={labelRowWidth}
-            labelRowHeight={labelRowHeight}
-            nativeShimmerPeakWidth={nativeShimmerPeakWidth}
-            shimmerDuration={shimmerDuration}
-            nativeGradientId={nativeGradientIdRef.current}
-            onLabelRowLayout={handleLabelRowLayout}
-            onLabelLayout={handleLabelLayout}
-            onSecondaryLayout={handleSecondaryLayout}
-            showOpenFileButton={Boolean(onOpenFile && isHovered)}
-            isOpenFileHovered={isOpenFileHovered}
-            onOpenFilePress={handleOpenFilePress}
-            onOpenFileHoverIn={handleOpenFileHoverIn}
-            onOpenFileHoverOut={handleOpenFileHoverOut}
-          />
-        </View>
-      </Pressable>
+      <View style={pressableStyle}>
+        <Pressable
+          {...pressHandlers}
+          disabled={!isInteractive}
+          accessibilityState={accessibilityState}
+          style={expandableBadgeStylesheet.togglePressable}
+        >
+          <View style={expandableBadgeStylesheet.headerRow}>
+            <View style={iconBadgeStyle}>{iconNode}</View>
+            <ExpandableBadgeLabelRow
+              label={label}
+              labelStyle={labelStyle}
+              secondaryLabel={secondaryLabel}
+              secondaryLabelStyle={secondaryLabelStyle}
+              shouldMeasureWebShimmer={shouldMeasureWebShimmer}
+              shouldMeasureNativeShimmer={shouldMeasureNativeShimmer}
+              isWebShimmer={isWebShimmer}
+              isNativeShimmer={isNativeShimmer}
+              shimmerLabelTextStyle={shimmerLabelTextStyle}
+              shimmerSecondaryTextStyle={shimmerSecondaryTextStyle}
+              labelRowWidth={labelRowWidth}
+              labelRowHeight={labelRowHeight}
+              nativeShimmerPeakWidth={nativeShimmerPeakWidth}
+              shimmerDuration={shimmerDuration}
+              nativeGradientId={nativeGradientIdRef.current}
+              onLabelRowLayout={handleLabelRowLayout}
+              onLabelLayout={handleLabelLayout}
+              onSecondaryLayout={handleSecondaryLayout}
+            />
+            {isInteractive ? (
+              <View style={chevronStyle}>
+                <ThemedChevronRightIcon
+                  size={13}
+                  uniProps={isActive ? foregroundColorMapping : foregroundMutedColorMapping}
+                />
+              </View>
+            ) : null}
+          </View>
+        </Pressable>
+        <ExpandableBadgeOpenFileButton isParentHovered={isHovered} onOpenFile={onOpenFile} />
+      </View>
       {detailContent ? (
         <Pressable
           ref={detailWrapperRef}

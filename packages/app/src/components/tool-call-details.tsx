@@ -822,9 +822,7 @@ const styles = StyleSheet.create((theme) => {
     sectionTitle: {
       color: theme.colors.foregroundMuted,
       fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
+      fontWeight: theme.fontWeight.medium,
     },
     rangeText: {
       color: theme.colors.foregroundMuted,
@@ -833,7 +831,7 @@ const styles = StyleSheet.create((theme) => {
     diffContainer: {
       borderWidth: theme.borderWidth[1],
       borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
+      borderRadius: theme.borderRadius.lg,
       overflow: "hidden",
       backgroundColor: theme.colors.surface2,
     },
@@ -859,7 +857,7 @@ const styles = StyleSheet.create((theme) => {
     scrollArea: {
       borderWidth: theme.borderWidth[1],
       borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
+      borderRadius: theme.borderRadius.lg,
       backgroundColor: theme.colors.surface2,
     },
     scrollContent: {
@@ -911,7 +909,7 @@ const styles = StyleSheet.create((theme) => {
     jsonScroll: {
       borderWidth: theme.borderWidth[1],
       borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
+      borderRadius: theme.borderRadius.lg,
       backgroundColor: theme.colors.surface2,
     },
     jsonScrollError: {

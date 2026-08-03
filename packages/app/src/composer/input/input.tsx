@@ -5,6 +5,7 @@ import {
   TextInput,
   Pressable,
   Platform,
+  StyleSheet as RNStyleSheet,
   useWindowDimensions,
   NativeSyntheticEvent,
   TextInputContentSizeChangeEventData,
@@ -22,8 +23,9 @@ import {
   forwardRef,
 } from "react";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import Animated, { FadeIn, FadeOut, ReduceMotion } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE, MOTION_DURATION, type Theme } from "@/styles/theme";
 import { ArrowUp, Mic, MicOff, CornerDownLeft, Plus, Square } from "lucide-react-native";
 import { useDictation } from "@/hooks/use-dictation";
 import { DictationOverlay } from "@/components/dictation-controls";
@@ -76,6 +78,8 @@ import {
 
 const DEFAULT_SEND_KEYS: ShortcutKey[][] = [["Enter"]];
 const COMPOSER_INPUT_DATASET = { composerInput: "" } as const;
+const SEND_STATE_FADE_IN = FadeIn.duration(MOTION_DURATION.fast).reduceMotion(ReduceMotion.System);
+const SEND_STATE_FADE_OUT = FadeOut.duration(100).reduceMotion(ReduceMotion.System);
 
 export interface AttachmentMenuItem {
   id: string;
@@ -444,13 +448,30 @@ function SendButtonContent({
   submitIcon: "arrow" | "return";
   buttonIconSize: number;
 }) {
+  let stateKey: "loading" | "return" | "send";
+  let content: React.ReactElement;
   if (isSubmitLoading) {
-    return <ThemedLoadingSpinner size="small" uniProps={iconAccentForegroundMapping} />;
+    stateKey = "loading";
+    content = <ThemedLoadingSpinner size="small" uniProps={iconAccentForegroundMapping} />;
+  } else if (submitIcon === "return") {
+    stateKey = "return";
+    content = <ThemedCornerDownLeft size={buttonIconSize} uniProps={iconAccentForegroundMapping} />;
+  } else {
+    stateKey = "send";
+    content = <ThemedArrowUp size={buttonIconSize} uniProps={iconAccentForegroundMapping} />;
   }
-  if (submitIcon === "return") {
-    return <ThemedCornerDownLeft size={buttonIconSize} uniProps={iconAccentForegroundMapping} />;
-  }
-  return <ThemedArrowUp size={buttonIconSize} uniProps={iconAccentForegroundMapping} />;
+  return (
+    <View style={styles.sendButtonContent}>
+      <Animated.View
+        key={stateKey}
+        entering={SEND_STATE_FADE_IN}
+        exiting={SEND_STATE_FADE_OUT}
+        style={animatedStaticStyles.sendButtonState}
+      >
+        {content}
+      </Animated.View>
+    </View>
+  );
 }
 
 interface DesktopKeyPressContext {
@@ -1656,18 +1677,18 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     }, [onFocusChange]);
 
     const attachButtonStyle = useCallback(
-      ({ hovered }: { hovered?: boolean }) => [
+      ({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => [
         styles.attachButton,
-        Boolean(hovered) && styles.iconButtonHovered,
+        (Boolean(hovered) || pressed) && styles.iconButtonHovered,
         (!isConnected || disabled) && styles.buttonDisabled,
       ],
       [isConnected, disabled],
     );
 
     const voiceButtonStyle = useCallback(
-      ({ hovered }: { hovered?: boolean }) => [
+      ({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => [
         styles.voiceButton,
-        Boolean(hovered) && !isDictating && styles.iconButtonHovered,
+        (Boolean(hovered) || pressed) && !isDictating && styles.iconButtonHovered,
         !isDictationStartEnabled && styles.buttonDisabled,
         isDictating && styles.voiceButtonRecording,
       ],
@@ -1681,17 +1702,23 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const inputWrapperCombinedStyle = useMemo(
       () => [
         styles.inputWrapper,
+        isInputFocused && styles.inputWrapperFocused,
         inputWrapperStyle,
         { opacity: surfacePresentation.input.opacity },
       ],
-      [inputWrapperStyle, surfacePresentation.input.opacity],
+      [inputWrapperStyle, isInputFocused, surfacePresentation.input.opacity],
     );
     const textInputStyle = useMemo(
       () => [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
       [inputHeight, maxInputHeight],
     );
-    const sendButtonCombinedStyle = useMemo(
-      () => [styles.sendButton, isSendButtonDisabled && styles.buttonDisabled],
+    const sendButtonCombinedStyle = useCallback(
+      ({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => [
+        styles.sendButton,
+        Boolean(hovered) && !isSendButtonDisabled && styles.sendButtonHovered,
+        pressed && !isSendButtonDisabled && styles.sendButtonPressed,
+        isSendButtonDisabled && styles.buttonDisabled,
+      ],
       [isSendButtonDisabled],
     );
     const overlayContainerStyle = useMemo(
@@ -1859,10 +1886,13 @@ const styles = StyleSheet.create((theme: Theme) => ({
     ...(isWeb
       ? {
           transitionProperty: "border-color",
-          transitionDuration: "200ms",
+          transitionDuration: `${theme.motion.duration.normal}ms`,
           transitionTimingFunction: "ease-in-out",
         }
       : {}),
+  },
+  inputWrapperFocused: {
+    borderColor: theme.colors.accentBright,
   },
   textInputScrollWrapper: {
     position: "relative",
@@ -1941,6 +1971,19 @@ const styles = StyleSheet.create((theme: Theme) => ({
     justifyContent: "center",
     marginLeft: theme.spacing[1],
   },
+  sendButtonContent: {
+    position: "relative",
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendButtonHovered: {
+    backgroundColor: theme.colors.accentBright,
+  },
+  sendButtonPressed: {
+    transform: [{ scale: 0.94 }],
+  },
   iconButtonHovered: {
     backgroundColor: theme.colors.surface2,
   },
@@ -1994,6 +2037,18 @@ const styles = StyleSheet.create((theme: Theme) => ({
     bottom: 0,
   },
 })) as unknown as Record<string, object>;
+
+const animatedStaticStyles = RNStyleSheet.create({
+  sendButtonState: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
 
 const ThemedPlus = withUnistyles(Plus);
 const ThemedMic = withUnistyles(Mic);

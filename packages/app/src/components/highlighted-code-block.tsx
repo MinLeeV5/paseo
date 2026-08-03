@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import {
+  Pressable,
+  View,
+  type PressableStateCallbackType,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { MarkdownTextSpan } from "@/components/markdown-text";
 import * as Clipboard from "expo-clipboard";
@@ -153,6 +160,8 @@ interface CopyButtonProps {
   visible: boolean;
 }
 
+type CopyButtonPressState = PressableStateCallbackType & { hovered?: boolean };
+
 const COPIED_RESET_MS = 1500;
 
 const CopyButton = React.memo(function CopyButton({ getCode, visible }: CopyButtonProps) {
@@ -179,27 +188,30 @@ const CopyButton = React.memo(function CopyButton({ getCode, visible }: CopyButt
     }, COPIED_RESET_MS);
   }, [getCode]);
 
-  const visibilityStyle = visible
-    ? copyButtonStyles.containerVisible
-    : copyButtonStyles.containerHidden;
-  const wrapperStyle = useMemo(
-    () => [copyButtonStyles.container, visibilityStyle],
-    [visibilityStyle],
+  const pressableStyle = useCallback(
+    ({ hovered, pressed }: CopyButtonPressState) => [
+      copyButtonStyles.container,
+      visible ? copyButtonStyles.containerVisible : copyButtonStyles.containerHidden,
+      (hovered || pressed) && copyButtonStyles.containerInteractive,
+    ],
+    [visible],
   );
 
   return (
     <Pressable
       onPress={handlePress}
-      style={wrapperStyle}
+      style={pressableStyle}
       pointerEvents={visible ? "auto" : "none"}
+      disabled={!visible}
       accessibilityRole="button"
       accessibilityLabel={copied ? t("message.actions.copied") : t("message.actions.copyCode")}
       hitSlop={8}
     >
-      {({ hovered }) => {
-        const iconColor = hovered
-          ? copyButtonStyles.iconHoveredColor.color
-          : copyButtonStyles.iconColor.color;
+      {({ hovered, pressed }) => {
+        const iconColor =
+          hovered || pressed
+            ? copyButtonStyles.iconHoveredColor.color
+            : copyButtonStyles.iconColor.color;
         return copied ? (
           <Check size={14} color={iconColor} />
         ) : (
@@ -215,13 +227,28 @@ const copyButtonStyles = StyleSheet.create((theme) => ({
     position: "absolute",
     top: theme.spacing[2],
     right: theme.spacing[2],
-    padding: theme.spacing[1],
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
+    ...(isWeb
+      ? {
+          transitionProperty: "opacity, background-color",
+          transitionDuration: `${theme.motion.duration.fast}ms`,
+          transitionTimingFunction: "ease-in-out",
+        }
+      : {}),
   },
   containerVisible: {
     opacity: 1,
   },
   containerHidden: {
     opacity: 0,
+  },
+  containerInteractive: {
+    backgroundColor: theme.colors.surface2,
   },
   iconColor: {
     color: theme.colors.foregroundMuted,

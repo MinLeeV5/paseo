@@ -355,7 +355,7 @@ export function InlineReviewGutterCell({
   const actionIconStyle = useMemo<StyleProp<ViewStyle>>(
     () => [
       styles.gutterActionIcon,
-      lineHeight !== undefined && inlineUnistylesStyle({ top: Math.floor((lineHeight - 22) / 2) }),
+      lineHeight !== undefined && inlineUnistylesStyle({ top: Math.floor((lineHeight - 24) / 2) }),
     ],
     [lineHeight],
   );
@@ -667,10 +667,10 @@ const styles = StyleSheet.create((theme) => ({
   gutterActionIcon: {
     position: "absolute",
     right: -10,
-    top: Math.floor((theme.lineHeight.diff - 22) / 2),
-    width: 22,
-    height: 22,
-    borderRadius: theme.borderRadius.md,
+    top: Math.floor((theme.lineHeight.diff - 24) / 2),
+    width: 24,
+    height: 24,
+    borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.colors.accent,
@@ -688,10 +688,10 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
   },
   commentBlock: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.lg,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.xl,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     flexDirection: "row",
@@ -712,15 +712,15 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   iconButton: {
-    width: 26,
-    height: 26,
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.full,
+    borderRadius: theme.borderRadius.lg,
     ...(isWeb
       ? {
           transitionProperty: "background-color",
-          transitionDuration: "120ms",
+          transitionDuration: `${theme.motion.duration.fast}ms`,
           transitionTimingFunction: "ease-in-out",
         }
       : {}),
@@ -733,10 +733,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   editorBlock: {
     minHeight: INLINE_REVIEW_EDITOR_HEIGHT,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.lg,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.xl,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[3],
     gap: theme.spacing[3],
@@ -745,10 +745,10 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
     color: theme.colors.foreground,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.lg,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     fontSize: theme.fontSize.sm,
@@ -762,7 +762,7 @@ const styles = StyleSheet.create((theme) => ({
       : {}),
   },
   editorInputFocused: {
-    borderColor: theme.colors.accent,
+    borderColor: theme.colors.accentBright,
   },
   editorActions: {
     flexDirection: "row",

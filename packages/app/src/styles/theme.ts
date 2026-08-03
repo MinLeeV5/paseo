@@ -494,6 +494,12 @@ export const OPACITY = {
   100: 1,
 } as const;
 
+export const MOTION_DURATION = {
+  fast: 150,
+  normal: 200,
+  slow: 280,
+} as const;
+
 // Platform default font stacks — copied verbatim from constants/theme.ts `Fonts`
 // (sans -> ui, mono -> mono). These seed the dynamic `fontFamily` theme token and
 // are the fallback an empty user-supplied family resolves to at apply time.
@@ -523,6 +529,9 @@ interface CommonTheme {
   borderRadius: typeof BORDER_RADIUS;
   borderWidth: typeof BORDER_WIDTH;
   opacity: typeof OPACITY;
+  motion: {
+    duration: typeof MOTION_DURATION;
+  };
 }
 
 const commonTheme: CommonTheme = {
@@ -535,6 +544,9 @@ const commonTheme: CommonTheme = {
   borderRadius: BORDER_RADIUS,
   borderWidth: BORDER_WIDTH,
   opacity: OPACITY,
+  motion: {
+    duration: MOTION_DURATION,
+  },
 };
 
 const darkShadow = {

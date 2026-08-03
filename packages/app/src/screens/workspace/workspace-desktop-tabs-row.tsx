@@ -578,8 +578,11 @@ function TabChip({
     : undefined;
 
   const tabChipStyle = useCallback(
-    () => [
+    ({ pressed }: PressableStateCallbackType) => [
       styles.tab,
+      isActive && styles.tabActive,
+      hovered && !isActive && styles.tabHovered,
+      pressed && styles.tabPressed,
       isWeb && isDragging && ({ cursor: "grabbing" } as object),
       {
         minWidth: resolvedTabWidth,
@@ -587,7 +590,7 @@ function TabChip({
         maxWidth: resolvedTabWidth,
       },
     ],
-    [isDragging, resolvedTabWidth],
+    [hovered, isActive, isDragging, resolvedTabWidth],
   );
 
   const handleTabHoverIn = useCallback(() => {
@@ -1283,12 +1286,20 @@ const styles = StyleSheet.create((theme) => ({
   tab: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    borderRightWidth: 1,
-    borderRightColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
     userSelect: "none",
+  },
+  tabActive: {
+    backgroundColor: theme.colors.surface2,
+  },
+  tabHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
+  tabPressed: {
+    opacity: 0.82,
   },
   tabSlot: {
     position: "relative",
@@ -1307,10 +1318,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabFocusIndicator: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
+    bottom: 2,
+    left: theme.spacing[2],
+    right: theme.spacing[2],
     height: 2,
+    borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.accent,
   },
   tabFocusIndicatorUnfocused: {
@@ -1363,7 +1375,7 @@ const styles = StyleSheet.create((theme) => ({
     width: 18,
     height: 18,
     marginLeft: 0,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1382,14 +1394,14 @@ const styles = StyleSheet.create((theme) => ({
   newTabActionButton: {
     width: 22,
     height: 22,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.lg,
     alignItems: "center",
     justifyContent: "center",
   },
   inlineAddActionButton: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.lg,
     alignItems: "center",
     justifyContent: "center",
   },

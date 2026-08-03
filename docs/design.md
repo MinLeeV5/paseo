@@ -120,6 +120,12 @@ Rows have generous vertical padding: roughly 16px of content plus 16px of vertic
 
 The whitespace is the design.
 
+Motion follows the same restraint. Durations come from `theme.motion.duration`: `fast` (150ms) for
+press and icon feedback, `normal` (200ms) for local state changes, and `slow` (280ms) for larger
+surface transitions. Animate opacity and transforms only, keep list rows and code/diff lines static,
+and use `ReduceMotion.System` for Reanimated transitions. Hidden retained panels must not keep an
+animation clock alive.
+
 ---
 
 ## 8. Responsiveness
