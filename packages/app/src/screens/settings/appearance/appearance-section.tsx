@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Text, TextInput, View, type PressableStateCallbackType } from "react-native";
+import {
+  Text,
+  TextInput,
+  View,
+  type GestureResponderEvent,
+  type LayoutChangeEvent,
+  type PressableStateCallbackType,
+} from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronDown, Monitor, Moon, Sun } from "lucide-react-native";
 import {
@@ -9,6 +16,7 @@ import {
   type SyntaxThemeId,
   type SyntaxThemeOption,
 } from "@getpaseo/highlight";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,8 +27,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import {
+  MAX_BACKGROUND_IMAGE_OPACITY,
+  MAX_INTERFACE_OPACITY,
   MAX_CODE_FONT_SIZE,
   MAX_UI_FONT_SIZE,
+  MIN_BACKGROUND_IMAGE_OPACITY,
+  MIN_INTERFACE_OPACITY,
   MIN_CODE_FONT_SIZE,
   MIN_UI_FONT_SIZE,
   parseClampedFontSize,
@@ -35,7 +47,13 @@ import {
   THEME_SWATCHES,
   type Theme,
 } from "@/styles/theme";
-import { isNative } from "@/constants/platform";
+import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
+import { isNative, isWeb } from "@/constants/platform";
+import { isElectronRuntime } from "@/desktop/host";
+import {
+  pickDesktopBackgroundImagePath,
+  readDesktopBackgroundImage,
+} from "@/desktop/background-image";
 import { settingsStyles } from "@/styles/settings";
 import { AppearancePreview } from "./appearance-preview";
 
@@ -186,6 +204,218 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Desktop background image
+// ---------------------------------------------------------------------------
+
+interface BackgroundImageRowProps {
+  path: string;
+  error: string | null;
+  pendingAction: "choose" | "clear" | null;
+  onChoose: () => void;
+  onClear: () => void;
+}
+
+function BackgroundImageRow({
+  path,
+  error,
+  pendingAction,
+  onChoose,
+  onClear,
+}: BackgroundImageRowProps) {
+  const { t } = useTranslation();
+  const isPending = pendingAction !== null;
+  return (
+    <View style={settingsStyles.row}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.appearance.background.image")}</Text>
+        <Text style={settingsStyles.rowHint} numberOfLines={2}>
+          {path || t("settings.appearance.background.imageHint")}
+        </Text>
+        {error ? <Text style={settingsStyles.rowError}>{error}</Text> : null}
+      </View>
+      <View style={styles.backgroundActions}>
+        {path ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            loading={pendingAction === "clear"}
+            disabled={isPending && pendingAction !== "clear"}
+            onPress={onClear}
+            accessibilityLabel={t("settings.appearance.background.remove")}
+          >
+            {t("settings.appearance.background.remove")}
+          </Button>
+        ) : null}
+        <Button
+          variant="outline"
+          size="sm"
+          loading={pendingAction === "choose"}
+          disabled={isPending && pendingAction !== "choose"}
+          onPress={onChoose}
+          accessibilityLabel={t("settings.appearance.background.choose")}
+        >
+          {path
+            ? t("settings.appearance.background.change")
+            : t("settings.appearance.background.choose")}
+        </Button>
+      </View>
+    </View>
+  );
+}
+
+interface OpacityRowProps {
+  value: number;
+  disabled: boolean;
+  min: number;
+  max: number;
+  title: string;
+  hint: string;
+  accessibilityLabel: string;
+  onCommit: (value: number) => void;
+}
+
+const OPACITY_STEP = 0.05;
+const OPACITY_ACCESSIBILITY_ACTIONS = [
+  { name: "increment" as const },
+  { name: "decrement" as const },
+];
+
+function getOpacityCursor(disabled: boolean, isDragging: boolean): string {
+  if (disabled) return "default";
+  if (isDragging) return "grabbing";
+  return "grab";
+}
+
+function OpacityRow({
+  value,
+  disabled,
+  min,
+  max,
+  title,
+  hint,
+  accessibilityLabel,
+  onCommit,
+}: OpacityRowProps) {
+  const clampedValue = Math.min(max, Math.max(min, value));
+  const [draft, setDraft] = useState(clampedValue);
+  const [trackWidth, setTrackWidth] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    setDraft(clampedValue);
+  }, [clampedValue]);
+
+  const valueFromEvent = useCallback(
+    (event: GestureResponderEvent): number | null => {
+      if (disabled || trackWidth <= 0) return null;
+      const ratio = Math.min(1, Math.max(0, event.nativeEvent.locationX / trackWidth));
+      const range = max - min;
+      const rawValue = min + ratio * range;
+      const steppedValue = Math.round(rawValue / OPACITY_STEP) * OPACITY_STEP;
+      return Math.min(max, Math.max(min, steppedValue));
+    },
+    [disabled, max, min, trackWidth],
+  );
+
+  const updateDraftFromEvent = useCallback(
+    (event: GestureResponderEvent) => {
+      const next = valueFromEvent(event);
+      if (next !== null) setDraft(next);
+    },
+    [valueFromEvent],
+  );
+
+  const handleResponderGrant = useCallback(
+    (event: GestureResponderEvent) => {
+      setIsDragging(true);
+      updateDraftFromEvent(event);
+    },
+    [updateDraftFromEvent],
+  );
+
+  const commitDraftFromEvent = useCallback(
+    (event: GestureResponderEvent) => {
+      setIsDragging(false);
+      const next = valueFromEvent(event) ?? draft;
+      setDraft(next);
+      onCommit(next);
+    },
+    [draft, onCommit, valueFromEvent],
+  );
+
+  const handleResponderTerminate = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    setTrackWidth(event.nativeEvent.layout.width);
+  }, []);
+
+  const handleShouldSetResponder = useCallback(() => !disabled, [disabled]);
+
+  const handleAccessibilityAction = useCallback(
+    (event: { nativeEvent: { actionName: string } }) => {
+      const direction = event.nativeEvent.actionName === "increment" ? 1 : -1;
+      const next = Math.min(max, Math.max(min, draft + direction * OPACITY_STEP));
+      setDraft(next);
+      onCommit(next);
+    },
+    [draft, max, min, onCommit],
+  );
+
+  const progress = (draft - min) / (max - min);
+  const progressStyle = inlineUnistylesStyle({ width: progress * trackWidth });
+  const thumbStyle = inlineUnistylesStyle({ left: progress * trackWidth });
+  const accessibilityValue = useMemo(
+    () => ({
+      min: Math.round(min * 100),
+      max: Math.round(max * 100),
+      now: Math.round(draft * 100),
+    }),
+    [draft, max, min],
+  );
+  const cursorStyle = useMemo(
+    () => (isWeb ? ({ cursor: getOpacityCursor(disabled, isDragging) } as object) : null),
+    [disabled, isDragging],
+  );
+
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder, disabled ? styles.disabled : null]}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{title}</Text>
+        <Text style={settingsStyles.rowHint}>{hint}</Text>
+      </View>
+      <View style={styles.opacityControl}>
+        <View
+          accessible
+          accessibilityRole="adjustable"
+          accessibilityLabel={accessibilityLabel}
+          accessibilityValue={accessibilityValue}
+          accessibilityActions={OPACITY_ACCESSIBILITY_ACTIONS}
+          onAccessibilityAction={handleAccessibilityAction}
+          onLayout={handleLayout}
+          onStartShouldSetResponder={handleShouldSetResponder}
+          onMoveShouldSetResponder={handleShouldSetResponder}
+          onResponderGrant={handleResponderGrant}
+          onResponderMove={updateDraftFromEvent}
+          onResponderRelease={commitDraftFromEvent}
+          onResponderTerminate={handleResponderTerminate}
+          style={[styles.opacityTrackHitArea, cursorStyle]}
+        >
+          <View style={styles.opacityTrack}>
+            <View style={[styles.opacityTrackFill, progressStyle]} />
+            <View style={[styles.opacityThumb, thumbStyle]} />
+          </View>
+        </View>
+        <Text style={styles.opacityValue} numberOfLines={1}>
+          {Math.round(draft * 100)}%
+        </Text>
+      </View>
     </View>
   );
 }
@@ -459,6 +689,7 @@ export function AppearanceSection() {
   const { t } = useTranslation();
   const { settings, updateSettings } = useAppSettings();
   const showFontFamilyRows = !isNative;
+  const showBackgroundSettings = isElectronRuntime();
   const uiFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_UI_FONT_STACK);
   const monoFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_MONO_FONT_STACK);
 
@@ -466,6 +697,8 @@ export function AppearanceSection() {
   const [monoFontDraft, setMonoFontDraft] = useState(settings.monoFontFamily);
   const [uiSizeDraft, setUiSizeDraft] = useState(String(settings.uiFontSize));
   const [codeSizeDraft, setCodeSizeDraft] = useState(String(settings.codeFontSize));
+  const [backgroundAction, setBackgroundAction] = useState<"choose" | "clear" | null>(null);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
 
   // Resync numeric drafts when the committed value changes elsewhere.
   useEffect(() => {
@@ -501,6 +734,58 @@ export function AppearanceSection() {
       void updateSettings({ toolCallDetailLevel });
     },
     [updateSettings],
+  );
+
+  const handleChooseBackground = useCallback(async () => {
+    setBackgroundAction("choose");
+    setBackgroundError(null);
+    try {
+      const path = await pickDesktopBackgroundImagePath({
+        currentPath: settings.backgroundImagePath,
+        title: t("settings.appearance.background.dialogTitle"),
+      });
+      if (!path) {
+        return;
+      }
+      await readDesktopBackgroundImage(path);
+      await updateSettings({ backgroundImagePath: path });
+    } catch {
+      setBackgroundError(t("settings.appearance.background.loadError"));
+    } finally {
+      setBackgroundAction(null);
+    }
+  }, [settings.backgroundImagePath, t, updateSettings]);
+
+  const handleClearBackground = useCallback(async () => {
+    setBackgroundAction("clear");
+    setBackgroundError(null);
+    try {
+      await updateSettings({ backgroundImagePath: "" });
+    } catch {
+      setBackgroundError(t("settings.appearance.background.saveError"));
+    } finally {
+      setBackgroundAction(null);
+    }
+  }, [t, updateSettings]);
+
+  const handleBackgroundOpacityChange = useCallback(
+    (backgroundImageOpacity: number) => {
+      setBackgroundError(null);
+      void updateSettings({ backgroundImageOpacity }).catch(() => {
+        setBackgroundError(t("settings.appearance.background.saveError"));
+      });
+    },
+    [t, updateSettings],
+  );
+
+  const handleInterfaceOpacityChange = useCallback(
+    (interfaceOpacity: number) => {
+      setBackgroundError(null);
+      void updateSettings({ interfaceOpacity }).catch(() => {
+        setBackgroundError(t("settings.appearance.background.saveError"));
+      });
+    },
+    [t, updateSettings],
   );
 
   const commitUiFontFamily = useCallback(
@@ -583,6 +868,39 @@ export function AppearanceSection() {
           <ThemeRow value={settings.theme} onChange={handleThemeChange} />
         </View>
       </SettingsSection>
+      {showBackgroundSettings ? (
+        <SettingsSection title={t("settings.appearance.background.title")}>
+          <View style={settingsStyles.card}>
+            <BackgroundImageRow
+              path={settings.backgroundImagePath}
+              error={backgroundError}
+              pendingAction={backgroundAction}
+              onChoose={handleChooseBackground}
+              onClear={handleClearBackground}
+            />
+            <OpacityRow
+              value={settings.backgroundImageOpacity}
+              disabled={!settings.backgroundImagePath || backgroundAction !== null}
+              min={MIN_BACKGROUND_IMAGE_OPACITY}
+              max={MAX_BACKGROUND_IMAGE_OPACITY}
+              title={t("settings.appearance.background.imageOpacity")}
+              hint={t("settings.appearance.background.imageOpacityHint")}
+              accessibilityLabel={t("settings.appearance.background.imageOpacityAccessibility")}
+              onCommit={handleBackgroundOpacityChange}
+            />
+            <OpacityRow
+              value={settings.interfaceOpacity}
+              disabled={!settings.backgroundImagePath || backgroundAction !== null}
+              min={MIN_INTERFACE_OPACITY}
+              max={MAX_INTERFACE_OPACITY}
+              title={t("settings.appearance.background.interfaceOpacity")}
+              hint={t("settings.appearance.background.interfaceOpacityHint")}
+              accessibilityLabel={t("settings.appearance.background.interfaceOpacityAccessibility")}
+              onCommit={handleInterfaceOpacityChange}
+            />
+          </View>
+        </SettingsSection>
+      ) : null}
       <SettingsSection title={t("settings.appearance.detailLevel.title")}>
         <View style={settingsStyles.card}>
           <AutoExpandReasoningRow
@@ -725,6 +1043,53 @@ const styles = StyleSheet.create((theme) => ({
   unit: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
+  },
+  backgroundActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  opacityControl: {
+    width: 220,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+  },
+  opacityTrackHitArea: {
+    flex: 1,
+    height: 36,
+    justifyContent: "center",
+  },
+  opacityTrack: {
+    height: 6,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface3,
+  },
+  opacityTrackFill: {
+    height: 6,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.accent,
+  },
+  opacityThumb: {
+    position: "absolute",
+    top: -5,
+    width: 16,
+    height: 16,
+    marginLeft: -8,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: theme.borderWidth[2],
+    borderColor: theme.colors.surface0,
+    backgroundColor: theme.colors.accent,
+  },
+  opacityValue: {
+    width: 44,
+    flexShrink: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    textAlign: "right",
+  },
+  disabled: {
+    opacity: theme.opacity[50],
   },
   placeholderColor: {
     color: theme.colors.foregroundMuted,

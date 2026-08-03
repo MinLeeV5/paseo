@@ -28,6 +28,13 @@ export const DEFAULT_CODE_FONT_SIZE = 12; // == FONT_SIZE.code
 export const MIN_CODE_FONT_SIZE = 9;
 export const MAX_CODE_FONT_SIZE = 22; // line-height 1.5×22=33 stays safe
 export const MAX_FONT_FAMILY_LENGTH = 200;
+export const DEFAULT_BACKGROUND_IMAGE_OPACITY = 0.2;
+export const MIN_BACKGROUND_IMAGE_OPACITY = 0.05;
+export const MAX_BACKGROUND_IMAGE_OPACITY = 0.5;
+export const DEFAULT_INTERFACE_OPACITY = 1;
+export const MIN_INTERFACE_OPACITY = 0.1;
+export const MAX_INTERFACE_OPACITY = 1;
+export const MAX_BACKGROUND_IMAGE_PATH_LENGTH = 4096;
 
 export interface AppSettings {
   theme: ThemeName | "auto";
@@ -44,6 +51,9 @@ export interface AppSettings {
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
   vimKeybindings: boolean;
+  backgroundImagePath: string; // "" = no custom desktop background
+  backgroundImageOpacity: number; // readability-safe 0.05–0.5 range
+  interfaceOpacity: number; // desktop content layer, 0.1–1 range
 }
 
 export interface Settings extends AppSettings {
@@ -68,6 +78,9 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
   vimKeybindings: false,
+  backgroundImagePath: "",
+  backgroundImageOpacity: DEFAULT_BACKGROUND_IMAGE_OPACITY,
+  interfaceOpacity: DEFAULT_INTERFACE_OPACITY,
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -188,6 +201,23 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
   return null;
 }
 
+function pickBackgroundSettings(stored: StoredAppSettings): Partial<AppSettings> {
+  const result: Partial<AppSettings> = {};
+  const backgroundImagePath = sanitizeBackgroundImagePath(stored.backgroundImagePath);
+  if (backgroundImagePath !== null) {
+    result.backgroundImagePath = backgroundImagePath;
+  }
+  const backgroundImageOpacity = parseBackgroundImageOpacity(stored.backgroundImageOpacity);
+  if (backgroundImageOpacity !== null) {
+    result.backgroundImageOpacity = backgroundImageOpacity;
+  }
+  const interfaceOpacity = parseInterfaceOpacity(stored.interfaceOpacity);
+  if (interfaceOpacity !== null) {
+    result.interfaceOpacity = interfaceOpacity;
+  }
+  return result;
+}
+
 function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
   if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
@@ -251,7 +281,7 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (toolCallDetailLevel !== null) {
     result.toolCallDetailLevel = toolCallDetailLevel;
   }
-  return result;
+  return { ...result, ...pickBackgroundSettings(stored) };
 }
 
 function pickAppSettingsFromLegacy(legacy: Record<string, unknown>): Partial<AppSettings> {
@@ -312,6 +342,49 @@ export function sanitizeFontFamily(value: unknown): string | null {
     return null; // control chars would corrupt the font-family string
   }
   return trimmed; // quotes/commas are legit in stacks
+}
+
+export function sanitizeBackgroundImagePath(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_BACKGROUND_IMAGE_PATH_LENGTH) {
+    return null;
+  }
+  if ([...trimmed].some((char) => char.charCodeAt(0) <= 0x1f)) {
+    return null;
+  }
+  return trimmed;
+}
+
+export function parseBackgroundImageOpacity(value: unknown): number | null {
+  let numericValue = NaN;
+  if (typeof value === "number") {
+    numericValue = value;
+  } else if (typeof value === "string" && value.trim().length > 0) {
+    numericValue = Number(value);
+  }
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+  return Math.min(
+    MAX_BACKGROUND_IMAGE_OPACITY,
+    Math.max(MIN_BACKGROUND_IMAGE_OPACITY, numericValue),
+  );
+}
+
+export function parseInterfaceOpacity(value: unknown): number | null {
+  let numericValue = NaN;
+  if (typeof value === "number") {
+    numericValue = value;
+  } else if (typeof value === "string" && value.trim().length > 0) {
+    numericValue = Number(value);
+  }
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+  return Math.min(MAX_INTERFACE_OPACITY, Math.max(MIN_INTERFACE_OPACITY, numericValue));
 }
 
 async function loadLegacyDesktopSettingsFromStorage(storage: KeyValueStorage): Promise<{

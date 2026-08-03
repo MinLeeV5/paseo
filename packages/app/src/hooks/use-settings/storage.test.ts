@@ -329,6 +329,44 @@ describe("appearance settings", () => {
     expect(result.codeFontSize).toBe(DEFAULT_CODE_FONT_SIZE);
     expect(result.syntaxTheme).toBe("one");
     expect(result.toolCallDetailLevel).toBe("detailed");
+    expect(result.backgroundImagePath).toBe("");
+    expect(result.backgroundImageOpacity).toBe(0.2);
+    expect(result.interfaceOpacity).toBe(1);
+  });
+
+  it("loads a background path and clamps its opacity into range", async () => {
+    const configured = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          backgroundImagePath: "  /Users/min/Pictures/Earth/3.jpg  ",
+          backgroundImageOpacity: 0.36,
+          interfaceOpacity: 0.72,
+        }),
+      }),
+    });
+    expect(await loadAppSettingsFromStorage(configured)).toMatchObject({
+      backgroundImagePath: "/Users/min/Pictures/Earth/3.jpg",
+      backgroundImageOpacity: 0.36,
+      interfaceOpacity: 0.72,
+    });
+
+    const excessive = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ backgroundImageOpacity: 4 }),
+      }),
+    });
+    expect((await loadAppSettingsFromStorage(excessive)).backgroundImageOpacity).toBe(0.5);
+    expect(
+      (
+        await loadAppSettingsFromStorage(
+          makeDeps({
+            storage: createInMemoryKeyValueStorage({
+              [APP_SETTINGS_KEY]: JSON.stringify({ interfaceOpacity: -2 }),
+            }),
+          }),
+        )
+      ).interfaceOpacity,
+    ).toBe(0.1);
   });
 
   it("migrates the enabled compact tool call preference to overview", async () => {

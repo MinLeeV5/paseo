@@ -29,6 +29,8 @@ import { DownloadToast } from "@/components/download-toast";
 import { QuittingOverlay } from "@/components/quitting-overlay";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
+import { GlobalBackground } from "@/components/global-background";
+import { GlobalBackgroundSurface } from "@/components/global-background-surface";
 import { LeftSidebar } from "@/components/left-sidebar";
 import { WindowSidebarMenuToggle } from "@/components/headers/menu-header";
 import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
@@ -532,7 +534,8 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
 
   const surface = (
     <View style={layoutStyles.surfaceFill}>
-      {workspaceChrome}
+      <GlobalBackground />
+      <GlobalBackgroundSurface>{workspaceChrome}</GlobalBackgroundSurface>
       {!isCompactLayout && appChromeLayout.sidebarToggleOwner === "window" ? (
         <WindowChromeRegion corners="top-left">
           <WindowChromeSafeArea

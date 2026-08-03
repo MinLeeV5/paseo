@@ -15,6 +15,12 @@ import {
   APP_SETTINGS_QUERY_KEY,
   DEFAULT_APP_SETTINGS,
   DEFAULT_CLIENT_SETTINGS,
+  DEFAULT_BACKGROUND_IMAGE_OPACITY,
+  DEFAULT_INTERFACE_OPACITY,
+  MAX_BACKGROUND_IMAGE_OPACITY,
+  MIN_BACKGROUND_IMAGE_OPACITY,
+  MAX_INTERFACE_OPACITY,
+  MIN_INTERFACE_OPACITY,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_TERMINAL_SCROLLBACK_LINES,
   DEFAULT_UI_FONT_SIZE,
@@ -28,8 +34,11 @@ import {
   loadSettingsFromStorage as loadSettingsFromStoragePure,
   normalizeAppSettings,
   parseClampedFontSize,
+  parseBackgroundImageOpacity,
+  parseInterfaceOpacity,
   parseTerminalScrollbackLines,
   sanitizeFontFamily,
+  sanitizeBackgroundImagePath,
   saveAppSettings as saveAppSettingsPure,
   type AppSettings,
   type DesktopSettingsBridge,
@@ -46,6 +55,12 @@ export {
   APP_SETTINGS_KEY,
   DEFAULT_APP_SETTINGS,
   DEFAULT_CLIENT_SETTINGS,
+  DEFAULT_BACKGROUND_IMAGE_OPACITY,
+  DEFAULT_INTERFACE_OPACITY,
+  MAX_BACKGROUND_IMAGE_OPACITY,
+  MIN_BACKGROUND_IMAGE_OPACITY,
+  MAX_INTERFACE_OPACITY,
+  MIN_INTERFACE_OPACITY,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_TERMINAL_SCROLLBACK_LINES,
   DEFAULT_UI_FONT_SIZE,
@@ -56,8 +71,11 @@ export {
   MIN_TERMINAL_SCROLLBACK_LINES,
   MIN_UI_FONT_SIZE,
   parseClampedFontSize,
+  parseBackgroundImageOpacity,
+  parseInterfaceOpacity,
   parseTerminalScrollbackLines,
   sanitizeFontFamily,
+  sanitizeBackgroundImagePath,
 };
 export type {
   AppSettings,
@@ -151,49 +169,7 @@ export function useSettings<TSelected>(
 
   const updateSettings = useCallback(
     async (updates: Partial<Settings>) => {
-      const appUpdates: Partial<AppSettings> = {};
-      if (updates.theme !== undefined) {
-        appUpdates.theme = updates.theme;
-      }
-      if (updates.language !== undefined) {
-        appUpdates.language = updates.language;
-      }
-      if (updates.sendBehavior !== undefined) {
-        appUpdates.sendBehavior = updates.sendBehavior;
-      }
-      if (updates.serviceUrlBehavior !== undefined) {
-        appUpdates.serviceUrlBehavior = updates.serviceUrlBehavior;
-      }
-      if (updates.terminalScrollbackLines !== undefined) {
-        appUpdates.terminalScrollbackLines = updates.terminalScrollbackLines;
-      }
-      if (updates.uiFontFamily !== undefined) {
-        appUpdates.uiFontFamily = updates.uiFontFamily;
-      }
-      if (updates.monoFontFamily !== undefined) {
-        appUpdates.monoFontFamily = updates.monoFontFamily;
-      }
-      if (updates.uiFontSize !== undefined) {
-        appUpdates.uiFontSize = updates.uiFontSize;
-      }
-      if (updates.codeFontSize !== undefined) {
-        appUpdates.codeFontSize = updates.codeFontSize;
-      }
-      if (updates.syntaxTheme !== undefined) {
-        appUpdates.syntaxTheme = updates.syntaxTheme;
-      }
-      if (updates.workspaceTitleSource !== undefined) {
-        appUpdates.workspaceTitleSource = updates.workspaceTitleSource;
-      }
-      if (updates.autoExpandReasoning !== undefined) {
-        appUpdates.autoExpandReasoning = updates.autoExpandReasoning;
-      }
-      if (updates.toolCallDetailLevel !== undefined) {
-        appUpdates.toolCallDetailLevel = updates.toolCallDetailLevel;
-      }
-      if (updates.vimKeybindings !== undefined) {
-        appUpdates.vimKeybindings = updates.vimKeybindings;
-      }
+      const { manageBuiltInDaemon, releaseChannel, ...appUpdates } = updates;
       const promises: Promise<void>[] = [];
       if (Object.keys(appUpdates).length > 0) {
         promises.push(appSettings.updateSettings(appUpdates));
@@ -201,13 +177,13 @@ export function useSettings<TSelected>(
 
       if (isElectronRuntime()) {
         const desktopUpdates: Parameters<typeof desktopSettings.updateSettings>[0] = {};
-        if (updates.manageBuiltInDaemon !== undefined) {
+        if (manageBuiltInDaemon !== undefined) {
           desktopUpdates.daemon = {
-            manageBuiltInDaemon: updates.manageBuiltInDaemon,
+            manageBuiltInDaemon,
           };
         }
-        if (updates.releaseChannel !== undefined) {
-          desktopUpdates.releaseChannel = updates.releaseChannel;
+        if (releaseChannel !== undefined) {
+          desktopUpdates.releaseChannel = releaseChannel;
         }
         if (Object.keys(desktopUpdates).length > 0) {
           promises.push(desktopSettings.updateSettings(desktopUpdates));
