@@ -1,0 +1,24 @@
+CHANGELOG.md
+  ec826262c11e320b 3-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "701b62e389e951c86ad7e8ac6fa239060abc9f63",
+  "prompts": {
+    "ec826262c11e320b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc6e6-8e8f-71c2-b2d4-916800cede1e",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 0,
+      "accepted_lines": 204,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/7a9217d49a0af77655918e5aed5234416f83866ec38806d502781cbef8f3fc97"
+    }
+  }
+}
