@@ -1,0 +1,71 @@
+packages/app/src/review/navigation.test.ts
+  aed3cd52c68e0e43 35-36
+  d20e2e08036057aa 1-34,37-52
+packages/app/src/i18n/resources/es.ts
+  d20e2e08036057aa 900-905
+packages/app/src/i18n/resources/ja.ts
+  d20e2e08036057aa 879-884
+packages/app/src/i18n/resources/ru.ts
+  d20e2e08036057aa 889-894
+packages/app/src/review/store.test.ts
+  d20e2e08036057aa 5,20,26,165-174,177,184,195,199,339-351
+packages/app/src/i18n/resources/en.ts
+  d20e2e08036057aa 877-882
+packages/app/src/git/use-working-diff.ts
+  d20e2e08036057aa 10-12,16,110-123,148-151
+packages/app/src/i18n/resources/fr.ts
+  d20e2e08036057aa 900-905
+packages/app/src/review/navigation.ts
+  d20e2e08036057aa 1-33
+packages/app/src/review/index.ts
+  d20e2e08036057aa 5,12-14
+packages/app/src/i18n/resources/ar.ts
+  d20e2e08036057aa 867-872
+packages/app/src/review/state.ts
+  aed3cd52c68e0e43 235-236
+  d20e2e08036057aa 26-27,32,35,145-171,176,180,182-183,191,197,200,203,216-234,237
+packages/app/src/review/store.ts
+  d20e2e08036057aa 20,35-36,39,78-83,150,173-175,296-346,377
+packages/app/src/i18n/resources/pt-BR.ts
+  d20e2e08036057aa 891-896
+packages/app/src/git/diff-pane.tsx
+  d20e2e08036057aa 45,53,68,86,136,155-163,257-258,1025-1026,1042,1083-1090,1184-1187,1212-1244,1526,1532,1540,1548-1550,1554-1562,1857-2010,2219,2239,2244-2254,2271-2280,2343-2344,2346-2348,2556-2589,2594-2596,2612-2615,2627-2634,2787-2788,2831-2832,2863,2876,3423-3430,3528-3531,3566-3577,3850-3915,3924-3938,3954,3969-3970,4119-4130,4182,4209,4263-4275,4282-4288,4312,4324,4340,4386-4395,4398,4400,4404,4434-4437,4457,4492,4504
+  aed3cd52c68e0e43 4243-4262,4276-4281
+packages/app/src/i18n/resources/zh-CN.ts
+  d20e2e08036057aa 859-864
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "26f269f0d19ead1d52e73c371bcd83d6daa29273",
+  "prompts": {
+    "aed3cd52c68e0e43": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc6c0-b436-7ba1-ab06-a830c5384fc2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 949,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/371a9927c7150d86d678f045aa19c4fbd54991206a652e3fa810a2f676941e28"
+    },
+    "d20e2e08036057aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc59c-f344-71d0-a9de-9b73e1ad2a5a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1498,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/2c0009c367814759f20deb9e754bdef2dfb7be0c52b1d87ec01df6c009ce8879"
+    }
+  }
+}
