@@ -1,9 +1,12 @@
-import { useMemo, type ReactElement, type ReactNode } from "react";
+import { useMemo, type ComponentProps, type PropsWithChildren, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Archive, CircleCheck, Copy, MoreVertical, Pencil, Pin, PinOff } from "lucide-react-native";
 import { isNative, isWeb } from "@/constants/platform";
+import { getForgePresentation, normalizeForge } from "@/git/forge";
+import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
@@ -12,9 +15,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
+import { resolveSidebarWorkspaceAccessibilityLabel } from "@/components/sidebar/sidebar-workspace-title";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -47,7 +56,7 @@ function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
   );
 }
 
-interface SidebarWorkspaceMenuProps {
+export interface SidebarWorkspaceMenuProps {
   workspaceKey: string;
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
@@ -63,41 +72,23 @@ interface SidebarWorkspaceMenuProps {
   openInFileManagerPath?: string | null;
 }
 
-type SidebarWorkspaceMenuSurface = "context" | "dropdown";
-
-interface SidebarWorkspaceMenuItemProps {
-  surface: SidebarWorkspaceMenuSurface;
-  children: ReactNode;
-  testID: string;
-  leading: ReactElement;
-  trailing?: ReactElement | null;
-  status?: "idle" | "pending" | "success";
-  pendingLabel?: string;
-  onSelect?: () => void;
+interface SidebarWorkspaceMenuItemsProps extends Omit<SidebarWorkspaceMenuProps, "onArchive"> {
+  onArchive?: () => void;
 }
 
-function SidebarWorkspaceMenuItem({
+type MenuSurface = "context" | "dropdown";
+
+function WorkspaceMenuItem({
   surface,
   children,
-  testID,
-  leading,
-  trailing,
-  status,
-  pendingLabel,
-  onSelect,
-}: SidebarWorkspaceMenuItemProps) {
-  const itemProps = {
-    testID,
-    leading,
-    trailing,
-    status,
-    pendingLabel,
-    onSelect,
-  };
+  ...props
+}: PropsWithChildren<
+  Omit<ComponentProps<typeof DropdownMenuItem>, "children"> & { surface: MenuSurface }
+>) {
   if (surface === "context") {
-    return <ContextMenuItem {...itemProps}>{children}</ContextMenuItem>;
+    return <ContextMenuItem {...props}>{children}</ContextMenuItem>;
   }
-  return <DropdownMenuItem {...itemProps}>{children}</DropdownMenuItem>;
+  return <DropdownMenuItem {...props}>{children}</DropdownMenuItem>;
 }
 
 function SidebarWorkspaceMenuItems({
@@ -115,7 +106,7 @@ function SidebarWorkspaceMenuItems({
   isPinned,
   onTogglePin,
   openInFileManagerPath,
-}: SidebarWorkspaceMenuProps & { surface: SidebarWorkspaceMenuSurface }) {
+}: SidebarWorkspaceMenuItemsProps & { surface: MenuSurface }): ReactNode {
   const { t } = useTranslation();
   const archiveTrailing = useMemo(
     () => (archiveShortcutKeys && !isNative ? <Shortcut chord={archiveShortcutKeys} /> : null),
@@ -125,71 +116,73 @@ function SidebarWorkspaceMenuItems({
   return (
     <>
       {onCopyPath ? (
-        <SidebarWorkspaceMenuItem
+        <WorkspaceMenuItem
           surface={surface}
           testID={`sidebar-workspace-menu-copy-path-${workspaceKey}`}
           leading={copyLeadingIcon}
           onSelect={onCopyPath}
         >
           {t("sidebar.workspace.actions.copyPath")}
-        </SidebarWorkspaceMenuItem>
+        </WorkspaceMenuItem>
       ) : null}
       {onCopyBranchName ? (
-        <SidebarWorkspaceMenuItem
+        <WorkspaceMenuItem
           surface={surface}
           testID={`sidebar-workspace-menu-copy-branch-name-${workspaceKey}`}
           leading={copyLeadingIcon}
           onSelect={onCopyBranchName}
         >
           {t("sidebar.workspace.actions.copyBranchName")}
-        </SidebarWorkspaceMenuItem>
+        </WorkspaceMenuItem>
       ) : null}
       {onRename ? (
-        <SidebarWorkspaceMenuItem
+        <WorkspaceMenuItem
           surface={surface}
           testID={`sidebar-workspace-menu-rename-${workspaceKey}`}
           leading={renameLeadingIcon}
           onSelect={onRename}
         >
           {t("sidebar.workspace.actions.rename")}
-        </SidebarWorkspaceMenuItem>
+        </WorkspaceMenuItem>
       ) : null}
       {onMarkAsRead ? (
-        <SidebarWorkspaceMenuItem
+        <WorkspaceMenuItem
           surface={surface}
           testID={`sidebar-workspace-menu-mark-as-read-${workspaceKey}`}
           leading={markAsReadLeadingIcon}
           onSelect={onMarkAsRead}
         >
           Mark as read
-        </SidebarWorkspaceMenuItem>
+        </WorkspaceMenuItem>
       ) : null}
       {onTogglePin ? (
-        <SidebarWorkspaceMenuItem
+        <WorkspaceMenuItem
           surface={surface}
           testID={`sidebar-workspace-menu-pin-${workspaceKey}`}
           leading={isPinned ? unpinLeadingIcon : pinLeadingIcon}
           onSelect={onTogglePin}
         >
           {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
-        </SidebarWorkspaceMenuItem>
+        </WorkspaceMenuItem>
       ) : null}
       <OpenInFileManagerMenuItem
+        surface={surface}
         path={openInFileManagerPath}
         testID={`sidebar-workspace-menu-open-folder-${workspaceKey}`}
-        surface={surface}
       />
-      <SidebarWorkspaceMenuItem
-        surface={surface}
-        testID={`sidebar-workspace-menu-archive-${workspaceKey}`}
-        leading={archiveLeadingIcon}
-        trailing={archiveTrailing}
-        status={archiveStatus}
-        pendingLabel={archivePendingLabel}
-        onSelect={onArchive}
-      >
-        {archiveLabel ?? t("sidebar.workspace.actions.archive")}
-      </SidebarWorkspaceMenuItem>
+      {onArchive ? (
+        <WorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-archive-${workspaceKey}`}
+          leading={archiveLeadingIcon}
+          trailing={archiveTrailing}
+          status={archiveStatus}
+          pendingLabel={archivePendingLabel}
+          onSelect={onArchive}
+        >
+          {archiveLabel ?? t("sidebar.workspace.actions.archive")}
+        </WorkspaceMenuItem>
+      ) : null}
     </>
   );
 }
@@ -210,7 +203,6 @@ export function SidebarWorkspaceMenu({
   openInFileManagerPath,
 }: SidebarWorkspaceMenuProps) {
   const { t } = useTranslation();
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -244,15 +236,96 @@ export function SidebarWorkspaceMenu({
   );
 }
 
-export function SidebarWorkspaceContextMenuContent(props: SidebarWorkspaceMenuProps) {
+type ContextTriggerProps = Omit<
+  ComponentProps<typeof ContextMenuTrigger>,
+  "children" | "enabledOnMobile"
+>;
+
+export function SidebarWorkspaceContextMenu({
+  children,
+  contextMenuOpen,
+  onContextMenuOpenChange,
+  workspace,
+  leadingProjectName,
+  hostBadgeLabel,
+  scriptIconKind,
+  workspaceKey,
+  onCopyPath,
+  onCopyBranchName,
+  onRename,
+  onMarkAsRead,
+  onArchive,
+  archiveLabel,
+  archiveStatus,
+  archivePendingLabel,
+  archiveShortcutKeys,
+  isPinned,
+  onTogglePin,
+  openInFileManagerPath,
+  accessibilityLabel,
+  ...triggerProps
+}: PropsWithChildren<
+  SidebarWorkspaceMenuItemsProps &
+    ContextTriggerProps & {
+      contextMenuOpen: boolean;
+      onContextMenuOpenChange: (open: boolean) => void;
+      workspace: SidebarWorkspaceEntry;
+      leadingProjectName?: string | null;
+      hostBadgeLabel?: string | null;
+      scriptIconKind?: "service" | "command" | null;
+    }
+>) {
+  const {
+    settings: { workspaceTitleSource },
+  } = useAppSettings();
+  const { t } = useTranslation();
+  const pullRequestLabel = workspace.prHint
+    ? t("workspace.git.pr.accessibility.pullRequest", {
+        number: workspace.prHint.number,
+        context: getForgePresentation(normalizeForge(workspace.prHint.forge)).changeRequestContext,
+      })
+    : null;
+  const rowAccessibilityLabel = resolveSidebarWorkspaceAccessibilityLabel({
+    workspace,
+    workspaceTitleSource,
+    leadingProjectName,
+    hostBadgeLabel,
+    pullRequestLabel,
+    scriptLabel: scriptIconKind ? t("workspace.status.scriptsAvailable") : null,
+  });
+
   return (
-    <ContextMenuContent
-      align="start"
-      width={260}
-      testID={`sidebar-workspace-context-menu-${props.workspaceKey}`}
-    >
-      <SidebarWorkspaceMenuItems surface="context" {...props} />
-    </ContextMenuContent>
+    <ContextMenu open={contextMenuOpen} onOpenChange={onContextMenuOpenChange}>
+      <ContextMenuTrigger
+        {...triggerProps}
+        enabledOnMobile={false}
+        accessibilityLabel={accessibilityLabel ?? rowAccessibilityLabel}
+      >
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        align="start"
+        width={260}
+        testID={`sidebar-workspace-context-menu-${workspaceKey}`}
+      >
+        <SidebarWorkspaceMenuItems
+          surface="context"
+          workspaceKey={workspaceKey}
+          onCopyPath={onCopyPath}
+          onCopyBranchName={onCopyBranchName}
+          onRename={onRename}
+          onMarkAsRead={onMarkAsRead}
+          onArchive={onArchive}
+          archiveLabel={archiveLabel}
+          archiveStatus={archiveStatus}
+          archivePendingLabel={archivePendingLabel}
+          archiveShortcutKeys={archiveShortcutKeys}
+          isPinned={isPinned}
+          onTogglePin={onTogglePin}
+          openInFileManagerPath={openInFileManagerPath}
+        />
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

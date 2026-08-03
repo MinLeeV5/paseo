@@ -3,7 +3,9 @@ import { isStandaloneMermaidFile } from "@/components/mermaid/language";
 export type FilePaneRenderMode = "code" | "markdown" | "mermaid";
 export type FilePaneMarkdownMode = "preview" | "source";
 
-function isMarkdownFile(filePath: string): boolean {
+export type FilePreviewRenderKind = "markdown" | "html";
+
+export function isRenderedMarkdownFile(filePath: string): boolean {
   const normalizedPath = filePath.trim().toLowerCase();
   return normalizedPath.endsWith(".md") || normalizedPath.endsWith(".markdown");
 }
@@ -12,7 +14,7 @@ export function getFilePaneRenderMode(filePath: string): FilePaneRenderMode {
   if (isStandaloneMermaidFile(filePath)) {
     return "mermaid";
   }
-  if (isMarkdownFile(filePath)) {
+  if (isRenderedMarkdownFile(filePath)) {
     return "markdown";
   }
   return "code";
@@ -40,8 +42,15 @@ export function getDefaultFilePaneMarkdownMode(hasDiffContext: boolean): FilePan
   return hasDiffContext ? "source" : "preview";
 }
 
-export function isRenderedMarkdownFile(filePath: string): boolean {
-  return getFilePaneRenderMode(filePath) === "markdown";
+function isRenderedHtmlFile(filePath: string): boolean {
+  const normalizedPath = filePath.trim().toLowerCase();
+  return normalizedPath.endsWith(".html") || normalizedPath.endsWith(".htm");
+}
+
+export function filePreviewRenderKind(filePath: string): FilePreviewRenderKind | null {
+  if (isRenderedMarkdownFile(filePath)) return "markdown";
+  if (isRenderedHtmlFile(filePath)) return "html";
+  return null;
 }
 
 export { isStandaloneMermaidFile };

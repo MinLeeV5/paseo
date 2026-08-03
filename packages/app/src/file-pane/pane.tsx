@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
   useCallback,
@@ -9,7 +10,6 @@ import React, {
   type RefObject,
 } from "react";
 import type { DaemonClient, FileReadResult } from "@getpaseo/client/internal/daemon-client";
-import type { FileVersion } from "@getpaseo/protocol/messages";
 import { Image as RNImage, ScrollView as RNScrollView, Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -21,9 +21,10 @@ import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { lineNumberGutterWidth } from "@/components/code-insets";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import {
+  filePreviewRenderKind,
   getDefaultFilePaneMarkdownMode,
   getFilePaneContentRenderMode,
-  isRenderedMarkdownFile,
+  isStandaloneMermaidFile,
 } from "@/components/file-pane-render-mode";
 import { MermaidDiagram } from "@/components/mermaid/diagram";
 import type { AttachmentMetadata } from "@/attachments/types";
@@ -51,11 +52,15 @@ import {
 } from "@/workspace/file-diff-decorations";
 import { isWeb } from "@/constants/platform";
 import { useAppSettings } from "@/hooks/use-settings";
-import { useLiveFile } from "./live-file";
+import { useLiveFile } from "./live-file/hook";
 import { FilePanelBar } from "./bar";
-import { FileEditorModel, type FileEditorFile } from "./editor/model";
+import { FileHtmlPreview } from "./html-preview";
+import { FileEditorModel, getFileConflictCallout, type FileConflictCallout } from "./editor/model";
+import { createFileObservationSource } from "./editor/observation-source";
 import { FileEditorView } from "./editor/view";
 import { FileSearchToolbar } from "./search-bar";
+import type { FileConflictAlertState } from "./conflict-alert";
+import type { LiveFileModel } from "./live-file/model";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import type { Theme } from "@/styles/theme";
@@ -85,13 +90,13 @@ interface DeletedCodeLineProps {
 
 interface FilePreviewBodyProps {
   preview: ExplorerFile | null;
+  mode?: "preview" | "source";
   isLoading: boolean;
   isMobile: boolean;
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
   diffDecorations: WorkspaceFileDiffDecorations | null;
-  mode?: "preview" | "source";
   search?: FileSearchController;
 }
 
@@ -514,15 +519,16 @@ function useFilePreviewSearch(input: {
   };
 }
 
+// oxlint-disable-next-line complexity
 function FilePreviewBody({
   preview,
+  mode,
   isLoading,
   isMobile,
   location,
   navigationRevision,
   imagePreviewUri,
   diffDecorations,
-  mode,
   search,
 }: FilePreviewBodyProps) {
   const theme = UnistylesRuntime.getTheme();
@@ -537,16 +543,22 @@ function FilePreviewBody({
           mode,
         })
       : "code";
+  // A line target means the caller wants to land on that line, so fall back to
+  // the highlighted source view even for renderable files.
+  const renderKind =
+    preview?.kind === "text" && !location.lineStart && mode !== "source"
+      ? filePreviewRenderKind(filePath)
+      : null;
 
   const previewScrollRef = useRef<RNScrollView>(null);
 
   const highlightedLines = useMemo(() => {
-    if (!preview || preview.kind !== "text" || textRenderMode !== "code") {
+    if (!preview || preview.kind !== "text" || textRenderMode !== "code" || renderKind) {
       return null;
     }
 
     return highlightCode(preview.content ?? "", filePath);
-  }, [textRenderMode, preview, filePath]);
+  }, [filePath, preview, renderKind, textRenderMode]);
 
   const maxDeletedLineNumber = useMemo(
     () => getMaxDeletedLineNumber(diffDecorations),
@@ -629,6 +641,15 @@ function FilePreviewBody({
   }
 
   if (preview.kind === "text") {
+    if (renderKind === "html") {
+      // The HTML document owns its own scrolling, so no ScrollView wrapper here.
+      return (
+        <View style={styles.previewScrollContainer}>
+          <FileHtmlPreview html={preview.content ?? ""} testID="file-html-preview" />
+        </View>
+      );
+    }
+
     if (textRenderMode === "markdown") {
       return (
         <View style={styles.previewScrollContainer}>
@@ -780,8 +801,8 @@ export function FilePane({
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const isDiffView = Boolean(location.diffContext);
-  const defaultMarkdownMode = getDefaultFilePaneMarkdownMode(isDiffView);
-  const [markdownMode, setMarkdownMode] = useState<"preview" | "source">(defaultMarkdownMode);
+  const defaultPreviewMode = getDefaultFilePaneMarkdownMode(isDiffView);
+  const [previewMode, setPreviewMode] = useState<"preview" | "source">(defaultPreviewMode);
   const [resolvedPreview, setResolvedPreview] = useState<{
     key: string | null;
     file: ExplorerFile | null;
@@ -816,9 +837,8 @@ export function FilePane({
     isTabActive: isActive,
     isAppVisible,
   });
-  const { query, version } = useLiveFile({
+  const liveFile = useLiveFile({
     client,
-    serverId,
     cwd: readTarget?.cwd ?? null,
     path: readTarget?.path ?? null,
     enabled,
@@ -834,35 +854,38 @@ export function FilePane({
   });
 
   useEffect(() => {
+    if (!liveFile.file) return;
     let active = true;
     const key = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
     void (async () => {
-      const nextPreview = await createFilePanePreview(query.data ?? null);
+      const nextPreview = await createFilePanePreview(liveFile.file);
       if (active) setResolvedPreview({ key, ...nextPreview });
     })();
     return () => {
       active = false;
     };
-  }, [query.data, readTarget]);
+  }, [liveFile.file, readTarget]);
 
-  useEffect(() => setMarkdownMode(defaultMarkdownMode), [defaultMarkdownMode, readTarget?.path]);
+  useEffect(() => setPreviewMode(defaultPreviewMode), [defaultPreviewMode, readTarget?.path]);
 
   const previewKey = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
   const preview = resolvedPreview.key === previewKey ? resolvedPreview.file : null;
   const imagePreviewUri = useAttachmentPreviewUrl(
     resolvedPreview.key === previewKey ? resolvedPreview.imageAttachment : null,
   );
-  const isMarkdown = isMarkdownPreview(preview, location.path);
+  const isRenderable = isRenderablePreview(preview, location.path);
   const editable = isEditableTextFile({
     preview,
     supportsEditing,
     isDiffView,
   });
-  const canToggleMarkdownMode = isMarkdown && (editable || isDiffView);
+  const canTogglePreviewMode = isRenderable && !location.lineStart;
   const lineCount =
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
-  const errorMessage = getFileErrorMessage(query.error, t("panels.file.failedToLoad"));
   const hasDeletedDiffFallback = collectDeletedRowsForFallback(diffDecorations).length > 0;
+  const errorMessage = hasDeletedDiffFallback
+    ? null
+    : getFileErrorMessage(liveFile.error, t("panels.file.failedToLoad"));
 
   return (
     <FilePanePresentation
@@ -870,15 +893,18 @@ export function FilePane({
       client={client}
       readTarget={readTarget}
       preview={preview}
-      version={version}
+      liveFile={liveFile.model}
+      onRetryRead={liveFile.refresh}
+      retryingRead={liveFile.isRetrying}
+      retryLabel={t("common.actions.retry")}
       filename={getFileNameFromPath(location.path) ?? location.path}
-      markdownMode={canToggleMarkdownMode ? markdownMode : undefined}
-      onMarkdownModeChange={canToggleMarkdownMode ? setMarkdownMode : undefined}
+      previewMode={canTogglePreviewMode ? previewMode : undefined}
+      onPreviewModeChange={canTogglePreviewMode ? setPreviewMode : undefined}
       lineCount={lineCount}
       editable={editable}
       disconnectedMessage={t("workspace.terminal.hostDisconnected")}
-      errorMessage={hasDeletedDiffFallback ? null : errorMessage}
-      isLoading={query.isFetching}
+      errorMessage={errorMessage}
+      isLoading={liveFile.isFetching}
       isMobile={isMobile}
       location={location}
       navigationRevision={navigationRevision}
@@ -890,12 +916,16 @@ export function FilePane({
   );
 }
 
-function isMarkdownPreview(preview: ExplorerFile | null, path: string): boolean {
-  return preview?.kind === "text" && isRenderedMarkdownFile(path);
+function isRenderablePreview(preview: ExplorerFile | null, path: string): boolean {
+  return (
+    preview?.kind === "text" &&
+    (filePreviewRenderKind(path) !== null || isStandaloneMermaidFile(path))
+  );
 }
 
 function getFileErrorMessage(error: unknown, fallback: string): string | null {
   if (!error) return null;
+  if (typeof error === "string") return error;
   return error instanceof Error ? error.message : fallback;
 }
 
@@ -918,10 +948,13 @@ function FilePanePresentation({
   client,
   readTarget,
   preview,
-  version,
+  liveFile,
+  onRetryRead,
+  retryingRead,
+  retryLabel,
   filename,
-  markdownMode,
-  onMarkdownModeChange,
+  previewMode,
+  onPreviewModeChange,
   lineCount,
   editable,
   disconnectedMessage,
@@ -939,10 +972,13 @@ function FilePanePresentation({
   client: DaemonClient | null;
   readTarget: { cwd: string; path: string } | null;
   preview: ExplorerFile | null;
-  version: FileVersion | null;
+  liveFile: LiveFileModel;
+  onRetryRead: () => void;
+  retryingRead: boolean;
+  retryLabel: string;
   filename: string;
-  markdownMode?: "preview" | "source";
-  onMarkdownModeChange?: (mode: "preview" | "source") => void;
+  previewMode?: "preview" | "source";
+  onPreviewModeChange?: (mode: "preview" | "source") => void;
   lineCount?: number;
   editable: boolean;
   disconnectedMessage: string;
@@ -974,10 +1010,12 @@ function FilePanePresentation({
         cwd={readTarget.cwd}
         path={readTarget.path}
         preview={preview as TextExplorerFile}
-        version={version}
+        liveFile={liveFile}
+        onRetryRead={onRetryRead}
+        retryingRead={retryingRead}
         filename={filename}
-        mode={markdownMode}
-        onModeChange={onMarkdownModeChange}
+        mode={previewMode}
+        onModeChange={onPreviewModeChange}
         isLoading={isLoading}
         isMobile={isMobile}
         location={location}
@@ -988,12 +1026,25 @@ function FilePanePresentation({
     );
   }
 
+  if (errorMessage) {
+    return (
+      <View style={styles.container} testID="workspace-file-pane">
+        <View style={styles.centerState}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+          <Button variant="outline" size="sm" onPress={onRetryRead} loading={retryingRead}>
+            {retryLabel}
+          </Button>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <ReadOnlyFilePane
       preview={preview}
       lineCount={lineCount}
-      markdownMode={markdownMode}
-      onMarkdownModeChange={onMarkdownModeChange}
+      previewMode={previewMode}
+      onPreviewModeChange={onPreviewModeChange}
       errorMessage={errorMessage}
       isLoading={isLoading}
       isMobile={isMobile}
@@ -1010,8 +1061,8 @@ function FilePanePresentation({
 function ReadOnlyFilePane({
   preview,
   lineCount,
-  markdownMode,
-  onMarkdownModeChange,
+  previewMode,
+  onPreviewModeChange,
   errorMessage,
   isLoading,
   isMobile,
@@ -1024,8 +1075,8 @@ function ReadOnlyFilePane({
 }: {
   preview: ExplorerFile | null;
   lineCount?: number;
-  markdownMode?: "preview" | "source";
-  onMarkdownModeChange?: (mode: "preview" | "source") => void;
+  previewMode?: "preview" | "source";
+  onPreviewModeChange?: (mode: "preview" | "source") => void;
   errorMessage: string | null;
   isLoading: boolean;
   isMobile: boolean;
@@ -1036,7 +1087,7 @@ function ReadOnlyFilePane({
   isPaneFocused: boolean;
   searchHandlerId: string;
 }) {
-  const textRenderMode = getSearchableTextRenderMode({ preview, location, mode: markdownMode });
+  const textRenderMode = getSearchableTextRenderMode({ preview, location, mode: previewMode });
   const canSearch = textRenderMode !== null;
   const search = useFileSearch({
     content: preview?.kind === "text" ? (preview.content ?? "") : "",
@@ -1052,8 +1103,8 @@ function ReadOnlyFilePane({
         <FilePanelBar
           size={preview.size}
           lineCount={lineCount}
-          mode={markdownMode}
-          onModeChange={onMarkdownModeChange}
+          mode={previewMode}
+          onModeChange={onPreviewModeChange}
           search={canSearch ? search : undefined}
         />
       ) : null}
@@ -1072,7 +1123,7 @@ function ReadOnlyFilePane({
           navigationRevision={navigationRevision}
           imagePreviewUri={imagePreviewUri}
           diffDecorations={diffDecorations}
-          mode={markdownMode}
+          mode={previewMode}
           search={canSearch ? search : undefined}
         />
         <FileSearchOverlay search={canSearch ? search : undefined} />
@@ -1114,7 +1165,9 @@ function EditableFilePane({
   cwd,
   path,
   preview,
-  version,
+  liveFile,
+  onRetryRead,
+  retryingRead,
   filename,
   mode,
   onModeChange,
@@ -1129,7 +1182,9 @@ function EditableFilePane({
   cwd: string;
   path: string;
   preview: TextExplorerFile;
-  version: FileVersion | null;
+  liveFile: LiveFileModel;
+  onRetryRead: () => void;
+  retryingRead: boolean;
   filename: string;
   mode?: "preview" | "source";
   onModeChange?: (mode: "preview" | "source") => void;
@@ -1146,48 +1201,34 @@ function EditableFilePane({
   const [vimMode, setVimMode] = useState<string | null>(settings.vimKeybindings ? "NORMAL" : null);
   const session = useMemo(
     () => ({
-      async read(): Promise<FileEditorFile> {
-        const file = await client.readFile(cwd, path);
-        const decodedFile = explorerFileFromReadResult(file);
-        if (decodedFile.kind !== "text" || decodedFile.content === undefined) {
-          throw new Error("File is no longer text.");
-        }
-        return {
-          content: decodedFile.content,
-          hasBom: decodedFile.hasBom,
-          version: {
-            status: "ready",
-            cwd,
-            path,
-            size: file.size,
-            modifiedAt: file.modifiedAt,
-            revision: file.revision,
-          },
-        };
-      },
       write(input: { content: string; expectedModifiedAt: string; expectedRevision?: string }) {
         return client.writeFile({ cwd, path, ...input });
       },
     }),
     [client, cwd, path],
   );
-  const [model] = useState(
-    () =>
-      new FileEditorModel({
-        file: {
-          content: preview.content ?? "",
-          hasBom: preview.hasBom,
-          version: {
-            status: "ready",
-            cwd,
-            path,
-            size: preview.size,
-            modifiedAt: preview.modifiedAt,
-          },
+  const [model] = useState(() => {
+    return new FileEditorModel({
+      file: {
+        content: preview.content ?? "",
+        hasBom: preview.hasBom,
+        version: {
+          status: "ready",
+          cwd,
+          path,
+          size: preview.size,
+          modifiedAt: preview.modifiedAt,
+          revision: preview.revision,
         },
-        session,
-      }),
-  );
+      },
+      session,
+    });
+  });
+  useEffect(() => {
+    const source = createFileObservationSource(liveFile);
+    model.connectFileObservations(source);
+    return () => model.disconnectFileObservations();
+  }, [liveFile, model]);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const suspendPendingSave = useCallback(() => model.suspendAutosave(), [model]);
   usePublishPanelInstanceAttributes({ modified: snapshot.modified, suspendPendingSave });
@@ -1226,11 +1267,12 @@ function EditableFilePane({
   );
 
   useEffect(() => () => model.dispose(), [model]);
-  useEffect(() => {
-    if (version) model.receiveFileVersion(version);
-  }, [model, version]);
 
   const handleReload = useCallback(() => {
+    if (!snapshot.modified) {
+      void model.reload();
+      return;
+    }
     void (async () => {
       const confirmed = await confirmDialog({
         title: t("panels.file.editor.reloadTitle"),
@@ -1240,8 +1282,15 @@ function EditableFilePane({
       });
       if (confirmed) void model.reload();
     })();
-  }, [model, t]);
+  }, [model, snapshot.modified, t]);
   const handleOverwrite = useCallback(() => void model.overwrite(), [model]);
+  const conflict = fileConflictAlertState({
+    callout: getFileConflictCallout(snapshot),
+    onOverwrite: handleOverwrite,
+    onReload: handleReload,
+    onRetry: onRetryRead,
+    retrying: retryingRead,
+  });
   const handleVimModeChange = useCallback((nextMode: string | null) => setVimMode(nextMode), []);
   const renderedPreview = useMemo<ExplorerFile>(
     () => ({
@@ -1272,9 +1321,7 @@ function EditableFilePane({
         editorStatus={snapshot.status}
         cursor={showSource ? cursor : undefined}
         vimMode={showSource ? vimMode : null}
-        conflictUnavailable={snapshot.observedVersion.status !== "ready"}
-        onOverwrite={handleOverwrite}
-        onReload={handleReload}
+        conflict={conflict}
         mode={mode}
         onModeChange={onModeChange}
         search={search}
@@ -1301,6 +1348,7 @@ function EditableFilePane({
             navigationRevision={navigationRevision}
             imagePreviewUri={null}
             diffDecorations={null}
+            mode={mode}
             search={search}
           />
         )}
@@ -1308,6 +1356,26 @@ function EditableFilePane({
       </View>
     </View>
   );
+}
+
+function fileConflictAlertState(input: {
+  callout: FileConflictCallout | null;
+  onOverwrite(): void;
+  onReload(): void;
+  onRetry(): void;
+  retrying: boolean;
+}): FileConflictAlertState | undefined {
+  if (!input.callout) return undefined;
+  if (input.callout.kind === "deleted") return { kind: "deleted" };
+  if (input.callout.kind === "checkFailed") {
+    return { kind: "checkFailed", retrying: input.retrying, onRetry: input.onRetry };
+  }
+  return {
+    kind: "changed",
+    canOverwrite: input.callout.canOverwrite,
+    onReload: input.onReload,
+    onOverwrite: input.onOverwrite,
+  };
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -1331,6 +1399,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: theme.spacing[3],
     padding: theme.spacing[4],
   },
   loadingText: {

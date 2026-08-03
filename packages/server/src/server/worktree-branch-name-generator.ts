@@ -67,6 +67,7 @@ async function buildPrompt(
         label: "Title style",
         default: [
           "A terse, task-shaped label naming what the task is about (sentence case, max 80 characters).",
+          "Preserve explicit identifiers such as PR or issue numbers, file paths, packages, components, commands, and quoted names when they distinguish the task.",
           "Match the title language to the source material's primary human language. For a primarily Chinese prompt, write a natural concise Chinese title; do not default to English merely because these instructions are English.",
           "Aim for about 4 words. Go longer only when the task genuinely needs it; most titles must stay short.",
           "Do not start with a generic 'do' verb (Fix, Add, Implement, Diagnose, Update, Change, Create, Set, Make) — every task is implicitly one of these, so the verb is noise. Name the thing instead.",
@@ -78,7 +79,8 @@ async function buildPrompt(
       {
         configKey: "branchName",
         label: "Branch style",
-        default: "A short, descriptive slug — a few lowercase words joined by hyphens.",
+        default:
+          "A short task-shaped slug preserving the operation, target, and explicit identifier when present.",
       },
     ],
     after: "Return JSON only with fields 'title' and 'branch'.",

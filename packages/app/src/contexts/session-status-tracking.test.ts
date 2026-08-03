@@ -9,6 +9,7 @@ function createAgent(status: Agent["status"]): Agent {
     provider: "codex",
     status,
     goal: null,
+    activeTurn: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
     lastUserMessageAt: null,

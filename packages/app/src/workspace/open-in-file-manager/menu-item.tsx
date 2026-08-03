@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
-import { ContextMenuItem } from "@/components/ui/context-menu";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { ContextMenuItem } from "@/components/ui/context-menu";
 import { getIsElectron } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import type { Theme } from "@/styles/theme";
@@ -52,10 +52,17 @@ export function OpenInFileManagerMenuItem({
     return null;
   }
 
-  const MenuItem = surface === "context" ? ContextMenuItem : DropdownMenuItem;
+  const label = t("sidebar.project.actions.openFolder");
+  if (surface === "context") {
+    return (
+      <ContextMenuItem testID={testID} leading={leadingIcon} onSelect={openInFileManager}>
+        {label}
+      </ContextMenuItem>
+    );
+  }
   return (
-    <MenuItem testID={testID} leading={leadingIcon} onSelect={openInFileManager}>
-      {t("sidebar.project.actions.openFolder")}
-    </MenuItem>
+    <DropdownMenuItem testID={testID} leading={leadingIcon} onSelect={openInFileManager}>
+      {label}
+    </DropdownMenuItem>
   );
 }

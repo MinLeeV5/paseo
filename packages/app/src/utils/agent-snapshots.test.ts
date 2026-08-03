@@ -19,6 +19,7 @@ function createSnapshot(
     status: input.status ?? "idle",
     goal: input.goal ?? null,
     goalArchivedAt: input.goalArchivedAt ?? null,
+    activeTurn: input.activeTurn,
     capabilities: input.capabilities ?? {
       supportsStreaming: true,
       supportsSessionPersistence: true,
@@ -37,6 +38,26 @@ function createSnapshot(
 }
 
 describe("normalizeAgentSnapshot", () => {
+  it("normalizes identified and legacy active turns at the snapshot boundary", () => {
+    const startedAt = "2026-07-31T12:00:00.000Z";
+    expect(
+      normalizeAgentSnapshot(
+        createSnapshot({
+          status: "running",
+          activeTurn: { turnId: "turn-1", startedAt },
+        }),
+        "server-1",
+      ).activeTurn,
+    ).toEqual({ turnId: "turn-1", startedAt: new Date(startedAt) });
+
+    expect(
+      normalizeAgentSnapshot(
+        createSnapshot({ status: "running", lastUserMessageAt: startedAt }),
+        "server-1",
+      ).activeTurn,
+    ).toEqual({ turnId: null, startedAt: new Date(startedAt) });
+  });
+
   it("derives parentAgentId from the parent label while preserving labels", () => {
     const labels = {
       [PARENT_AGENT_ID_LABEL]: "parent-1",
