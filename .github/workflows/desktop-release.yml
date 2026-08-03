@@ -149,12 +149,40 @@ jobs:
           fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
           NODE
 
+      - name: Download macOS DMG builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.electron_arch }}" in
+            arm64)
+              dmg_arch=arm64
+              checksum=a785f2a385c8c31996a089ef8e26361904b40c772d5ea65a36001212f1fc25e0
+              ;;
+            x64)
+              dmg_arch=x86_64
+              checksum=87b3bb72148b11451ee90ede79cc8d59305c9173b68b0f2b50a3bea51fc4a4e2
+              ;;
+            *)
+              echo "::error::Unsupported macOS architecture: ${{ matrix.electron_arch }}"
+              exit 1
+              ;;
+          esac
+
+          archive="dmgbuild-bundle-${dmg_arch}-75c8a6c.tar.gz"
+          vendor_dir="$RUNNER_TEMP/dmgbuild"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/$archive" \
+            "https://github.com/electron-userland/electron-builder-binaries/releases/download/dmg-builder%401.2.0/$archive"
+          echo "$checksum  $RUNNER_TEMP/$archive" | shasum -a 256 -c -
+          mkdir -p "$vendor_dir"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$vendor_dir" --strip-components=1
+          test -x "$vendor_dir/dmgbuild"
+          echo "CUSTOM_DMGBUILD_PATH=$vendor_dir/dmgbuild" >> "$GITHUB_ENV"
+
       - name: Build desktop release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EP_GH_IGNORE_TIME: true
-          ELECTRON_BUILDER_BINARIES_DOWNLOAD_OVERRIDE_URL: https://github.com/electron-userland/electron-builder-binaries/releases/download/dmg-builder@1.2.0
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
