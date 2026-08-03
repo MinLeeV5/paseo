@@ -1,0 +1,38 @@
+.github/workflows/desktop-release.yml
+  ec826262c11e320b 59,85,88,165,169-214,225-243,251,267,275
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "6f64e73c81e851bff19d66d15908fb59b3877593",
+  "prompts": {
+    "59bad89acc5fb9e1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc6e3-d6c9-7b11-b3b6-ecf872cf35c0",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/1a93044f29a2683ba23f5d3a2c4308e2bd51e4e4ab9cf385fa4a495be17b6872"
+    },
+    "ec826262c11e320b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc6e6-8e8f-71c2-b2d4-916800cede1e",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 282,
+      "total_deletions": 443,
+      "accepted_lines": 276,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/b0c2c7df1fb9d6a83a77be157bc87343ba68694de158a18d6f80a043ea4c0547"
+    }
+  }
+}
