@@ -1,0 +1,28 @@
+packages/app/src/app/_layout.tsx
+  f41026e5ca0826dc 34-35
+packages/app/src/desktop/global-background.tsx
+  f41026e5ca0826dc 1
+packages/app/src/desktop/global-background-surface.tsx
+  f41026e5ca0826dc 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "5364f8cdbca47d19f4efc40bbf26905043879206",
+  "prompts": {
+    "f41026e5ca0826dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcaca-2d18-7b53-91d3-9402e4c5ba14",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 163,
+      "total_deletions": 161,
+      "accepted_lines": 163,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/16cfe951cecd9fdd7e5f170ae08eac84c1808881e9b2a4a37162f61e202bc84c"
+    }
+  }
+}
