@@ -1,0 +1,24 @@
+.npmrc
+  f41026e5ca0826dc 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "6f480efa1b7b4399fcff524c3f9a251cf4ea544e",
+  "prompts": {
+    "f41026e5ca0826dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcaca-2d18-7b53-91d3-9402e4c5ba14",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 160,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/19fdaee02ddbacb9d17fe5f0c14f78012adc60b473bf5e4f8aa59274405f2459"
+    }
+  }
+}
