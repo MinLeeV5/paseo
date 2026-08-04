@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.4.0 - 2026-08-04
+
+### 新增
+
+- 通过聊天大纲快速跳转到对话中的关键位置（[#2792](https://github.com/getpaseo/paseo/pull/2792)）
+- 从正在进行的对话中分叉，尝试新方向而不丢失原有上下文（[#2638](https://github.com/getpaseo/paseo/pull/2638) by [@kaspesi](https://github.com/kaspesi)）
+- 在文件面板中直接预览 HTML 文件（[#2712](https://github.com/getpaseo/paseo/pull/2712) by [@nicholas-salgueiro-britecore](https://github.com/nicholas-salgueiro-britecore), [@nickmaglowsch](https://github.com/nickmaglowsch)）
+- 为每个项目设置自定义图标，方便在侧边栏中辨认（[#2335](https://github.com/getpaseo/paseo/pull/2335) by [@nikuscs](https://github.com/nikuscs)）
+- 通过 Command Center 调整推理、模式、计划和快速执行设置（[#2274](https://github.com/getpaseo/paseo/pull/2274) by [@claude](https://github.com/claude), [@kedrzu](https://github.com/kedrzu)）
+- 在子智能体轨道中查看原生子智能体的完整对话（[#2760](https://github.com/getpaseo/paseo/pull/2760)）
+
+### 改进
+
+- 智能体与子智能体运行期间，工作区保持可用并响应更快（[#2777](https://github.com/getpaseo/paseo/pull/2777), [#2791](https://github.com/getpaseo/paseo/pull/2791)）
+- 为 ACP 会话提供统一的自动接受控制（[#2752](https://github.com/getpaseo/paseo/pull/2752)）
+
+### 修复
+
+- 多行 Markdown 表格内容会保持在对应的单元格内
+
 ## 1.3.0 - 2026-08-03
 
 ### 新增
