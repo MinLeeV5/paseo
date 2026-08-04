@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import MarkdownIt from "markdown-it";
 import { describe, expect, it } from "vitest";
 import { normalizeHtmlishMarkdown, splitHtmlishMarkdown } from "./html-ish";
 
@@ -292,8 +293,24 @@ describe("splitHtmlishMarkdown", () => {
 
   it("normalizes br and simple code tags into markdown", () => {
     expect(normalizeHtmlishMarkdown("Line 1<br/>Line 2 <code>safe-value</code>")).toBe(
-      "Line 1\nLine 2 `safe-value`",
+      "Line 1&#10;Line 2 `safe-value`",
     );
+  });
+
+  it("keeps HTML line breaks inside their Markdown table cells", () => {
+    const source = [
+      "| Phase | Tasks |",
+      "| --- | --- |",
+      "| Build<br>Validate | Read<br>Review |",
+    ].join("\n");
+
+    const tokens = MarkdownIt({ typographer: true, linkify: true }).parse(
+      normalizeHtmlishMarkdown(source),
+      {},
+    );
+
+    expect(tokens.filter((token) => token.type === "tr_open")).toHaveLength(2);
+    expect(tokens.filter((token) => token.type === "td_open")).toHaveLength(2);
   });
 
   it("normalizes HTML table cells and inline formatting into markdown", () => {

@@ -38,6 +38,13 @@ describe("createMarkdownStyles", () => {
     });
   });
 
+  it("keeps table header and body columns aligned", () => {
+    const styles = createMarkdownStyles(darkTheme);
+
+    expect(styles.th).toMatchObject({ flex: 1 });
+    expect(styles.td).toMatchObject({ flex: 1 });
+  });
+
   it("keeps assistant markdown text selectable on web", () => {
     const styles = createMarkdownStyles(darkTheme);
 

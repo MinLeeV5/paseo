@@ -231,6 +231,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       fontSize: theme.fontSize.sm,
       textAlign: "left" as const,
+      flex: 1,
     },
 
     tr: {

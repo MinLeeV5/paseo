@@ -306,7 +306,7 @@ function renderInlineTokens(tokens: HtmlToken[]): string {
     }
 
     if (token.name === "br") {
-      output += "\n";
+      output += "&#10;";
       continue;
     }
 
