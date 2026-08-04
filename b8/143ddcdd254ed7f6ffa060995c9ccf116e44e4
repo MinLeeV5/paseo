@@ -1,0 +1,44 @@
+packages/desktop/package.json
+  f41026e5ca0826dc 3
+packages/expo-two-way-audio/package.json
+  f41026e5ca0826dc 3
+packages/relay/package.json
+  f41026e5ca0826dc 3
+packages/server/package.json
+  f41026e5ca0826dc 3,72-75
+packages/protocol/package.json
+  f41026e5ca0826dc 3
+packages/website/package.json
+  f41026e5ca0826dc 3
+packages/highlight/package.json
+  f41026e5ca0826dc 3
+packages/client/package.json
+  f41026e5ca0826dc 3,38-39
+package.json
+  f41026e5ca0826dc 3
+packages/app/package.json
+  f41026e5ca0826dc 3
+packages/cli/package.json
+  f41026e5ca0826dc 3,31-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "b8143ddcdd254ed7f6ffa060995c9ccf116e44e4",
+  "prompts": {
+    "f41026e5ca0826dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcaca-2d18-7b53-91d3-9402e4c5ba14",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 20,
+      "total_deletions": 20,
+      "accepted_lines": 179,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/62c88bd669a667f680ee10df2c27b3711e158fc5386105dbd2a04821486afbab"
+    }
+  }
+}
