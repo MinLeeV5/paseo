@@ -1,0 +1,32 @@
+packages/app/src/components/agent-status-dot.tsx
+  f41026e5ca0826dc 46-47,78-91
+packages/app/src/panels/agent-goal-status.tsx
+  f41026e5ca0826dc 24,87-88,242-255,257-270
+packages/desktop/src/daemon/desktop-packaging.test.ts
+  f41026e5ca0826dc 93-96
+packages/app/src/subagents/select.test.ts
+  f41026e5ca0826dc 279
+packages/app/src/panels/agent-workflow-status.tsx
+  f41026e5ca0826dc 110,114,226-239,241-254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "c27761a7405b7450cd0e40dcf4c6096e99d3a9f4",
+  "prompts": {
+    "f41026e5ca0826dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcaca-2d18-7b53-91d3-9402e4c5ba14",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 82,
+      "total_deletions": 44,
+      "accepted_lines": 241,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/924c1b14229e5cbad862307b22cec2552fb2aed6700c29973e256507b8e1fac7"
+    }
+  }
+}
