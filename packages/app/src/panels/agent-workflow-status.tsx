@@ -107,11 +107,11 @@ export function AgentWorkflowStatus({ serverId, agentId }: { serverId: string; a
   );
   const model = buildAgentWorkflowStatusModel(selection);
   const surfaceStyle = useMemo(
-    () => (model ? [styles.surface, toneSurfaceStyles[model.tone]] : styles.surface),
+    () => (model ? [styles.surface, getToneSurfaceStyle(model.tone)] : styles.surface),
     [model],
   );
   const labelStyle = useMemo(
-    () => (model ? [styles.label, toneTextStyles[model.tone]] : styles.label),
+    () => (model ? [styles.label, getToneTextStyle(model.tone)] : styles.label),
     [model],
   );
 
@@ -223,18 +223,32 @@ const styles = StyleSheet.create((theme) => ({
   },
 }));
 
-const toneSurfaceStyles = {
-  active: styles.surfaceActive,
-  muted: styles.surfaceMuted,
-  success: styles.surfaceSuccess,
-  danger: styles.surfaceDanger,
-  warning: styles.surfaceWarning,
-} as const;
+function getToneSurfaceStyle(tone: AgentWorkflowTone) {
+  switch (tone) {
+    case "active":
+      return styles.surfaceActive;
+    case "muted":
+      return styles.surfaceMuted;
+    case "success":
+      return styles.surfaceSuccess;
+    case "danger":
+      return styles.surfaceDanger;
+    case "warning":
+      return styles.surfaceWarning;
+  }
+}
 
-const toneTextStyles = {
-  active: styles.labelActive,
-  muted: styles.labelMuted,
-  success: styles.labelSuccess,
-  danger: styles.labelDanger,
-  warning: styles.labelWarning,
-} as const;
+function getToneTextStyle(tone: AgentWorkflowTone) {
+  switch (tone) {
+    case "active":
+      return styles.labelActive;
+    case "muted":
+      return styles.labelMuted;
+    case "success":
+      return styles.labelSuccess;
+    case "danger":
+      return styles.labelDanger;
+    case "warning":
+      return styles.labelWarning;
+  }
+}

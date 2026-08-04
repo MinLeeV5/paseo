@@ -21,7 +21,7 @@ import { useSessionStore } from "@/stores/session-store";
 import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { toErrorMessage } from "@/utils/error-messages";
-import { buildAgentGoalStatusModel } from "@/panels/agent-goal-status-model";
+import { buildAgentGoalStatusModel, type GoalTone } from "@/panels/agent-goal-status-model";
 import { requestArchiveGoalAgent } from "@/panels/archive-goal-agent";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 
@@ -84,8 +84,8 @@ export function AgentGoalStatus({ serverId, agentId }: { serverId: string; agent
 
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
   const tone = model?.tone ?? "muted";
-  const surfaceStyle = useMemo(() => [styles.surface, toneSurfaceStyles[tone]], [tone]);
-  const statusStyle = useMemo(() => [styles.status, toneTextStyles[tone]], [tone]);
+  const surfaceStyle = useMemo(() => [styles.surface, getToneSurfaceStyle(tone)], [tone]);
+  const statusStyle = useMemo(() => [styles.status, getToneTextStyle(tone)], [tone]);
   const handleArchivePress = useCallback(() => {
     if (isArchivingGoal) {
       return;
@@ -239,18 +239,32 @@ const styles = StyleSheet.create((theme) => ({
   },
 }));
 
-const toneSurfaceStyles = {
-  active: styles.surfaceActive,
-  muted: styles.surfaceMuted,
-  success: styles.surfaceSuccess,
-  danger: styles.surfaceDanger,
-  warning: styles.surfaceWarning,
-} as const;
+function getToneSurfaceStyle(tone: GoalTone) {
+  switch (tone) {
+    case "active":
+      return styles.surfaceActive;
+    case "muted":
+      return styles.surfaceMuted;
+    case "success":
+      return styles.surfaceSuccess;
+    case "danger":
+      return styles.surfaceDanger;
+    case "warning":
+      return styles.surfaceWarning;
+  }
+}
 
-const toneTextStyles = {
-  active: styles.statusActive,
-  muted: styles.statusMuted,
-  success: styles.statusSuccess,
-  danger: styles.statusDanger,
-  warning: styles.statusWarning,
-} as const;
+function getToneTextStyle(tone: GoalTone) {
+  switch (tone) {
+    case "active":
+      return styles.statusActive;
+    case "muted":
+      return styles.statusMuted;
+    case "success":
+      return styles.statusSuccess;
+    case "danger":
+      return styles.statusDanger;
+    case "warning":
+      return styles.statusWarning;
+  }
+}

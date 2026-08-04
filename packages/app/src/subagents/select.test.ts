@@ -275,8 +275,8 @@ describe("selectSubagentsForParent", () => {
     ]);
     expect(Object.keys(rows[0] ?? {}).sort()).toEqual([
       "createdAt",
-      "goalStatus",
       "description",
+      "goalStatus",
       "id",
       "kind",
       "provider",

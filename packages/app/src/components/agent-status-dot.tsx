@@ -43,8 +43,8 @@ export function AgentStatusDot({
   return <AgentStatusDotView bucket={bucket} />;
 }
 
-function AgentStatusDotView({ bucket }: { bucket: keyof typeof dotColorStyles }) {
-  const dotStyle = useMemo(() => [styles.dot, dotColorStyles[bucket]], [bucket]);
+function AgentStatusDotView({ bucket }: { bucket: ReturnType<typeof deriveSidebarStateBucket> }) {
+  const dotStyle = useMemo(() => [styles.dot, getDotColorStyle(bucket)], [bucket]);
   return <View style={dotStyle} />;
 }
 
@@ -75,10 +75,17 @@ const styles = StyleSheet.create((theme) => ({
   },
 }));
 
-const dotColorStyles = {
-  needs_input: styles.needsInput,
-  failed: styles.failed,
-  running: styles.running,
-  attention: styles.attention,
-  done: styles.done,
-} as const;
+function getDotColorStyle(bucket: ReturnType<typeof deriveSidebarStateBucket>) {
+  switch (bucket) {
+    case "needs_input":
+      return styles.needsInput;
+    case "failed":
+      return styles.failed;
+    case "running":
+      return styles.running;
+    case "attention":
+      return styles.attention;
+    case "done":
+      return styles.done;
+  }
+}

@@ -90,7 +90,10 @@ describe("desktop packaging", () => {
   });
 
   it("checks for packaged app updates in the MinLeeV5 GitHub releases", () => {
-    const config = readFileSync(join(packageRoot, "electron-builder.yml"), "utf8");
+    const config = readFileSync(join(packageRoot, "electron-builder.yml"), "utf8").replaceAll(
+      "\r\n",
+      "\n",
+    );
 
     expect(config).toContain(
       ["publish:", "  provider: github", "  owner: MinLeeV5", "  repo: paseo"].join("\n"),
