@@ -1,5 +1,17 @@
 import type { WorkspaceFileDiffOverviewMarker } from "@/workspace/file-diff-decorations";
 
+export function getFileDiffOverviewRowHeight(input: {
+  defaultRowHeight: number;
+  contentHeight: number;
+  totalRows: number;
+  wrapLines: boolean;
+}): number {
+  if (!input.wrapLines || input.contentHeight <= 0 || input.totalRows <= 0) {
+    return input.defaultRowHeight;
+  }
+  return input.contentHeight / input.totalRows;
+}
+
 export function getFileDiffOverviewScrollOffset(input: {
   marker: WorkspaceFileDiffOverviewMarker;
   lineHeight: number;

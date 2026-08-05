@@ -2,6 +2,7 @@ import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { Search } from "lucide-react-native";
+import type { ReactNode } from "react";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -23,8 +24,9 @@ export function FilePanelBar({
   vimMode,
   search,
   conflict,
+  actions,
 }: {
-  size: number;
+  size?: number;
   lineCount?: number;
   mode?: "preview" | "source";
   onModeChange?(mode: "preview" | "source"): void;
@@ -33,6 +35,7 @@ export function FilePanelBar({
   vimMode?: string | null;
   search?: FileSearchController;
   conflict?: FileConflictAlertState;
+  actions?: ReactNode;
 }) {
   const { t } = useTranslation();
   const previewModes = [
@@ -47,12 +50,14 @@ export function FilePanelBar({
     <View style={styles.chrome} testID="file-panel-bar">
       <View style={styles.row}>
         <View style={styles.metadata}>
-          <Text
-            style={styles.whisper}
-            accessibilityLabel={t("panels.file.editor.fileSize", { size: formatFileSize(size) })}
-          >
-            {formatFileSize(size)}
-          </Text>
+          {size !== undefined ? (
+            <Text
+              style={styles.whisper}
+              accessibilityLabel={t("panels.file.editor.fileSize", { size: formatFileSize(size) })}
+            >
+              {formatFileSize(size)}
+            </Text>
+          ) : null}
           {lineCount !== undefined ? (
             <Text
               style={styles.whisper}
@@ -102,6 +107,7 @@ export function FilePanelBar({
             </Text>
           ) : null}
         </View>
+        {actions}
         {search ? (
           <Button
             variant="ghost"

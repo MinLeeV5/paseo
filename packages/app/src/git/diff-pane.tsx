@@ -256,8 +256,6 @@ interface DiffFileSectionProps {
 
 const EMPTY_COMMENTS: readonly ReviewDraftComment[] = [];
 
-function noopStartComment(): void {}
-
 const DIFF_LINE_HOVER_STYLE = isWeb ? ({ cursor: "auto" } as const) : null;
 
 function LongPressableLine({
@@ -377,7 +375,16 @@ function DiffGutterCell({
     [reviewTarget, reviewActions?.commentsByTarget],
   );
   const isEditorOpen = isInlineReviewEditorForTarget(reviewActions?.editor ?? null, reviewTarget);
-  const onStartComment = reviewActions?.onStartComment ?? noopStartComment;
+
+  if (!reviewActions) {
+    return (
+      <View style={containerStyle}>
+        <Text numberOfLines={1} style={textStyle} testID={textTestID}>
+          {formatDiffGutterText(lineNumber)}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <InlineReviewGutterCell
@@ -386,7 +393,7 @@ function DiffGutterCell({
       isEditorOpen={isEditorOpen}
       isLineHovered={isLineHovered}
       lineHeight={lineHeight}
-      onStartComment={onStartComment}
+      onStartComment={reviewActions.onStartComment}
       style={containerStyle}
       actionTestID={actionTestID}
     >

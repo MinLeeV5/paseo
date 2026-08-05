@@ -10,39 +10,29 @@ import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { isWeb } from "@/constants/platform";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
-import {
-  buildWorkspaceFileDiffOverview,
-  type WorkspaceFileDiffDecorations,
-  type WorkspaceFileDiffOverviewMarker,
-  type WorkspaceFileDiffOverviewMarkerState,
+import type {
+  WorkspaceFileDiffOverview,
+  WorkspaceFileDiffOverviewMarker,
+  WorkspaceFileDiffOverviewMarkerState,
 } from "@/workspace/file-diff-decorations";
 
 const MIN_MARKER_HEIGHT = 3;
 const MARKER_HIT_SLOP = { top: 6, right: 0, bottom: 6, left: 0 } as const;
 
 export function FileDiffOverviewRuler({
-  decorations,
-  lineCount,
+  overview,
   onMarkerPress,
 }: {
-  decorations: WorkspaceFileDiffDecorations | null;
-  lineCount: number;
+  overview: WorkspaceFileDiffOverview | null;
   onMarkerPress: (marker: WorkspaceFileDiffOverviewMarker) => void;
 }) {
   const [trackHeight, setTrackHeight] = useState(0);
   const { t } = useTranslation();
-  const overview = useMemo(
-    () =>
-      decorations
-        ? buildWorkspaceFileDiffOverview({ decorations, lineCount })
-        : { markers: [], totalRows: 0 },
-    [decorations, lineCount],
-  );
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setTrackHeight(event.nativeEvent.layout.height);
   }, []);
 
-  if (overview.markers.length === 0) {
+  if (!overview || overview.markers.length === 0) {
     return null;
   }
 

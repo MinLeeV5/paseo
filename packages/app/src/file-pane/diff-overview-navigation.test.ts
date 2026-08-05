@@ -1,5 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { getFileDiffOverviewScrollOffset } from "./diff-overview-navigation";
+import {
+  getFileDiffOverviewRowHeight,
+  getFileDiffOverviewScrollOffset,
+} from "./diff-overview-navigation";
+
+describe("getFileDiffOverviewRowHeight", () => {
+  it("uses the measured average row height when long lines wrap", () => {
+    expect(
+      getFileDiffOverviewRowHeight({
+        defaultRowHeight: 20,
+        contentHeight: 600,
+        totalRows: 20,
+        wrapLines: true,
+      }),
+    ).toBe(30);
+  });
+
+  it("keeps the configured row height before wrapped content is measured", () => {
+    expect(
+      getFileDiffOverviewRowHeight({
+        defaultRowHeight: 20,
+        contentHeight: 0,
+        totalRows: 20,
+        wrapLines: true,
+      }),
+    ).toBe(20);
+  });
+});
 
 describe("getFileDiffOverviewScrollOffset", () => {
   it("centers the selected change marker in the source viewport", () => {

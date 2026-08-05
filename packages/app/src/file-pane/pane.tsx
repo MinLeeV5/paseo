@@ -50,8 +50,10 @@ import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
 import { useCheckoutDiffQuery, type ParsedDiffFile } from "@/git/use-diff-query";
 import { useAgentSessionChangesQuery } from "@/git/use-agent-session-changes-query";
+import { DiffLayoutToggle, resolveDiffLayout } from "@/git/diff-pane";
 import {
   buildWorkspaceFileDiffDecorations,
+  buildWorkspaceFileDiffOverview,
   type WorkspaceFileDeletedDiffRow,
   type WorkspaceFileDiffDecorations,
   type WorkspaceFileDiffLineState,
@@ -59,6 +61,7 @@ import {
 } from "@/workspace/file-diff-decorations";
 import { isWeb } from "@/constants/platform";
 import { useAppSettings } from "@/hooks/use-settings";
+import { useChangesPreferences } from "@/hooks/use-changes-preferences";
 import { useLiveFile } from "./live-file/hook";
 import { FilePanelBar } from "./bar";
 import { FileHtmlPreview } from "./html-preview";
@@ -76,6 +79,7 @@ import { useFileSearch, type FileSearchController } from "./use-search";
 import { MarkdownSearchPreview } from "./markdown-search-preview";
 import { FileDiffOverviewRuler } from "./diff-overview-ruler";
 import { getFileDiffOverviewScrollOffset } from "./diff-overview-navigation";
+import { FileDiffView } from "./file-diff-view";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -305,14 +309,14 @@ function useWorkspaceFileDiffFiles(input: {
   return sessionDiffContext ? sessionFiles : checkoutFiles;
 }
 
-function useWorkspaceFileDiffDecorations(input: {
+function useWorkspaceFileDiffFile(input: {
   serverId: string;
   normalizedWorkspaceRoot: string;
   normalizedFilePath: string | null;
   location: WorkspaceFileLocation;
   isActive: boolean;
   isAppVisible: boolean;
-}): WorkspaceFileDiffDecorations | null {
+}): ParsedDiffFile | null {
   const resolvedFilePaths = useMemo(
     () =>
       input.normalizedFilePath
@@ -340,7 +344,7 @@ function useWorkspaceFileDiffDecorations(input: {
       }),
     [diffFiles, input.normalizedFilePath, resolvedFilePaths],
   );
-  return useMemo(() => (diffFile ? buildWorkspaceFileDiffDecorations(diffFile) : null), [diffFile]);
+  return diffFile;
 }
 
 const CodeLine = React.memo(function CodeLine({
@@ -599,6 +603,16 @@ function FilePreviewBody({
     () => collectDeletedRowsForFallback(diffDecorations),
     [diffDecorations],
   );
+  const sourceDiffOverview = useMemo(
+    () =>
+      diffDecorations
+        ? buildWorkspaceFileDiffOverview({
+            decorations: diffDecorations,
+            lineCount: highlightedLines?.length ?? 0,
+          })
+        : null,
+    [diffDecorations, highlightedLines?.length],
+  );
   const { matchesByLine: searchMatchesByLine, currentMatchIndex: currentSearchMatchIndex } =
     useFilePreviewSearch({ search, scrollRef: previewScrollRef, lineHeight });
   const handlePreviewLayout = useCallback((event: LayoutChangeEvent) => {
@@ -657,8 +671,7 @@ function FilePreviewBody({
           </View>
         </RNScrollView>
         <FileDiffOverviewRuler
-          decorations={diffDecorations}
-          lineCount={0}
+          overview={sourceDiffOverview}
           onMarkerPress={handleDiffOverviewMarkerPress}
         />
       </View>
@@ -778,8 +791,7 @@ function FilePreviewBody({
           )}
         </RNScrollView>
         <FileDiffOverviewRuler
-          decorations={diffDecorations}
-          lineCount={keyedLines.length}
+          overview={sourceDiffOverview}
           onMarkerPress={handleDiffOverviewMarkerPress}
         />
       </View>
@@ -822,6 +834,18 @@ function FilePreviewBody({
   );
 }
 
+function useFileDiffPreferences(isMobile: boolean) {
+  const { preferences, updatePreferences } = useChangesPreferences();
+  const canUseSplitLayout = isWeb && !isMobile;
+  const layout = resolveDiffLayout(preferences.layout, canUseSplitLayout);
+  const toggleLayout = useCallback(() => {
+    void updatePreferences({
+      layout: preferences.layout === "unified" ? "split" : "unified",
+    });
+  }, [preferences.layout, updatePreferences]);
+  return { layout, wrapLines: preferences.wrapLines, canUseSplitLayout, toggleLayout };
+}
+
 export function FilePane({
   serverId,
   workspaceRoot,
@@ -839,6 +863,8 @@ export function FilePane({
 }) {
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
+  const { settings } = useAppSettings();
+  const fileDiffPreferences = useFileDiffPreferences(isMobile);
   const isDiffView = Boolean(location.diffContext);
   const defaultPreviewMode = getDefaultFilePaneMarkdownMode(isDiffView);
   const [previewMode, setPreviewMode] = useState<"preview" | "source">(defaultPreviewMode);
@@ -883,7 +909,7 @@ export function FilePane({
     enabled,
     liveUpdates: supportsEditing,
   });
-  const diffDecorations = useWorkspaceFileDiffDecorations({
+  const diffFile = useWorkspaceFileDiffFile({
     serverId,
     normalizedWorkspaceRoot,
     normalizedFilePath,
@@ -891,6 +917,10 @@ export function FilePane({
     isActive,
     isAppVisible,
   });
+  const diffDecorations = useMemo(
+    () => (diffFile ? buildWorkspaceFileDiffDecorations(diffFile) : null),
+    [diffFile],
+  );
 
   useEffect(() => {
     if (!liveFile.file) return;
@@ -918,13 +948,14 @@ export function FilePane({
     supportsEditing,
     isDiffView,
   });
-  const canTogglePreviewMode = isRenderable && !location.lineStart;
+  const canTogglePreviewMode = isRenderable && !location.lineStart && !isDiffView;
   const lineCount =
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
   const hasDeletedDiffFallback = collectDeletedRowsForFallback(diffDecorations).length > 0;
-  const errorMessage = hasDeletedDiffFallback
-    ? null
-    : getFileErrorMessage(liveFile.error, t("panels.file.failedToLoad"));
+  const errorMessage =
+    diffFile || hasDeletedDiffFallback
+      ? null
+      : getFileErrorMessage(liveFile.error, t("panels.file.failedToLoad"));
 
   return (
     <FilePanePresentation
@@ -948,6 +979,13 @@ export function FilePane({
       location={location}
       navigationRevision={navigationRevision}
       imagePreviewUri={imagePreviewUri}
+      diffFile={diffFile}
+      diffLayout={fileDiffPreferences.layout}
+      diffWrapLines={fileDiffPreferences.wrapLines}
+      canUseSplitDiffLayout={fileDiffPreferences.canUseSplitLayout}
+      onToggleDiffLayout={fileDiffPreferences.toggleLayout}
+      codeFontSize={settings.codeFontSize}
+      monoFontFamily={settings.monoFontFamily}
       diffDecorations={diffDecorations}
       isPaneFocused={isPaneFocused}
       searchHandlerId={searchHandlerId}
@@ -1003,6 +1041,13 @@ function FilePanePresentation({
   location,
   navigationRevision,
   imagePreviewUri,
+  diffFile,
+  diffLayout,
+  diffWrapLines,
+  canUseSplitDiffLayout,
+  onToggleDiffLayout,
+  codeFontSize,
+  monoFontFamily,
   diffDecorations,
   isPaneFocused,
   searchHandlerId,
@@ -1027,6 +1072,13 @@ function FilePanePresentation({
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  diffFile: ParsedDiffFile | null;
+  diffLayout: "unified" | "split";
+  diffWrapLines: boolean;
+  canUseSplitDiffLayout: boolean;
+  onToggleDiffLayout: () => void;
+  codeFontSize: number;
+  monoFontFamily: string;
   diffDecorations: WorkspaceFileDiffDecorations | null;
   isPaneFocused: boolean;
   searchHandlerId: string;
@@ -1090,6 +1142,13 @@ function FilePanePresentation({
       location={location}
       navigationRevision={navigationRevision}
       imagePreviewUri={imagePreviewUri}
+      diffFile={diffFile}
+      diffLayout={diffLayout}
+      diffWrapLines={diffWrapLines}
+      canUseSplitDiffLayout={canUseSplitDiffLayout}
+      onToggleDiffLayout={onToggleDiffLayout}
+      codeFontSize={codeFontSize}
+      monoFontFamily={monoFontFamily}
       diffDecorations={diffDecorations}
       isPaneFocused={isPaneFocused}
       searchHandlerId={searchHandlerId}
@@ -1108,6 +1167,13 @@ function ReadOnlyFilePane({
   location,
   navigationRevision,
   imagePreviewUri,
+  diffFile,
+  diffLayout,
+  diffWrapLines,
+  canUseSplitDiffLayout,
+  onToggleDiffLayout,
+  codeFontSize,
+  monoFontFamily,
   diffDecorations,
   isPaneFocused,
   searchHandlerId,
@@ -1122,12 +1188,19 @@ function ReadOnlyFilePane({
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  diffFile: ParsedDiffFile | null;
+  diffLayout: "unified" | "split";
+  diffWrapLines: boolean;
+  canUseSplitDiffLayout: boolean;
+  onToggleDiffLayout: () => void;
+  codeFontSize: number;
+  monoFontFamily: string;
   diffDecorations: WorkspaceFileDiffDecorations | null;
   isPaneFocused: boolean;
   searchHandlerId: string;
 }) {
   const textRenderMode = getSearchableTextRenderMode({ preview, location, mode: previewMode });
-  const canSearch = textRenderMode !== null;
+  const canSearch = !diffFile && textRenderMode !== null;
   const search = useFileSearch({
     content: preview?.kind === "text" ? (preview.content ?? "") : "",
     enabled: canSearch,
@@ -1135,16 +1208,29 @@ function ReadOnlyFilePane({
     handlerId: searchHandlerId,
     matchSource: textRenderMode === "markdown" ? "rendered" : "content",
   });
+  const diffLayoutAction = useMemo(
+    () =>
+      diffFile && canUseSplitDiffLayout ? (
+        <DiffLayoutToggle
+          layout={diffLayout}
+          isMobile={isMobile}
+          testID="file-diff-toggle-layout"
+          onToggle={onToggleDiffLayout}
+        />
+      ) : undefined,
+    [canUseSplitDiffLayout, diffFile, diffLayout, isMobile, onToggleDiffLayout],
+  );
 
   return (
     <View style={styles.container} testID="workspace-file-pane">
-      {preview ? (
+      {preview || diffFile ? (
         <FilePanelBar
-          size={preview.size}
+          size={preview?.size}
           lineCount={lineCount}
           mode={previewMode}
           onModeChange={onPreviewModeChange}
           search={canSearch ? search : undefined}
+          actions={diffLayoutAction}
         />
       ) : null}
       <View style={styles.contentLayer}>
@@ -1154,17 +1240,27 @@ function ReadOnlyFilePane({
           </View>
         ) : null}
 
-        <FilePreviewBody
-          preview={preview}
-          isLoading={isLoading}
-          isMobile={isMobile}
-          location={location}
-          navigationRevision={navigationRevision}
-          imagePreviewUri={imagePreviewUri}
-          diffDecorations={diffDecorations}
-          mode={previewMode}
-          search={canSearch ? search : undefined}
-        />
+        {diffFile ? (
+          <FileDiffView
+            file={diffFile}
+            layout={diffLayout}
+            wrapLines={diffWrapLines}
+            codeFontSize={codeFontSize}
+            monoFontFamily={monoFontFamily}
+          />
+        ) : (
+          <FilePreviewBody
+            preview={preview}
+            isLoading={isLoading}
+            isMobile={isMobile}
+            location={location}
+            navigationRevision={navigationRevision}
+            imagePreviewUri={imagePreviewUri}
+            diffDecorations={diffDecorations}
+            mode={previewMode}
+            search={canSearch ? search : undefined}
+          />
+        )}
         <FileSearchOverlay search={canSearch ? search : undefined} />
       </View>
     </View>
