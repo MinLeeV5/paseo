@@ -314,6 +314,7 @@ export const ar: TranslationResources = {
       copied: "منقول",
     },
     attachments: {
+      openImage: "فتح الصورة",
       dismissImage: "تجاهل الصورة",
       closeImage: "إغلاق الصورة",
       imageLoadFailed: "تعذر تحميل الصورة",

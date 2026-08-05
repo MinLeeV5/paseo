@@ -1,4 +1,4 @@
-import { test as base } from "../support/fixtures";
+import { expect, test as base } from "../support/fixtures";
 import {
   appendSettledTimelineTurns,
   createNearTenMegabyteAssistantPng,
@@ -43,6 +43,44 @@ test("switching between settled agent tabs keeps a real assistant PNG rendered",
   await openExistingImageAgentTabs(page, { imageAgent, otherAgent });
   await expectAssistantImageRendered(page, image);
   await switchAwayAndBackWithoutImageInstability(page, { image, imageAgent, otherAgent });
+});
+
+test("clicking a settled assistant image opens a full-screen lightbox", async ({
+  imageWorkspace: workspace,
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const image = await createSmallAssistantPng(workspace, {
+    alt: "Full-screen Agent output",
+    fileName: "full-screen-assistant-preview.png",
+  });
+  const imageAgent = await createSettledMockAgent(workspace, "Full-screen image timeline");
+  await emitSettledAssistantImage(workspace.client, imageAgent, image);
+
+  await openAssistantImageTimeline(page, imageAgent);
+  await expectAssistantImageRendered(page, image);
+
+  const preview = page.getByTestId("assistant-markdown-image").first();
+  await preview.click();
+
+  const lightboxImage = page.getByTestId("assistant-image-lightbox-image");
+  const backdrop = page.getByTestId("assistant-image-lightbox-backdrop");
+  await expect(lightboxImage).toBeVisible();
+  await expect(backdrop).toBeVisible();
+  const viewport = await page.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
+  const backdropBounds = await backdrop.boundingBox();
+  expect(backdropBounds).toEqual({ x: 0, y: 0, ...viewport });
+
+  await page.keyboard.press("Escape");
+  await expect(lightboxImage).toHaveCount(0);
+
+  await preview.click();
+  await expect(lightboxImage).toBeVisible();
+  await page.getByTestId("assistant-image-lightbox-close").click();
+  await expect(lightboxImage).toHaveCount(0);
 });
 
 test("a real assistant PNG remains reachable through pagination and remount", async ({

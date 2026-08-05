@@ -319,6 +319,7 @@ export const es: TranslationResources = {
       copied: "Copiado",
     },
     attachments: {
+      openImage: "Abrir imagen",
       dismissImage: "Descartar imagen",
       closeImage: "Cerrar imagen",
       imageLoadFailed: "No se pudo cargar la imagen",

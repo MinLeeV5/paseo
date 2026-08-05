@@ -318,6 +318,7 @@ export const ja: TranslationResources = {
       copied: "コピーしました",
     },
     attachments: {
+      openImage: "画像を開く",
       dismissImage: "画像を閉じる",
       closeImage: "画像を閉じる",
       imageLoadFailed: "画像を読み込めませんでした",

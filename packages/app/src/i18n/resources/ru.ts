@@ -316,6 +316,7 @@ export const ru: TranslationResources = {
       copied: "Скопировано",
     },
     attachments: {
+      openImage: "Открыть изображение",
       dismissImage: "Закрыть изображение",
       closeImage: "Закрыть изображение",
       imageLoadFailed: "Не удалось загрузить изображение",

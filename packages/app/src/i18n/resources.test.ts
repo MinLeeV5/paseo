@@ -354,6 +354,7 @@ describe("translation resources", () => {
     expect(en.message.actions.copyTurn).toBe("Copy turn");
     expect(en.message.actions.copyMessage).toBe("Copy message");
     expect(en.message.actions.copied).toBe("Copied");
+    expect(en.message.attachments.openImage).toBe("Open image");
     expect(en.message.attachments.dismissImage).toBe("Dismiss image");
     expect(en.message.attachments.closeImage).toBe("Close image");
     expect(en.message.attachments.imageLoadFailed).toBe("Couldn't load image");

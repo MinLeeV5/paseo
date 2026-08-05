@@ -319,6 +319,7 @@ export const ptBR: TranslationResources = {
       copied: "Copiado",
     },
     attachments: {
+      openImage: "Abrir imagem",
       dismissImage: "Dispensar imagem",
       closeImage: "Fechar imagem",
       imageLoadFailed: "Não foi possível carregar a imagem",

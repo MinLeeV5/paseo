@@ -314,6 +314,7 @@ export const zhCN: TranslationResources = {
       copied: "已复制",
     },
     attachments: {
+      openImage: "打开图片",
       dismissImage: "关闭图片",
       closeImage: "关闭图片",
       imageLoadFailed: "无法加载图片",

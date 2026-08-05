@@ -313,6 +313,7 @@ export const en = {
       copied: "Copied",
     },
     attachments: {
+      openImage: "Open image",
       dismissImage: "Dismiss image",
       closeImage: "Close image",
       imageLoadFailed: "Couldn't load image",
