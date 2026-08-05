@@ -805,6 +805,7 @@ export const zhCN: TranslationResources = {
           title: "归档「{{workspaceName}}」？",
           confirm: "归档",
           cancel: "取消",
+          message: "这会归档 workspace 及其 agents，并关闭其中的 terminals。",
           uncommittedChanges: "未 commit 的变更",
           uncommittedChangesWithDiff: "未 commit 的变更（{{diffStat}}）",
           addedLine: "新增 {{count}} 行",

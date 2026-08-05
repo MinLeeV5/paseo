@@ -1,21 +1,46 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildWorktreeArchiveConfirmationMessage,
+  buildWorkspaceArchiveConfirmationMessage,
+  buildWorktreeArchiveRiskMessage,
   buildWorktreeArchiveRiskReasons,
   toWorktreeArchiveRisk,
 } from "@/git/worktree-archive-warning";
 
-describe("workspace archive warning for worktree backing", () => {
-  it("does not require a confirmation for clean and pushed worktrees", () => {
+describe("workspace archive confirmation", () => {
+  it("has no worktree risk message for clean and pushed worktrees", () => {
     expect(
-      buildWorktreeArchiveConfirmationMessage({
+      buildWorktreeArchiveRiskMessage({
         workspaceName: "feature",
         isDirty: false,
         aheadOfOrigin: 0,
         diffStat: null,
       }),
     ).toBeNull();
+  });
+
+  it("builds a confirmation message even when the workspace has no git risks", () => {
+    expect(
+      buildWorkspaceArchiveConfirmationMessage({
+        workspaceName: "feature",
+        isDirty: false,
+        aheadOfOrigin: 0,
+        diffStat: null,
+      }),
+    ).toBe("This archives the workspace and its agents, and closes its terminals.");
+  });
+
+  it("appends every git risk to the workspace confirmation", () => {
+    expect(
+      buildWorkspaceArchiveConfirmationMessage({
+        workspaceName: "risky-feature",
+        isDirty: true,
+        aheadOfOrigin: 1,
+        diffStat: { additions: 1, deletions: 3 },
+      }),
+    ).toBe(
+      "This archives the workspace and its agents, and closes its terminals.\nUncommitted changes (1 added line, 3 deleted lines)\n1 unpushed commit",
+    );
   });
 
   it("explains uncommitted line changes", () => {
@@ -50,7 +75,7 @@ describe("workspace archive warning for worktree backing", () => {
 
   it("includes every archive risk in the confirmation copy", () => {
     expect(
-      buildWorktreeArchiveConfirmationMessage({
+      buildWorktreeArchiveRiskMessage({
         workspaceName: "risky-feature",
         isDirty: true,
         aheadOfOrigin: 1,

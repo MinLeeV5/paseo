@@ -1,4 +1,4 @@
-import { confirmRiskyWorktreeArchive, toWorktreeArchiveRisk } from "@/git/worktree-archive-warning";
+import { confirmWorkspaceArchive, toWorktreeArchiveRisk } from "@/git/worktree-archive-warning";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { WorkspaceArchiveTarget } from "@/workspace/workspace-archive";
 
@@ -13,23 +13,21 @@ export interface ProjectWorkspaceArchiveEntry extends Pick<
   | "diffStat"
 > {}
 
-type ConfirmWorktreeArchive = typeof confirmRiskyWorktreeArchive;
+type ConfirmWorkspaceArchive = typeof confirmWorkspaceArchive;
 
 export async function selectProjectWorkspacesToArchive(
   workspaces: ProjectWorkspaceArchiveEntry[],
-  confirmWorktreeArchive: ConfirmWorktreeArchive = confirmRiskyWorktreeArchive,
+  confirmArchive: ConfirmWorkspaceArchive = confirmWorkspaceArchive,
 ): Promise<WorkspaceArchiveTarget[]> {
   const confirmed: WorkspaceArchiveTarget[] = [];
 
   for (const workspace of workspaces) {
-    if (workspace.workspaceKind === "worktree") {
-      const shouldArchive = await confirmWorktreeArchive({
-        workspaceName: workspace.name,
-        ...toWorktreeArchiveRisk(workspace),
-      });
-      if (!shouldArchive) {
-        continue;
-      }
+    const shouldArchive = await confirmArchive({
+      workspaceName: workspace.name,
+      ...(workspace.workspaceKind === "worktree" ? toWorktreeArchiveRisk(workspace) : {}),
+    });
+    if (!shouldArchive) {
+      continue;
     }
 
     confirmed.push({

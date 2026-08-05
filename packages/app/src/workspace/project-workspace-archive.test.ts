@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { selectProjectWorkspacesToArchive } from "@/workspace/project-workspace-archive";
 
 describe("selectProjectWorkspacesToArchive", () => {
-  it("skips archiving a dirty and unpushed worktree when the risky archive confirmation is canceled", async () => {
-    const confirmWorktreeArchive = vi.fn(async () => false);
+  it("skips each workspace whose archive confirmation is canceled", async () => {
+    const confirmWorkspaceArchive = vi
+      .fn<(input: { workspaceName: string }) => Promise<boolean>>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
 
     const targets = await selectProjectWorkspacesToArchive(
       [
@@ -26,15 +29,18 @@ describe("selectProjectWorkspacesToArchive", () => {
           diffStat: null,
         },
       ],
-      confirmWorktreeArchive,
+      confirmWorkspaceArchive,
     );
 
-    expect(confirmWorktreeArchive).toHaveBeenCalledOnce();
-    expect(confirmWorktreeArchive).toHaveBeenCalledWith({
+    expect(confirmWorkspaceArchive).toHaveBeenCalledTimes(2);
+    expect(confirmWorkspaceArchive).toHaveBeenNthCalledWith(1, {
       workspaceName: "feature/risky",
       isDirty: true,
       aheadOfOrigin: 2,
       diffStat: { additions: 5, deletions: 1 },
+    });
+    expect(confirmWorkspaceArchive).toHaveBeenNthCalledWith(2, {
+      workspaceName: "main",
     });
     expect(targets).toEqual([
       {
@@ -44,8 +50,8 @@ describe("selectProjectWorkspacesToArchive", () => {
     ]);
   });
 
-  it("includes a dirty and unpushed worktree when the risky archive confirmation is accepted", async () => {
-    const confirmWorktreeArchive = vi.fn(async () => true);
+  it("includes every workspace whose archive confirmation is accepted", async () => {
+    const confirmWorkspaceArchive = vi.fn(async () => true);
 
     const targets = await selectProjectWorkspacesToArchive(
       [
@@ -68,15 +74,18 @@ describe("selectProjectWorkspacesToArchive", () => {
           diffStat: null,
         },
       ],
-      confirmWorktreeArchive,
+      confirmWorkspaceArchive,
     );
 
-    expect(confirmWorktreeArchive).toHaveBeenCalledOnce();
-    expect(confirmWorktreeArchive).toHaveBeenCalledWith({
+    expect(confirmWorkspaceArchive).toHaveBeenCalledTimes(2);
+    expect(confirmWorkspaceArchive).toHaveBeenNthCalledWith(1, {
       workspaceName: "feature/risky",
       isDirty: true,
       aheadOfOrigin: 2,
       diffStat: { additions: 5, deletions: 1 },
+    });
+    expect(confirmWorkspaceArchive).toHaveBeenNthCalledWith(2, {
+      workspaceName: "main",
     });
     expect(targets).toEqual([
       {

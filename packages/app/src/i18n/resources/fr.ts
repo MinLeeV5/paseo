@@ -844,6 +844,8 @@ export const fr: TranslationResources = {
           title: "Archiver «{{workspaceName}}»?",
           confirm: "Archive",
           cancel: "Annuler",
+          message:
+            "L’espace de travail et ses agents seront archivés, et ses terminaux seront fermés.",
           uncommittedChanges: "Modifications non validées",
           uncommittedChangesWithDiff: "Modifications non validées ({{diffStat}})",
           addedLine: "Ligne ajoutée{{count}}",

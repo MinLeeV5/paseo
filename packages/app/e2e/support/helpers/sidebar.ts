@@ -151,8 +151,8 @@ export async function pinWorkspaceFromSidebar(page: Page, workspaceId: string): 
 }
 
 export async function archiveWorkspaceFromSidebar(page: Page, workspaceId: string): Promise<void> {
-  // A clean workspace archives with no prompt. Managed worktree backing may raise
-  // a browser confirm for unsynced work, so accept it when present.
+  // Workspace archive always requires confirmation. Register the handler before
+  // clicking because window.confirm blocks the click until it is answered.
   page.once("dialog", (dialog) => void dialog.accept());
   await clickArchiveWorkspaceMenuItem(page, workspaceId);
 }

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
 import {
-  confirmRiskyWorktreeArchive,
+  confirmWorkspaceArchive,
   DEFAULT_WORKTREE_ARCHIVE_WARNING_LABELS,
   type WorktreeArchiveWarningLabels,
 } from "@/git/worktree-archive-warning";
@@ -80,19 +80,15 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
 
   const archive = useCallback(() => {
     void (async () => {
-      if (workspaceKind === "worktree") {
-        const confirmed = await confirmRiskyWorktreeArchive(
-          {
-            workspaceName: name,
-            isDirty,
-            aheadOfOrigin,
-            diffStat,
-          },
-          warningLabels,
-        );
-        if (!confirmed) {
-          return;
-        }
+      const confirmed = await confirmWorkspaceArchive(
+        {
+          workspaceName: name,
+          ...(workspaceKind === "worktree" ? { isDirty, aheadOfOrigin, diffStat } : {}),
+        },
+        warningLabels,
+      );
+      if (!confirmed) {
+        return;
       }
       await archiveWorkspaceRecord();
     })();

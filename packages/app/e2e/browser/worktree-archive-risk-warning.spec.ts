@@ -82,7 +82,7 @@ async function clickArchiveAndAnswerWarning(
   return warning;
 }
 
-test.describe("Workspace archive risk warning for worktree backing", () => {
+test.describe("Workspace archive confirmation with worktree risks", () => {
   let client: Awaited<ReturnType<typeof connectNewWorkspaceDaemonClient>>;
   let tempRepo: { path: string; cleanup: () => Promise<void> };
   const createdWorktreeDirectories = new Set<string>();
@@ -124,6 +124,9 @@ test.describe("Workspace archive risk warning for worktree backing", () => {
     const firstWarning = await clickArchiveAndAnswerWarning(page, worktree.workspaceId, "dismiss");
     expect(firstWarning.type()).toBe("confirm");
     expect(firstWarning.message()).toContain(`Archive "${worktree.workspaceName}"?`);
+    expect(firstWarning.message()).toContain(
+      "This archives the workspace and its agents, and closes its terminals.",
+    );
     expect(firstWarning.message()).toContain("Uncommitted changes");
     expect(firstWarning.message()).toContain("1 unpushed commit");
 

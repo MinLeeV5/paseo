@@ -21,6 +21,7 @@ export interface WorktreeArchiveWarningLabels {
   title: (workspaceName: string) => string;
   confirm: string;
   cancel: string;
+  message: string;
   uncommittedChanges: string;
   uncommittedChangesWithDiff: (diffStat: string) => string;
   addedLine: (count: number) => string;
@@ -32,6 +33,7 @@ export const DEFAULT_WORKTREE_ARCHIVE_WARNING_LABELS: WorktreeArchiveWarningLabe
   title: (workspaceName) => i18n.t("workspace.git.actions.archiveWarning.title", { workspaceName }),
   confirm: i18n.t("workspace.git.actions.archiveWarning.confirm"),
   cancel: i18n.t("workspace.git.actions.archiveWarning.cancel"),
+  message: i18n.t("workspace.git.actions.archiveWarning.message"),
   uncommittedChanges: i18n.t("workspace.git.actions.archiveWarning.uncommittedChanges"),
   uncommittedChangesWithDiff: (diffStat) =>
     i18n.t("workspace.git.actions.archiveWarning.uncommittedChangesWithDiff", { diffStat }),
@@ -101,7 +103,7 @@ export function buildWorktreeArchiveRiskReasons(
   return reasons;
 }
 
-export function buildWorktreeArchiveConfirmationMessage(
+export function buildWorktreeArchiveRiskMessage(
   input: WorktreeArchiveConfirmationInput,
   labels: WorktreeArchiveWarningLabels = DEFAULT_WORKTREE_ARCHIVE_WARNING_LABELS,
 ): string | null {
@@ -113,18 +115,20 @@ export function buildWorktreeArchiveConfirmationMessage(
   return reasons.join("\n");
 }
 
-export async function confirmRiskyWorktreeArchive(
+export function buildWorkspaceArchiveConfirmationMessage(
+  input: WorktreeArchiveConfirmationInput,
+  labels: WorktreeArchiveWarningLabels = DEFAULT_WORKTREE_ARCHIVE_WARNING_LABELS,
+): string {
+  return [labels.message, ...buildWorktreeArchiveRiskReasons(input, labels)].join("\n");
+}
+
+export async function confirmWorkspaceArchive(
   input: WorktreeArchiveConfirmationInput,
   labels: WorktreeArchiveWarningLabels = DEFAULT_WORKTREE_ARCHIVE_WARNING_LABELS,
 ): Promise<boolean> {
-  const message = buildWorktreeArchiveConfirmationMessage(input, labels);
-  if (!message) {
-    return true;
-  }
-
   return await confirmDialog({
     title: labels.title(input.workspaceName),
-    message,
+    message: buildWorkspaceArchiveConfirmationMessage(input, labels),
     confirmLabel: labels.confirm,
     cancelLabel: labels.cancel,
     destructive: true,

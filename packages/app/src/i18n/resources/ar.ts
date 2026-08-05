@@ -813,6 +813,7 @@ export const ar: TranslationResources = {
           title: 'الأرشيف "{{workspaceName}}"؟',
           confirm: "أرشيف",
           cancel: "يلغي",
+          message: "ستتم أرشفة مساحة العمل ووكلائها وإغلاق وحداتها الطرفية.",
           uncommittedChanges: "تغييرات غير ملتزم بها",
           uncommittedChangesWithDiff: "التغييرات غير الملتزم بها ({{diffStat}})",
           addedLine: "تمت إضافة خط{{count}}",

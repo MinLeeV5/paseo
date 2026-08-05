@@ -823,6 +823,7 @@ export const en = {
           title: 'Archive "{{workspaceName}}"?',
           confirm: "Archive",
           cancel: "Cancel",
+          message: "This archives the workspace and its agents, and closes its terminals.",
           uncommittedChanges: "Uncommitted changes",
           uncommittedChangesWithDiff: "Uncommitted changes ({{diffStat}})",
           addedLine: "{{count}} added line",
