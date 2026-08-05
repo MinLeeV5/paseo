@@ -928,6 +928,7 @@ export const fr: TranslationResources = {
         reviewProgress: "{{reviewed}} fichiers révisés sur {{total}}",
         previousChangedFile: "Fichier modifié précédent",
         nextChangedFile: "Fichier modifié suivant",
+        jumpToFileChange: "Accéder à la modification du fichier à la position {{position}}",
         noReviewComments: "Aucun commentaire de révision",
         commits: {
           title: "Commits",

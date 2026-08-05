@@ -907,6 +907,7 @@ export const ja: TranslationResources = {
         reviewProgress: "{{total}} ファイル中 {{reviewed}} 件レビュー済み",
         previousChangedFile: "前の変更ファイル",
         nextChangedFile: "次の変更ファイル",
+        jumpToFileChange: "ファイル変更位置 {{position}} に移動",
         noReviewComments: "レビューコメントはまだありません",
         commits: {
           title: "コミット",

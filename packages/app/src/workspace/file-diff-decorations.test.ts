@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ParsedDiffFile } from "@/git/use-diff-query";
-import { buildWorkspaceFileDiffDecorations } from "./file-diff-decorations";
+import {
+  buildWorkspaceFileDiffDecorations,
+  buildWorkspaceFileDiffOverview,
+} from "./file-diff-decorations";
 
 function makeFile(
   lines: ParsedDiffFile["hunks"][number]["lines"],
@@ -180,5 +183,74 @@ describe("buildWorkspaceFileDiffDecorations", () => {
       ],
     ]);
     expect(decorations.deletedRowsAfterLastLine).toEqual([]);
+  });
+});
+
+describe("buildWorkspaceFileDiffOverview", () => {
+  it("maps added, modified, and deleted rows to their rendered file positions", () => {
+    const decorations = buildWorkspaceFileDiffDecorations(
+      makeFile([
+        { type: "header", content: "@@ -10,5 +10,6 @@" },
+        { type: "context", content: "before" },
+        { type: "remove", content: "old name" },
+        { type: "add", content: "new name" },
+        { type: "context", content: "middle" },
+        { type: "add", content: "new option" },
+        { type: "context", content: "after addition" },
+        { type: "remove", content: "deleted setting" },
+        { type: "context", content: "after deletion" },
+      ]),
+    );
+
+    expect(buildWorkspaceFileDiffOverview({ decorations, lineCount: 15 })).toEqual({
+      markers: [
+        { key: "modified:10", state: "modified", startRow: 10, rowCount: 1 },
+        { key: "added:12", state: "added", startRow: 12, rowCount: 1 },
+        { key: "deleted:14", state: "deleted", startRow: 14, rowCount: 1 },
+      ],
+      totalRows: 16,
+    });
+  });
+
+  it("groups adjacent markers and includes trailing deleted rows", () => {
+    const decorations = buildWorkspaceFileDiffDecorations(
+      makeFile(
+        [
+          { type: "header", content: "@@ -1,2 +1,3 @@" },
+          { type: "add", content: "first added" },
+          { type: "add", content: "second added" },
+          { type: "context", content: "keep" },
+          { type: "remove", content: "first removed" },
+          { type: "remove", content: "second removed" },
+        ],
+        { oldStart: 1, oldCount: 3, newStart: 1, newCount: 3 },
+      ),
+    );
+
+    expect(buildWorkspaceFileDiffOverview({ decorations, lineCount: 3 })).toEqual({
+      markers: [
+        { key: "added:0", state: "added", startRow: 0, rowCount: 2 },
+        { key: "deleted:3", state: "deleted", startRow: 3, rowCount: 2 },
+      ],
+      totalRows: 5,
+    });
+  });
+
+  it("maps a fully deleted file without source lines", () => {
+    const decorations = buildWorkspaceFileDiffDecorations(
+      makeFile(
+        [
+          { type: "header", content: "@@ -1,2 +0,0 @@" },
+          { type: "remove", content: "first" },
+          { type: "remove", content: "second" },
+        ],
+        { oldStart: 1, oldCount: 2, newStart: 0, newCount: 0 },
+      ),
+    );
+
+    expect(buildWorkspaceFileDiffOverview({ decorations, lineCount: 0 })).toEqual({
+      markers: [{ key: "deleted:0", state: "deleted", startRow: 0, rowCount: 2 }],
+      totalRows: 2,
+    });
   });
 });

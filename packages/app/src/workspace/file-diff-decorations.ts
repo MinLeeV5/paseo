@@ -14,6 +14,20 @@ export interface WorkspaceFileDiffDecorations {
   deletedRowsAfterLastLine: WorkspaceFileDeletedDiffRow[];
 }
 
+export type WorkspaceFileDiffOverviewMarkerState = WorkspaceFileDiffLineState | "deleted";
+
+export interface WorkspaceFileDiffOverviewMarker {
+  key: string;
+  state: WorkspaceFileDiffOverviewMarkerState;
+  startRow: number;
+  rowCount: number;
+}
+
+export interface WorkspaceFileDiffOverview {
+  markers: WorkspaceFileDiffOverviewMarker[];
+  totalRows: number;
+}
+
 interface PendingRemoval {
   key: string;
   oldLineNumber: number;
@@ -128,4 +142,52 @@ export function buildWorkspaceFileDiffDecorations(
     deletedRowsBeforeLineNumber,
     deletedRowsAfterLastLine,
   };
+}
+
+export function buildWorkspaceFileDiffOverview(input: {
+  decorations: WorkspaceFileDiffDecorations;
+  lineCount: number;
+}): WorkspaceFileDiffOverview {
+  const markers: WorkspaceFileDiffOverviewMarker[] = [];
+  const lineCount = Math.max(0, Math.floor(input.lineCount));
+  let renderedRow = 0;
+
+  function addMarker(state: WorkspaceFileDiffOverviewMarkerState): void {
+    const previous = markers.at(-1);
+    if (previous?.state === state && previous.startRow + previous.rowCount === renderedRow) {
+      previous.rowCount += 1;
+      return;
+    }
+    markers.push({
+      key: `${state}:${renderedRow}`,
+      state,
+      startRow: renderedRow,
+      rowCount: 1,
+    });
+  }
+
+  function addDeletedRows(rows: WorkspaceFileDeletedDiffRow[]): void {
+    for (const _row of rows) {
+      addMarker("deleted");
+      renderedRow += 1;
+    }
+  }
+
+  for (let lineNumber = 1; lineNumber <= lineCount; lineNumber += 1) {
+    addDeletedRows(input.decorations.deletedRowsBeforeLineNumber.get(lineNumber) ?? []);
+    const lineState = input.decorations.lineStatesByLineNumber.get(lineNumber);
+    if (lineState) {
+      addMarker(lineState);
+    }
+    renderedRow += 1;
+  }
+
+  for (const [lineNumber, rows] of input.decorations.deletedRowsBeforeLineNumber) {
+    if (lineNumber < 1 || lineNumber > lineCount) {
+      addDeletedRows(rows);
+    }
+  }
+  addDeletedRows(input.decorations.deletedRowsAfterLastLine);
+
+  return { markers, totalRows: renderedRow };
 }

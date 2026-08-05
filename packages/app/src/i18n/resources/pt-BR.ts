@@ -919,6 +919,7 @@ export const ptBR: TranslationResources = {
         reviewProgress: "{{reviewed}} de {{total}} arquivos revisados",
         previousChangedFile: "Arquivo alterado anterior",
         nextChangedFile: "Próximo arquivo alterado",
+        jumpToFileChange: "Ir para a alteração do arquivo na posição {{position}}",
         noReviewComments: "Ainda não há comentários de revisão",
         commits: {
           title: "Commits",

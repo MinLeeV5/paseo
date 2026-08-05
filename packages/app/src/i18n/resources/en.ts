@@ -905,6 +905,7 @@ export const en = {
         reviewProgress: "{{reviewed}} of {{total}} files reviewed",
         previousChangedFile: "Previous changed file",
         nextChangedFile: "Next changed file",
+        jumpToFileChange: "Jump to file change at position {{position}}",
         noReviewComments: "No review comments yet",
         commits: {
           title: "Commits",

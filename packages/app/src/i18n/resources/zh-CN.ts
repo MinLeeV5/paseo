@@ -887,6 +887,7 @@ export const zhCN: TranslationResources = {
         reviewProgress: "已审阅 {{reviewed}} / {{total}} 个文件",
         previousChangedFile: "上一个变更文件",
         nextChangedFile: "下一个变更文件",
+        jumpToFileChange: "跳转到文件变更位置 {{position}}",
         noReviewComments: "暂无审阅评论",
         commits: {
           title: "提交",

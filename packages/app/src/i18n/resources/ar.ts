@@ -895,6 +895,7 @@ export const ar: TranslationResources = {
         reviewProgress: "تمت مراجعة {{reviewed}} من {{total}} ملفات",
         previousChangedFile: "الملف السابق الذي تم تغييره",
         nextChangedFile: "الملف التالي الذي تم تغييره",
+        jumpToFileChange: "الانتقال إلى تغيير الملف عند الموضع {{position}}",
         noReviewComments: "لا توجد تعليقات مراجعة بعد",
         commits: {
           title: "الإيداعات",

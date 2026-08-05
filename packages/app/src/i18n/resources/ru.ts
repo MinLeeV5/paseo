@@ -917,6 +917,7 @@ export const ru: TranslationResources = {
         reviewProgress: "Проверено файлов: {{reviewed}} из {{total}}",
         previousChangedFile: "Предыдущий изменённый файл",
         nextChangedFile: "Следующий изменённый файл",
+        jumpToFileChange: "Перейти к изменению файла в позиции {{position}}",
         noReviewComments: "Комментариев к проверке пока нет",
         commits: {
           title: "Коммиты",

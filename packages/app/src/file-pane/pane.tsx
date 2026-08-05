@@ -10,7 +10,13 @@ import React, {
   type RefObject,
 } from "react";
 import type { DaemonClient, FileReadResult } from "@getpaseo/client/internal/daemon-client";
-import { Image as RNImage, ScrollView as RNScrollView, Text, View } from "react-native";
+import {
+  Image as RNImage,
+  ScrollView as RNScrollView,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -49,6 +55,7 @@ import {
   type WorkspaceFileDeletedDiffRow,
   type WorkspaceFileDiffDecorations,
   type WorkspaceFileDiffLineState,
+  type WorkspaceFileDiffOverviewMarker,
 } from "@/workspace/file-diff-decorations";
 import { isWeb } from "@/constants/platform";
 import { useAppSettings } from "@/hooks/use-settings";
@@ -67,6 +74,8 @@ import type { Theme } from "@/styles/theme";
 import { splitFileSearchTokens, type FileSearchMatch, type FileSearchTokenState } from "./search";
 import { useFileSearch, type FileSearchController } from "./use-search";
 import { MarkdownSearchPreview } from "./markdown-search-preview";
+import { FileDiffOverviewRuler } from "./diff-overview-ruler";
+import { getFileDiffOverviewScrollOffset } from "./diff-overview-navigation";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -551,6 +560,7 @@ function FilePreviewBody({
       : null;
 
   const previewScrollRef = useRef<RNScrollView>(null);
+  const previewViewportHeightRef = useRef(0);
 
   const highlightedLines = useMemo(() => {
     if (!preview || preview.kind !== "text" || textRenderMode !== "code" || renderKind) {
@@ -591,6 +601,23 @@ function FilePreviewBody({
   );
   const { matchesByLine: searchMatchesByLine, currentMatchIndex: currentSearchMatchIndex } =
     useFilePreviewSearch({ search, scrollRef: previewScrollRef, lineHeight });
+  const handlePreviewLayout = useCallback((event: LayoutChangeEvent) => {
+    previewViewportHeightRef.current = event.nativeEvent.layout.height;
+  }, []);
+  const handleDiffOverviewMarkerPress = useCallback(
+    (marker: WorkspaceFileDiffOverviewMarker) => {
+      previewScrollRef.current?.scrollTo({
+        y: getFileDiffOverviewScrollOffset({
+          marker,
+          lineHeight,
+          viewportHeight: previewViewportHeightRef.current,
+          contentTopInset: theme.spacing[4],
+        }),
+        animated: false,
+      });
+    },
+    [lineHeight, theme.spacing],
+  );
 
   useEffect(() => {
     if (!lineSelection) {
@@ -621,6 +648,7 @@ function FilePreviewBody({
           ref={previewScrollRef}
           style={styles.previewContent}
           showsVerticalScrollIndicator
+          onLayout={handlePreviewLayout}
         >
           <View style={styles.previewCodeScrollContent} dataSet={CODE_SURFACE_DATASET}>
             {deletedFallbackRows.map((row) => (
@@ -628,6 +656,11 @@ function FilePreviewBody({
             ))}
           </View>
         </RNScrollView>
+        <FileDiffOverviewRuler
+          decorations={diffDecorations}
+          lineCount={0}
+          onMarkerPress={handleDiffOverviewMarkerPress}
+        />
       </View>
     );
   }
@@ -729,6 +762,7 @@ function FilePreviewBody({
           ref={previewScrollRef}
           style={styles.previewContent}
           showsVerticalScrollIndicator
+          onLayout={handlePreviewLayout}
         >
           {isMobile ? (
             <View style={styles.previewCodeScrollContent}>{codeLines}</View>
@@ -743,6 +777,11 @@ function FilePreviewBody({
             </RNScrollView>
           )}
         </RNScrollView>
+        <FileDiffOverviewRuler
+          decorations={diffDecorations}
+          lineCount={keyedLines.length}
+          onMarkerPress={handleDiffOverviewMarkerPress}
+        />
       </View>
     );
   }

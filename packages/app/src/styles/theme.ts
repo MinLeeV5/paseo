@@ -118,6 +118,7 @@ export type ThemeName = "light" | "dark" | "zinc" | "midnight" | "claude" | "gho
 // weight of foregroundMuted, so it sits with the subtitle instead of shouting over it.
 const lightDiffColors = {
   diffAddition: "#15803d", // green-700 — readable on white without screaming
+  diffModification: "#ea580c", // orange-600
   diffDeletion: "#b91c1c", // red-700
   diffStatAddition: "#32794a", // softened green-700
   diffStatDeletion: "#a43c39", // softened red-700
@@ -125,6 +126,7 @@ const lightDiffColors = {
 
 const darkDiffColors = {
   diffAddition: "#4ade80", // green-400
+  diffModification: "#f97316", // orange-500
   diffDeletion: "#ef4444", // red-500
   diffStatAddition: "#61bf82",
   diffStatDeletion: "#d36461",
