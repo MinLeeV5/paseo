@@ -146,15 +146,11 @@ export function resolveDiffLayout(
   return canUseSplitLayout ? layout : "unified";
 }
 
-function fileHeaderPressableStyle({
+function fileHeaderFileTargetStyle({
   hovered,
   pressed,
 }: PressableStateCallbackType & { hovered?: boolean }) {
-  return [
-    styles.fileHeader,
-    Boolean(hovered) && styles.fileHeaderHovered,
-    pressed && styles.fileHeaderPressed,
-  ];
+  return [styles.fileHeaderFileTarget, (Boolean(hovered) || pressed) && styles.fileHeaderHovered];
 }
 
 function fileOpenButtonStyle({ pressed }: PressableStateCallbackType) {
@@ -241,6 +237,7 @@ interface DiffFileSectionProps {
   directoryPrefix?: string;
   interactive?: boolean;
   onToggle?: (path: string) => void;
+  onFilePress?: (path: string) => void;
   onOpenFile?: (file: ParsedDiffFile) => void;
   onOpenInPreferredTool?: (file: ParsedDiffFile) => void;
   preferredOpenToolLabel?: string;
@@ -1005,7 +1002,7 @@ function DiffFileOpenButton({
   );
 }
 
-// The cross-platform gesture handling and independent file actions are intentionally colocated.
+// The file header keeps expansion and file opening on separate press targets.
 // oxlint-disable-next-line complexity
 const DiffFileHeader = memo(function DiffFileHeader({
   file,
@@ -1016,6 +1013,7 @@ const DiffFileHeader = memo(function DiffFileHeader({
   directoryPrefix,
   interactive = true,
   onToggle,
+  onFilePress,
   onOpenFile,
   onOpenInPreferredTool,
   preferredOpenToolLabel,
@@ -1036,30 +1034,33 @@ const DiffFileHeader = memo(function DiffFileHeader({
     path: file.path,
     ...workspaceFileDragScope,
   });
-  const layoutYRef = useRef<number | null>(null);
-  const pressHandledRef = useRef(false);
-  const pressInRef = useRef<{ ts: number; pageX: number; pageY: number } | null>(null);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const reviewedAccessibilityState = useMemo(() => ({ checked: isReviewed }), [isReviewed]);
+  const expandedAccessibilityState = useMemo(() => ({ expanded: isExpanded }), [isExpanded]);
 
-  const toggleExpanded = useCallback(() => {
-    if (!interactive) {
-      return;
-    }
-    pressHandledRef.current = true;
-    onToggle?.(file.path);
-  }, [file.path, interactive, onToggle]);
+  const toggleExpanded = useCallback(
+    (event: GestureResponderEvent) => {
+      if (!interactive) {
+        return;
+      }
+      event.stopPropagation();
+      onToggle?.(file.path);
+    },
+    [file.path, interactive, onToggle],
+  );
   const handleOpenFilePress = useCallback(
     (event: GestureResponderEvent) => {
-      pressHandledRef.current = true;
       event.stopPropagation();
-      onOpenFile?.(file);
+      if (onOpenFile) {
+        onOpenFile(file);
+      } else {
+        onFilePress?.(file.path);
+      }
     },
-    [file, onOpenFile],
+    [file, onFilePress, onOpenFile],
   );
   const handleOpenInPreferredTool = useCallback(
     (event: GestureResponderEvent) => {
-      pressHandledRef.current = true;
       event.stopPropagation();
       onOpenInPreferredTool?.(file);
     },
@@ -1083,7 +1084,6 @@ const DiffFileHeader = memo(function DiffFileHeader({
   }, [file.path, onDownload]);
   const handleToggleReviewed = useCallback(
     (event: GestureResponderEvent) => {
-      pressHandledRef.current = true;
       event.stopPropagation();
       onToggleReviewed?.(file, !isReviewed);
     },
@@ -1101,58 +1101,23 @@ const DiffFileHeader = memo(function DiffFileHeader({
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      layoutYRef.current = event.nativeEvent.layout.y;
       onHeaderHeightChange?.(file.path, event.nativeEvent.layout.height);
     },
     [file.path, onHeaderHeightChange],
-  );
-
-  const handlePressIn = useCallback((event: { nativeEvent: { pageX: number; pageY: number } }) => {
-    pressHandledRef.current = false;
-    pressInRef.current = {
-      ts: Date.now(),
-      pageX: event.nativeEvent.pageX,
-      pageY: event.nativeEvent.pageY,
-    };
-  }, []);
-
-  const handlePressOut = useCallback(
-    (event: { nativeEvent: { pageX: number; pageY: number } }) => {
-      if (
-        interactive &&
-        isNative &&
-        !pressHandledRef.current &&
-        layoutYRef.current === 0 &&
-        pressInRef.current
-      ) {
-        const durationMs = Date.now() - pressInRef.current.ts;
-        const dx = event.nativeEvent.pageX - pressInRef.current.pageX;
-        const dy = event.nativeEvent.pageY - pressInRef.current.pageY;
-        const distance = Math.hypot(dx, dy);
-        if (durationMs <= 500 && distance <= 12) {
-          toggleExpanded();
-        }
-      }
-    },
-    [interactive, toggleExpanded],
   );
 
   const containerStyle = useMemo(
     () => [styles.fileSectionHeaderContainer, isExpanded && styles.fileSectionHeaderExpanded],
     [isExpanded],
   );
-  const openFileLabel = t("message.actions.openFile");
-
-  const headerPressableStyle = useCallback(
-    (state: PressableStateCallbackType) =>
-      depth > 0
-        ? [
-            fileHeaderPressableStyle(state),
-            inlineUnistylesStyle({ paddingLeft: treeRowPaddingLeft(depth) }),
-          ]
-        : fileHeaderPressableStyle(state),
+  const headerStyle = useMemo(
+    () => [
+      styles.fileHeader,
+      depth > 0 && inlineUnistylesStyle({ paddingLeft: treeRowPaddingLeft(depth) }),
+    ],
     [depth],
   );
+  const openFileLabel = t("message.actions.openFile");
 
   const fileName = file.path.split("/").pop() ?? file.path;
   const openInPreferredToolLabel = preferredOpenToolLabel
@@ -1179,36 +1144,72 @@ const DiffFileHeader = memo(function DiffFileHeader({
       ? parentDirectory.slice(nestedPrefix.length)
       : parentDirectory;
   }, [directoryPrefix, file.path, showDir]);
+  const fileContent = (
+    <View ref={dragSourceRef} style={styles.fileHeaderLeft}>
+      <View style={styles.fileIcon}>
+        <SvgXml xml={getFileIconSvg(fileName)} width={16} height={16} />
+      </View>
+      <Text style={styles.fileName} numberOfLines={1}>
+        {fileName}
+      </Text>
+      {showDir ? (
+        <Text style={styles.fileDir} numberOfLines={1}>
+          {displayDirectory ? ` ${displayDirectory}` : ""}
+        </Text>
+      ) : (
+        // Flex spacer in tree mode (no dir suffix) so the New/Deleted badge
+        // stays right-aligned next to the diff stats, as in the flat list.
+        <View style={styles.fileDirSpacer} />
+      )}
+      {file.isNew && (
+        <View style={styles.newBadge}>
+          <Text style={styles.newBadgeText}>{t("workspace.git.diff.newFile")}</Text>
+        </View>
+      )}
+      {file.isDeleted && (
+        <View style={styles.deletedBadge}>
+          <Text style={styles.deletedBadgeText}>{t("workspace.git.diff.deletedFile")}</Text>
+        </View>
+      )}
+    </View>
+  );
+  const fileTarget =
+    onOpenFile || onFilePress ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${openFileLabel}: ${fileName}`}
+        // Android: prevent parent pan/scroll gestures from canceling the tap release.
+        cancelable={false}
+        onPress={handleOpenFilePress}
+        style={fileHeaderFileTargetStyle}
+        testID={testID ? `${testID}-file` : undefined}
+      >
+        {fileContent}
+      </Pressable>
+    ) : (
+      <View style={styles.fileHeaderFileTarget}>{fileContent}</View>
+    );
   const headerContent = (
     <>
-      <View ref={dragSourceRef} style={styles.fileHeaderLeft}>
-        <TreeChevron expanded={isExpanded} />
-        <View style={styles.fileIcon}>
-          <SvgXml xml={getFileIconSvg(fileName)} width={16} height={16} />
+      {interactive ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={fileName}
+          accessibilityState={expandedAccessibilityState}
+          // Android: prevent parent pan/scroll gestures from canceling the tap release.
+          cancelable={false}
+          onPress={toggleExpanded}
+          testID={testID ? `${testID}-toggle` : undefined}
+          style={styles.fileExpandButton}
+        >
+          <TreeChevron expanded={isExpanded} />
+        </Pressable>
+      ) : (
+        <View style={styles.fileExpandButton}>
+          <TreeChevron expanded={isExpanded} />
         </View>
-        <Text style={styles.fileName} numberOfLines={1}>
-          {fileName}
-        </Text>
-        {showDir ? (
-          <Text style={styles.fileDir} numberOfLines={1}>
-            {displayDirectory ? ` ${displayDirectory}` : ""}
-          </Text>
-        ) : (
-          // Flex spacer in tree mode (no dir suffix) so the New/Deleted badge
-          // stays right-aligned next to the diff stats, as in the flat list.
-          <View style={styles.fileDirSpacer} />
-        )}
-        {file.isNew && (
-          <View style={styles.newBadge}>
-            <Text style={styles.newBadgeText}>{t("workspace.git.diff.newFile")}</Text>
-          </View>
-        )}
-        {file.isDeleted && (
-          <View style={styles.deletedBadge}>
-            <Text style={styles.deletedBadgeText}>{t("workspace.git.diff.deletedFile")}</Text>
-          </View>
-        )}
-      </View>
+      )}
+      {fileTarget}
       <View style={styles.fileHeaderRight}>
         {onToggleReviewed ? (
           <Tooltip delayDuration={300}>
@@ -1284,28 +1285,15 @@ const DiffFileHeader = memo(function DiffFileHeader({
     </>
   );
 
-  let trigger: ReactElement;
-  if (!interactive) {
-    trigger = (
-      <View style={headerPressableStyle({ hovered: false, pressed: false })}>{headerContent}</View>
-    );
-  } else {
-    trigger = (
-      <Pressable
-        testID={testID ? `${testID}-toggle` : undefined}
-        style={headerPressableStyle}
-        // Android: prevent parent pan/scroll gestures from canceling the tap release.
-        cancelable={false}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        onPress={toggleExpanded}
-        // @ts-ignore - onContextMenu is web-only and not in RN types.
-        onContextMenu={handleContextMenu}
-      >
-        {headerContent}
-      </Pressable>
-    );
-  }
+  const trigger = (
+    <View
+      style={headerStyle}
+      // @ts-ignore - onContextMenu is web-only and not in RN types.
+      onContextMenu={handleContextMenu}
+    >
+      {headerContent}
+    </View>
+  );
 
   return (
     <View style={containerStyle} onLayout={handleLayout} testID={testID}>
@@ -2259,6 +2247,7 @@ interface SharedDiffViewProps {
         kind: "working_tree";
         fileGrouping: CheckoutDiffFileGrouping;
         expandedPaths: string[];
+        persistedExpandedPaths?: string[];
         collapsedFolders: string[];
         collapsedGroupKeys: string[];
         reviewActions?: InlineReviewActions;
@@ -2298,6 +2287,15 @@ interface SharedDiffViewProps {
       };
 }
 
+function resolveExpandedPathsForToggle(
+  mode: SharedDiffViewProps["mode"],
+  visibleExpandedPaths: string[],
+): string[] {
+  return mode.kind === "working_tree"
+    ? (mode.persistedExpandedPaths ?? visibleExpandedPaths)
+    : visibleExpandedPaths;
+}
+
 export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffViewProps) {
   const { t } = useTranslation();
   const { layout, wrapLines, codeFontSize, monoFontFamily } = displayPreferences;
@@ -2322,6 +2320,11 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     return files.map((file) => file.path);
   }, [files, mode]);
   const expandedPaths = useMemo(() => new Set(expandedPathsArray), [expandedPathsArray]);
+  const expandedPathsForToggleArray = resolveExpandedPathsForToggle(mode, expandedPathsArray);
+  const expandedPathsForToggle = useMemo(
+    () => new Set(expandedPathsForToggleArray),
+    [expandedPathsForToggleArray],
+  );
   const collapsedFoldersArray =
     mode.kind === "working_tree" ? mode.collapsedFolders : EMPTY_PATH_LIST;
   const collapsedFolders = useMemo(() => new Set(collapsedFoldersArray), [collapsedFoldersArray]);
@@ -2655,11 +2658,11 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
 
       mode.onExpandedPathsChange(
         nextExpanded
-          ? [...expandedPaths, path]
-          : Array.from(expandedPaths).filter((expandedPath) => expandedPath !== path),
+          ? [...expandedPathsForToggle, path]
+          : Array.from(expandedPathsForToggle).filter((expandedPath) => expandedPath !== path),
       );
     },
-    [computeHeaderOffset, expandedPaths, mode],
+    [computeHeaderOffset, expandedPaths, expandedPathsForToggle, mode],
   );
 
   const handleToggleFolder = useCallback(
@@ -2770,7 +2773,8 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
             showDir={fileGrouping !== "directory"}
             directoryPrefix={fileGrouping === "submodule" ? item.file.submodulePath : undefined}
             interactive={interactive}
-            onToggle={interactive ? (onFilePress ?? handleToggleExpanded) : undefined}
+            onToggle={interactive ? handleToggleExpanded : undefined}
+            onFilePress={onFilePress}
             onOpenFile={onOpenFile}
             onOpenInPreferredTool={onOpenInPreferredTool}
             preferredOpenToolLabel={preferredOpenToolLabel}
@@ -3912,6 +3916,7 @@ export function GitDiffPane({
       kind: "working_tree" as const,
       fileGrouping,
       expandedPaths: visibleExpandedPathsArray,
+      persistedExpandedPaths: stableExpandedPathsArray,
       collapsedFolders: stableCollapsedFoldersArray,
       collapsedGroupKeys: stableCollapsedGroupKeysArray,
       reviewActions: checkoutOnlyValue(activeChangesSource, reviewActions),
@@ -3965,6 +3970,7 @@ export function GitDiffPane({
       serverId,
       stableCollapsedFoldersArray,
       stableCollapsedGroupKeysArray,
+      stableExpandedPathsArray,
       visibleExpandedPathsArray,
       workspaceId,
     ],
@@ -4412,11 +4418,21 @@ const styles = StyleSheet.create((theme) => ({
     zIndex: 2,
     elevation: 2,
   },
-  fileHeaderPressed: {
-    backgroundColor: theme.colors.surface2,
-  },
   fileHeaderHovered: {
     backgroundColor: theme.colors.surface1,
+  },
+  fileExpandButton: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  fileHeaderFileTarget: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: "stretch",
+    justifyContent: "center",
   },
   fileHeaderLeft: {
     flexDirection: "row",

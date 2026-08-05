@@ -234,6 +234,13 @@ test("changes file actions open from the kebab and right-click", async ({ page }
   await expect(page.getByTestId("diff-file-1-menu-open-file")).toHaveCount(0);
   await page.keyboard.press("Escape");
 
+  await page.getByTestId("diff-file-0-file").click();
+  await expect(page.getByTestId("workspace-file-pane")).toBeVisible();
+  await expect(page.getByTestId("diff-file-0-body")).toBeVisible();
+  await expect(
+    page.getByTestId(/^workspace-tab-file_src\/use-mounted-tab-set\.ts#diff:/),
+  ).toBeVisible();
+
   await expect(page.getByTestId("diff-file-0-open-file")).toBeVisible();
   await expect(page.getByTestId("diff-file-0-preview-file")).toHaveCount(0);
   await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
@@ -341,19 +348,21 @@ test("changes diff switches between flat and tree file lists", async ({ page }) 
   await page.keyboard.press("Escape");
 
   await scrollToLowerUnwrappedDiffRows(page);
-  await page.getByTestId("changes-toggle-view-mode").click();
+  await page.getByTestId("changes-grouping").click();
+  await page.getByTestId("changes-grouping-directory").click();
   await expect(page.getByTestId("diff-folder-src")).toBeVisible();
   await expect(page.getByTestId("diff-file-0")).toBeVisible();
 
   await page.getByRole("button", { name: "Collapse all" }).click();
-  await expect(page.getByTestId("diff-file-0")).toHaveCount(0);
+  await expect(page.getByTestId(/^diff-file-\d+-body$/)).toHaveCount(0);
   await page.getByRole("button", { name: "Expand all" }).click();
   await expect(page.getByTestId("diff-file-0-body")).toBeVisible();
 
   await page.getByTestId("diff-folder-src-toggle").click();
   await expect(page.getByTestId("diff-file-0")).toHaveCount(0);
 
-  await page.getByTestId("changes-toggle-view-mode").click();
+  await page.getByTestId("changes-grouping").click();
+  await page.getByTestId("changes-grouping-flat").click();
   await expectFlatFileList(page);
 });
 
@@ -361,7 +370,8 @@ test("workspace file panes keep their controls on shared alignment rails", async
   const workspace = await createWorkspaceWithMountedTabDiff();
   await openWorkspaceChanges(page, workspace);
 
-  await page.getByTestId("changes-toggle-view-mode").click();
+  await page.getByTestId("changes-grouping").click();
+  await page.getByTestId("changes-grouping-directory").click();
   await expect(page.getByTestId("diff-folder-src")).toBeVisible();
 
   const changesRightRail = await Promise.all([
@@ -588,7 +598,7 @@ async function openWorkspaceChanges(page: Page, workspace: DirtyWorkspace): Prom
   await waitForWorkspaceTabsVisible(page);
   await page.getByRole("button", { name: "Open explorer" }).click();
   await openChangesInVisibleExplorer(page);
-  await page.getByTestId("diff-file-0").click();
+  await page.getByTestId("diff-file-0-toggle").click();
   await expectExpandedMountedTabDiff(page);
 }
 
