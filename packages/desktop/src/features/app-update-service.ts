@@ -19,6 +19,7 @@ export interface AppUpdateInstallResult {
   installed: boolean;
   version: string | null;
   message: string;
+  errorMessage?: string;
 }
 
 export interface RuntimeUpdateInfo {
@@ -26,6 +27,22 @@ export interface RuntimeUpdateInfo {
   releaseNotes?: unknown;
   releaseDate?: unknown;
   rolloutHours?: unknown;
+}
+
+export interface RuntimeUpdateProgress {
+  percent: number;
+  bytesPerSecond: number;
+  transferred: number;
+  total: number;
+}
+
+export interface AppUpdateDownloadProgress extends RuntimeUpdateProgress {
+  version: string | null;
+}
+
+export interface AppUpdateDownloadError {
+  version: string | null;
+  message: string;
 }
 
 export interface RuntimeUpdateCheckResult {
@@ -37,6 +54,7 @@ export interface AppUpdateRuntimeConfiguration {
   releaseChannel: AppReleaseChannel;
   shouldAdmitUpdate(info: RuntimeUpdateInfo): boolean | Promise<boolean>;
   onUpdateAvailable(info: RuntimeUpdateInfo): void;
+  onDownloadProgress(progress: RuntimeUpdateProgress): void;
   onUpdateDownloaded(info: RuntimeUpdateInfo): void;
   onUpdateNotAvailable(): void;
   onError(error: unknown): void;
@@ -77,6 +95,10 @@ export interface AppUpdateServiceDeps {
   reportCheckError?(error: unknown): void;
   reportRuntimeError?(error: unknown): void;
   reportInstallError?(message: string): void;
+  onUpdateAvailable?(info: RuntimeUpdateInfo): void;
+  onUpdateProgress?(progress: AppUpdateDownloadProgress): void;
+  onUpdateDownloaded?(info: RuntimeUpdateInfo): void;
+  onUpdateError?(error: AppUpdateDownloadError): void;
 }
 
 function buildCheckResult(input: {
@@ -173,6 +195,13 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
         if (!alreadyReady && preparingUpdateVersion === null) {
           preparingUpdateVersion = info.version;
         }
+        deps.onUpdateAvailable?.(info);
+      },
+      onDownloadProgress(progress) {
+        deps.onUpdateProgress?.({
+          ...progress,
+          version: preparingUpdateVersion ?? cachedUpdateInfo?.version ?? null,
+        });
       },
       onUpdateDownloaded(info) {
         // A superseded download can finish after a newer manifest check. Keep
@@ -185,17 +214,21 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
         if (preparationError?.version === info.version) {
           preparationError = null;
         }
+        deps.onUpdateDownloaded?.(info);
       },
       onUpdateNotAvailable() {
         clearUpdateState();
       },
       onError(error) {
-        if (preparingUpdateVersion) {
+        const failedVersion = preparingUpdateVersion;
+        const message = getErrorMessage(error);
+        if (failedVersion) {
           preparationError = {
-            version: preparingUpdateVersion,
-            message: getErrorMessage(error),
+            version: failedVersion,
+            message,
           };
           preparingUpdateVersion = null;
+          deps.onUpdateError?.({ version: failedVersion, message });
         }
         deps.reportRuntimeError?.(error);
       },
@@ -304,10 +337,12 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
       intent: "manual",
     });
     if (!check.hasUpdate) {
+      const errorMessage = check.errorMessage ?? undefined;
       return {
         installed: false,
         version: currentVersion,
-        message: check.errorMessage ?? "No update available.",
+        message: errorMessage ?? "No update available.",
+        ...(errorMessage ? { errorMessage } : {}),
       };
     }
 
@@ -405,10 +440,14 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       deps.reportInstallError?.(message);
+      if (preparationError?.version !== readyVersion) {
+        deps.onUpdateError?.({ version: readyVersion, message });
+      }
       return {
         installed: false,
         version: currentVersion,
         message: `Update failed: ${message}`,
+        errorMessage: message,
       };
     }
   }

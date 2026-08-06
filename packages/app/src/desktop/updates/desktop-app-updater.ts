@@ -102,6 +102,18 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function getInstallErrorMessage(result: DesktopAppUpdateInstallResult): string | null {
+  if (result.errorMessage) {
+    return result.errorMessage;
+  }
+
+  if (result.message.startsWith("Update failed:")) {
+    return result.message.slice("Update failed:".length).trim() || result.message;
+  }
+
+  return null;
+}
+
 export function formatStatusText(input: {
   status: DesktopAppUpdateStatus;
   availableUpdate: DesktopAppUpdateCheckResult | null;
@@ -307,6 +319,19 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
         releaseChannel: options.releaseChannel,
       });
       const nextLastCheckedAt = deps.now();
+      const installErrorMessage = getInstallErrorMessage(result);
+      if (installErrorMessage) {
+        commit({
+          ...state,
+          status: "error",
+          errorMessage: installErrorMessage,
+          installMessage: null,
+          lastCheckedAt: nextLastCheckedAt,
+          isInstalling: false,
+        });
+        return result;
+      }
+
       commit({
         ...state,
         status: result.installed ? "installed" : "up-to-date",

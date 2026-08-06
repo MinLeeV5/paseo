@@ -7,11 +7,14 @@ import { autoUpdater } from "electron-updater";
 import {
   createAppUpdateService,
   type AppUpdateCheckResult,
+  type AppUpdateDownloadError,
+  type AppUpdateDownloadProgress,
   type AppUpdateInstallResult,
   type AppUpdateRuntime,
   type AppUpdateRuntimeConfiguration,
   type RuntimeUpdateCheckResult,
   type RuntimeUpdateInfo,
+  type RuntimeUpdateProgress,
 } from "./app-update-service.js";
 import {
   bucketFromStagingUserId,
@@ -30,6 +33,32 @@ export {
   type AppUpdateCheckResult,
   type AppUpdateInstallResult,
 };
+
+export const DESKTOP_APP_UPDATE_EVENT = "desktop-app-update";
+
+export type DesktopAppUpdateEvent =
+  | { type: "available"; version: string }
+  | ({ type: "progress" } & AppUpdateDownloadProgress)
+  | { type: "downloaded"; version: string }
+  | ({ type: "error" } & AppUpdateDownloadError);
+
+type DesktopAppUpdateEventListener = (event: DesktopAppUpdateEvent) => void;
+const desktopAppUpdateEventListeners = new Set<DesktopAppUpdateEventListener>();
+
+export function subscribeToDesktopAppUpdateEvents(
+  listener: DesktopAppUpdateEventListener,
+): () => void {
+  desktopAppUpdateEventListeners.add(listener);
+  return () => {
+    desktopAppUpdateEventListeners.delete(listener);
+  };
+}
+
+function emitDesktopAppUpdateEvent(event: DesktopAppUpdateEvent): void {
+  for (const listener of desktopAppUpdateEventListeners) {
+    listener(event);
+  }
+}
 
 let cachedStagingUserIdPromise: Promise<string> | null = null;
 
@@ -112,6 +141,9 @@ class ElectronAppUpdateRuntime implements AppUpdateRuntime {
     autoUpdater.on("update-available", (info) => {
       input.onUpdateAvailable(info as RuntimeUpdateInfo);
     });
+    autoUpdater.on("download-progress", (progress) => {
+      input.onDownloadProgress(progress as RuntimeUpdateProgress);
+    });
     autoUpdater.on("update-downloaded", (info) => {
       input.onUpdateDownloaded(info as RuntimeUpdateInfo);
     });
@@ -155,6 +187,18 @@ const appUpdateService = createAppUpdateService({
   },
   reportInstallError: (message) => {
     console.error("[auto-updater] Failed to download/install update:", message);
+  },
+  onUpdateAvailable: (info) => {
+    emitDesktopAppUpdateEvent({ type: "available", version: info.version });
+  },
+  onUpdateProgress: (progress) => {
+    emitDesktopAppUpdateEvent({ type: "progress", ...progress });
+  },
+  onUpdateDownloaded: (info) => {
+    emitDesktopAppUpdateEvent({ type: "downloaded", version: info.version });
+  },
+  onUpdateError: (error) => {
+    emitDesktopAppUpdateEvent({ type: "error", ...error });
   },
 });
 

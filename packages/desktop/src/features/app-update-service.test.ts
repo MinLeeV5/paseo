@@ -4,6 +4,9 @@ import {
   createAppUpdateService,
   type AppUpdateRuntime,
   type AppUpdateRuntimeConfiguration,
+  type AppUpdateDownloadError,
+  type AppUpdateDownloadProgress,
+  type RuntimeUpdateProgress,
   type RuntimeUpdateInfo,
 } from "./app-update-service";
 
@@ -64,6 +67,10 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
 
   failRuntime(error: Error): void {
     this.configuration?.onError(error);
+  }
+
+  emitProgress(progress: RuntimeUpdateProgress): void {
+    this.configuration?.onDownloadProgress(progress);
   }
 
   prepareUpdate(info: RuntimeUpdateInfo): void {
@@ -150,13 +157,17 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
 
 function createService(input?: { now?: () => number; bucket?: () => Promise<number> }) {
   const runtime = new FakeAppUpdateRuntime();
+  const progressEvents: AppUpdateDownloadProgress[] = [];
+  const errorEvents: AppUpdateDownloadError[] = [];
   const service = createAppUpdateService({
     runtime,
     isPackaged: () => true,
     now: input?.now ?? (() => Date.parse("2026-04-28T12:00:00.000Z")),
     bucket: input?.bucket ?? (async () => 0.99),
+    onUpdateProgress: (progress) => progressEvents.push(progress),
+    onUpdateError: (error) => errorEvents.push(error),
   });
-  return { runtime, service };
+  return { runtime, service, progressEvents, errorEvents };
 }
 
 const rolledOutUpdate = {
@@ -166,6 +177,48 @@ const rolledOutUpdate = {
 };
 
 describe("app update service", () => {
+  it("forwards download progress with the version being prepared", async () => {
+    const { runtime, service, progressEvents } = createService({ bucket: async () => 0 });
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    await service.checkForAppUpdate({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      intent: "automatic",
+    });
+    runtime.emitProgress({
+      percent: 42,
+      bytesPerSecond: 128,
+      transferred: 10,
+      total: 20,
+    });
+
+    expect(progressEvents).toEqual([
+      {
+        version: "1.2.4",
+        percent: 42,
+        bytesPerSecond: 128,
+        transferred: 10,
+        total: 20,
+      },
+    ]);
+  });
+
+  it("reports a download error for the update that was being prepared", async () => {
+    const { runtime, service, errorEvents } = createService({ bucket: async () => 0 });
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    await service.checkForAppUpdate({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      intent: "automatic",
+    });
+    runtime.prepareUpdate(rolledOutUpdate);
+    runtime.failRuntime(new Error("checksum mismatch"));
+
+    expect(errorEvents).toEqual([{ version: "1.2.4", message: "checksum mismatch" }]);
+  });
+
   it("does not expose automatic stable updates before the user is admitted to rollout", async () => {
     const { runtime, service } = createService();
     runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });

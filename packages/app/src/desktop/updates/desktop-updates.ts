@@ -17,6 +17,7 @@ export interface DesktopAppUpdateInstallResult {
   installed: boolean;
   version: string | null;
   message: string;
+  errorMessage?: string;
 }
 
 export interface DesktopRuntimeInfo {
@@ -138,10 +139,12 @@ export async function installDesktopAppUpdate({
     throw new Error("Unexpected response while installing desktop update.");
   }
 
+  const errorMessage = toStringOrNull(result.errorMessage);
   return {
     installed: result.installed === true,
     version: toStringOrNull(result.version),
     message: toStringOrNull(result.message) ?? i18n.t("desktop.updates.status.installed"),
+    ...(errorMessage ? { errorMessage } : {}),
   };
 }
 

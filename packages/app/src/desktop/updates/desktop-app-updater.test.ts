@@ -360,6 +360,25 @@ describe("desktop app updater — install", () => {
       },
     ]);
   });
+
+  it("keeps an install failure visible when the desktop command returns an error result", async () => {
+    const { updater, port } = createUpdater();
+    port.nextInstallResult(
+      buildFakeInstallResult({
+        installed: false,
+        message: "Update failed: checksum mismatch",
+        errorMessage: "checksum mismatch",
+      }),
+    );
+
+    await updater.installUpdate({ releaseChannel: "stable" });
+
+    expect(updater.getSnapshot()).toMatchObject({
+      status: "error",
+      errorMessage: "checksum mismatch",
+      isInstalling: false,
+    });
+  });
 });
 
 describe("desktop app updater — subscribe", () => {
