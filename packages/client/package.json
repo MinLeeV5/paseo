@@ -1,6 +1,6 @@
 {
   "name": "@getpaseo/client",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "Paseo client SDK package",
   "files": [
     "dist",
@@ -35,8 +35,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@getpaseo/protocol": "1.4.5",
-    "@getpaseo/relay": "1.4.5",
+    "@getpaseo/protocol": "1.4.6",
+    "@getpaseo/relay": "1.4.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {
