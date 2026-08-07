@@ -136,6 +136,39 @@ describe("buildBrowserKeyboardPolicy", () => {
     });
   });
 
+  it("publishes Cmd+digit for tab jumps on macOS desktop", () => {
+    const policy = buildBrowserKeyboardPolicy({
+      bindings: buildEffectiveBindings({}),
+      isMac: true,
+      isDesktop: true,
+    });
+
+    expect(policy.prefixes).toContainEqual({
+      alt: false,
+      code: "Digit",
+      control: false,
+      meta: true,
+      shift: false,
+    });
+  });
+
+  it("publishes Cmd+Alt+digit for workspace jumps on macOS desktop", () => {
+    const policy = buildBrowserKeyboardPolicy({
+      bindings: buildEffectiveBindings({}),
+      isMac: true,
+      isDesktop: true,
+    });
+
+    expect(policy.prefixes).toContainEqual({
+      alt: true,
+      code: "Digit",
+      control: false,
+      editable: false,
+      meta: true,
+      shift: false,
+    });
+  });
+
   it("keeps Ctrl+W out of the window menu after the tab-close shortcut is remapped", () => {
     const bindings = buildEffectiveBindings({
       "workspace-tab-close-current-ctrl-w-non-mac": "Ctrl+Y",

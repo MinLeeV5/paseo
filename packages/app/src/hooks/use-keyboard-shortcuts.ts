@@ -118,6 +118,15 @@ export function useKeyboardShortcuts({
         state.setAltDown(down);
       }
     };
+    const updateMacShortcutBadges = (event: KeyboardEvent) => {
+      if (!isMac || !isDesktopApp) {
+        return;
+      }
+      const state = useKeyboardShortcutsStore.getState();
+      const modifierOnly = !event.shiftKey;
+      state.setShowShortcutBadges(event.metaKey && event.altKey && modifierOnly);
+      state.setShowTabShortcutBadges(event.metaKey && !event.altKey && modifierOnly);
+    };
 
     const shouldHandle = () => {
       if (typeof document === "undefined") return false;
@@ -305,7 +314,7 @@ export function useKeyboardShortcuts({
       }
 
       const key = event.key ?? "";
-      if (key === badgeModifierKey && !event.shiftKey) {
+      if (!(isMac && isDesktopApp) && key === badgeModifierKey && !event.shiftKey) {
         setBadgeModifierDown(true);
       }
       if (key === "Shift") {
@@ -314,6 +323,7 @@ export function useKeyboardShortcuts({
           state.resetModifiers();
         }
       }
+      updateMacShortcutBadges(event);
 
       const focusScope = resolveKeyboardFocusScope({
         target: event.target,
@@ -328,8 +338,11 @@ export function useKeyboardShortcuts({
 
     const handleKeyUp = (event: KeyboardEvent) => {
       const key = event.key ?? "";
-      if (key === badgeModifierKey) {
+      if (!(isMac && isDesktopApp) && key === badgeModifierKey) {
         setBadgeModifierDown(false);
+      }
+      if (isMac && isDesktopApp && (key === "Meta" || key === "Alt" || key === "Shift")) {
+        updateMacShortcutBadges(event);
       }
     };
 

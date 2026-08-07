@@ -59,6 +59,7 @@ import {
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
+import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-layout";
@@ -93,6 +94,7 @@ import { PinnableMenuItem } from "@/workspace-pins/pinnable-menu-item";
 const DROPDOWN_WIDTH = 220;
 const LOADING_TAB_LABEL_SKELETON_WIDTH = 80;
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
+const MAX_TAB_SHORTCUT_INDEX = 9;
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedX = withUnistyles(X);
@@ -540,6 +542,7 @@ function TabChip({
   onNavigateTab,
   onCloseTab,
   dragHandleProps,
+  shortcutNumber,
 }: {
   tab: WorkspaceTabDescriptor;
   isActive: boolean;
@@ -557,6 +560,7 @@ function TabChip({
   onNavigateTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
   dragHandleProps: DraggableListDragHandleProps | undefined;
+  shortcutNumber: number | null;
 }) {
   const { t } = useTranslation();
   const { closeButtonTestId, contextMenuTestId, menuEntries } = resolvedTab;
@@ -685,6 +689,16 @@ function TabChip({
                 tabLabelStyle={tabLabelStyle}
               />
 
+              {shortcutNumber !== null ? (
+                <View
+                  style={styles.tabShortcutBadge}
+                  pointerEvents="none"
+                  testID={`workspace-tab-shortcut-${shortcutNumber}`}
+                >
+                  <Text style={styles.tabShortcutBadgeText}>{shortcutNumber}</Text>
+                </View>
+              ) : null}
+
               {showTrailingAffordance ? (
                 <Pressable
                   {...(closeButtonDragBlockers as object | undefined)}
@@ -799,6 +813,7 @@ export function WorkspaceDesktopTabsRow({
   const focusModeKeys = useShortcutKeys("toggle-focus");
   const splitRightKeys = useShortcutKeys("workspace-pane-split-right");
   const splitDownKeys = useShortcutKeys("workspace-pane-split-down");
+  const showTabShortcutBadges = useKeyboardShortcutsStore((state) => state.showTabShortcutBadges);
   const [tabsContainerWidth, setTabsContainerWidth] = useState<number>(0);
   const [tabsActionsWidth, setTabsActionsWidth] = useState<number>(0);
   const [inlineAddButtonWidth, setInlineAddButtonWidth] = useState<number>(0);
@@ -972,6 +987,9 @@ export function WorkspaceDesktopTabsRow({
           dragHandleProps={dragHandleProps}
           showDropIndicatorBefore={showDropIndicatorBefore}
           showDropIndicatorAfter={showDropIndicatorAfter}
+          shortcutNumber={
+            showTabShortcutBadges && isFocused && index < MAX_TAB_SHORTCUT_INDEX ? index + 1 : null
+          }
         />
       );
     },
@@ -995,6 +1013,7 @@ export function WorkspaceDesktopTabsRow({
       onReloadAgent,
       onRenameTab,
       setHoveredCloseTabKey,
+      showTabShortcutBadges,
       tabMenuLabels,
       tabDropPreviewIndex,
       tabs.length,
@@ -1128,6 +1147,7 @@ function ResolvedDesktopTabChip({
   dragHandleProps,
   showDropIndicatorBefore,
   showDropIndicatorAfter,
+  shortcutNumber,
 }: {
   item: WorkspaceDesktopTabRowItem;
   isFocused: boolean;
@@ -1156,6 +1176,7 @@ function ResolvedDesktopTabChip({
   dragHandleProps: DraggableListDragHandleProps | undefined;
   showDropIndicatorBefore: boolean;
   showDropIndicatorAfter: boolean;
+  shortcutNumber: number | null;
 }) {
   const { t } = useTranslation();
   const resolvedTab = useMemo(
@@ -1230,6 +1251,7 @@ function ResolvedDesktopTabChip({
               onNavigateTab={onNavigateTab}
               onCloseTab={onCloseTab}
               dragHandleProps={dragHandleProps}
+              shortcutNumber={shortcutNumber}
             />
             {showDropIndicatorAfter ? (
               <View style={[styles.tabDropIndicator, styles.tabDropIndicatorAfter]} />
@@ -1312,6 +1334,24 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     userSelect: "none",
+  },
+  tabShortcutBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: theme.spacing[1],
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
+    flexShrink: 0,
+  },
+  tabShortcutBadgeText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: 14,
   },
   tabIcon: {
     flexShrink: 0,

@@ -8,6 +8,8 @@ beforeEach(() => {
     capturingShortcut: false,
     altDown: false,
     cmdOrCtrlDown: false,
+    showShortcutBadges: false,
+    showTabShortcutBadges: false,
     sidebarShortcutWorkspaceTargets: [],
   });
 });
@@ -23,5 +25,13 @@ describe("keyboard-shortcuts-store", () => {
     expect(useKeyboardShortcutsStore.getState().capturingShortcut).toBe(false);
     useKeyboardShortcutsStore.getState().setCapturingShortcut(true);
     expect(useKeyboardShortcutsStore.getState().capturingShortcut).toBe(true);
+  });
+
+  it("shows tab shortcut badges while Cmd is held", () => {
+    useKeyboardShortcutsStore.getState().setShowTabShortcutBadges(true);
+    expect(useKeyboardShortcutsStore.getState().showTabShortcutBadges).toBe(true);
+
+    useKeyboardShortcutsStore.getState().resetModifiers();
+    expect(useKeyboardShortcutsStore.getState().showTabShortcutBadges).toBe(false);
   });
 });

@@ -10,6 +10,7 @@ interface KeyboardShortcutsState {
   altDown: boolean;
   cmdOrCtrlDown: boolean;
   showShortcutBadges: boolean;
+  showTabShortcutBadges: boolean;
   /** Sidebar-visible workspace targets (up to 9), in top-to-bottom visual order. */
   sidebarShortcutWorkspaceTargets: SidebarShortcutWorkspaceTarget[];
 
@@ -18,6 +19,8 @@ interface KeyboardShortcutsState {
   setCapturingShortcut: (capturing: boolean) => void;
   setAltDown: (down: boolean) => void;
   setCmdOrCtrlDown: (down: boolean) => void;
+  setShowShortcutBadges: (show: boolean) => void;
+  setShowTabShortcutBadges: (show: boolean) => void;
   setSidebarShortcutWorkspaceTargets: (targets: SidebarShortcutWorkspaceTarget[]) => void;
   resetModifiers: () => void;
 }
@@ -52,6 +55,7 @@ export const useKeyboardShortcutsStore = create<KeyboardShortcutsState>((set, ge
   altDown: false,
   cmdOrCtrlDown: false,
   showShortcutBadges: false,
+  showTabShortcutBadges: false,
   sidebarShortcutWorkspaceTargets: [],
 
   setCommandCenterOpen: (open) => set({ commandCenterOpen: open }),
@@ -65,10 +69,23 @@ export const useKeyboardShortcutsStore = create<KeyboardShortcutsState>((set, ge
     set({ cmdOrCtrlDown: down });
     updateBadgeTimer(set, get);
   },
+  setShowShortcutBadges: (show) => {
+    if (badgeTimer) {
+      clearTimeout(badgeTimer);
+      badgeTimer = null;
+    }
+    set({ showShortcutBadges: show });
+  },
+  setShowTabShortcutBadges: (show) => set({ showTabShortcutBadges: show }),
   setSidebarShortcutWorkspaceTargets: (targets) =>
     set({ sidebarShortcutWorkspaceTargets: targets }),
   resetModifiers: () => {
-    set({ altDown: false, cmdOrCtrlDown: false });
+    set({
+      altDown: false,
+      cmdOrCtrlDown: false,
+      showShortcutBadges: false,
+      showTabShortcutBadges: false,
+    });
     updateBadgeTimer(set, get);
   },
 }));

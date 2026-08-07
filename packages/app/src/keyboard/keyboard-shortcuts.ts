@@ -413,14 +413,17 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
   {
     id: "workspace-navigate-index-cmd-digit-mac",
     action: "workspace.navigate.index",
-    combo: "Cmd+Digit",
-    when: { mac: true, desktop: true, commandCenter: false },
+    // Keep this binding id stable so existing user overrides survive the
+    // reallocation of Cmd+Digit to tabs. Cmd+Alt+Digit remains the direct
+    // workspace jump; Cmd+ArrowUp/Down handles relative workspace navigation.
+    combo: "Cmd+Alt+Digit",
+    when: { mac: true, desktop: true, commandCenter: false, editable: false },
     payload: { type: "index" },
     help: {
       id: "workspace-jump-index",
       section: "navigation",
       label: "Jump to workspace",
-      keys: ["mod", "1-9"],
+      keys: ["mod", "alt", "1-9"],
     },
   },
   {
@@ -452,16 +455,18 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
 
   // --- Tab index jump ---
   {
+    // Keep this binding id stable so existing user overrides survive the default
+    // shortcut change from Cmd+Alt+Digit to Cmd+Digit.
     id: "workspace-tab-navigate-index-cmd-alt-digit-mac-desktop",
     action: "workspace.tab.navigate.index",
-    combo: "Cmd+Alt+Digit",
+    combo: "Cmd+Digit",
     when: { mac: true, desktop: true, commandCenter: false },
     payload: { type: "index" },
     help: {
       id: "workspace-tab-jump-index",
       section: "navigation",
       label: "Jump to tab",
-      keys: ["mod", "alt", "1-9"],
+      keys: ["mod", "1-9"],
     },
   },
   {
@@ -495,14 +500,16 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
   {
     id: "workspace-navigate-relative-cmd-left-mac",
     action: "workspace.navigate.relative",
-    combo: "Cmd+[",
-    when: { mac: true, desktop: true, commandCenter: false },
+    // Keep the binding id stable while moving the default to a vertical
+    // workspace gesture. Cmd+[/] remains available to user overrides.
+    combo: "Cmd+ArrowUp",
+    when: { mac: true, desktop: true, commandCenter: false, editable: false },
     payload: { type: "delta", delta: -1 },
     help: {
       id: "workspace-prev",
       section: "navigation",
       label: "Previous workspace",
-      keys: ["mod", "["],
+      keys: ["mod", "ArrowUp"],
     },
   },
   {
@@ -521,14 +528,14 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
   {
     id: "workspace-navigate-relative-cmd-right-mac",
     action: "workspace.navigate.relative",
-    combo: "Cmd+]",
-    when: { mac: true, desktop: true, commandCenter: false },
+    combo: "Cmd+ArrowDown",
+    when: { mac: true, desktop: true, commandCenter: false, editable: false },
     payload: { type: "delta", delta: 1 },
     help: {
       id: "workspace-next",
       section: "navigation",
       label: "Next workspace",
-      keys: ["mod", "]"],
+      keys: ["mod", "ArrowDown"],
     },
   },
   {
@@ -1480,18 +1487,16 @@ export function resolveShortcutKeysForAction(
 }
 
 /**
- * The `KeyboardEvent.key` whose hold reveals the sidebar workspace-jump number
- * badges. It must match the modifier of the active `workspace.navigate.index`
- * binding for this runtime, otherwise the badges appear for a modifier that
- * does not actually jump: Alt on web, Cmd (Meta) on desktop Mac, Ctrl on
- * desktop non-Mac.
+ * The single modifier used by the workspace-index binding on web and
+ * non-Mac desktop. Mac desktop uses the Cmd+Alt chord, so its badge state is
+ * derived from both modifiers in the keyboard-shortcuts hook.
  */
 export function getWorkspaceIndexJumpModifierKey(platform: {
   isMac: boolean;
   isDesktop: boolean;
-}): "Alt" | "Meta" | "Control" {
+}): "Alt" | "Meta" | "Control" | null {
   if (!platform.isDesktop) return "Alt";
-  return platform.isMac ? "Meta" : "Control";
+  return platform.isMac ? null : "Control";
 }
 
 export function buildKeyboardShortcutHelpSections(

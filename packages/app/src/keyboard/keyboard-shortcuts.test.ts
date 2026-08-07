@@ -180,15 +180,15 @@ describe("keyboard-shortcuts", () => {
       payload: { index: 2 },
     },
     {
-      name: "matches workspace index jump on desktop via Mod+digit",
-      event: { key: "2", code: "Digit2", metaKey: true },
+      name: "matches workspace index jump on desktop via Cmd+Alt+digit",
+      event: { key: "@", code: "Digit2", metaKey: true, altKey: true },
       context: { isMac: true, isDesktop: true },
       action: "workspace.navigate.index",
       payload: { index: 2 },
     },
     {
-      name: "matches tab index jump on mac desktop via Cmd+Alt+digit",
-      event: { key: "@", code: "Digit2", metaKey: true, altKey: true },
+      name: "matches tab index jump on mac desktop via Cmd+digit",
+      event: { key: "2", code: "Digit2", metaKey: true },
       context: { isMac: true, isDesktop: true },
       action: "workspace.tab.navigate.index",
       payload: { index: 2 },
@@ -206,6 +206,20 @@ describe("keyboard-shortcuts", () => {
       context: { isDesktop: false },
       action: "workspace.tab.navigate.index",
       payload: { index: 2 },
+    },
+    {
+      name: "matches previous workspace on mac desktop via Cmd+ArrowUp",
+      event: { key: "ArrowUp", code: "ArrowUp", metaKey: true },
+      context: { isMac: true, isDesktop: true },
+      action: "workspace.navigate.relative",
+      payload: { delta: -1 },
+    },
+    {
+      name: "matches next workspace on mac desktop via Cmd+ArrowDown",
+      event: { key: "ArrowDown", code: "ArrowDown", metaKey: true },
+      context: { isMac: true, isDesktop: true },
+      action: "workspace.navigate.relative",
+      payload: { delta: 1 },
     },
     {
       name: "matches workspace relative navigation on web via Alt+[",
@@ -438,6 +452,16 @@ describe("keyboard-shortcuts", () => {
       name: "does not keep old Mod+Alt+N binding",
       event: { key: "n", code: "KeyN", metaKey: true, altKey: true },
       context: { isMac: true },
+    },
+    {
+      name: "does not keep the old Cmd+Shift+digit tab jump binding",
+      event: { key: "@", code: "Digit2", metaKey: true, shiftKey: true },
+      context: { isMac: true, isDesktop: true },
+    },
+    {
+      name: "keeps Cmd+ArrowUp available inside editable fields",
+      event: { key: "ArrowUp", code: "ArrowUp", metaKey: true },
+      context: { isMac: true, isDesktop: true, focusScope: "message-input" },
     },
     {
       name: "does not keep old Alt+Shift+T binding",
@@ -679,10 +703,12 @@ describe("keyboard-shortcut help sections", () => {
         "new-agent": ["mod", "O"],
         "new-workspace": ["mod", "N"],
         "workspace-tab-new": ["mod", "T"],
-        "workspace-jump-index": ["mod", "1-9"],
+        "workspace-jump-index": ["mod", "alt", "1-9"],
+        "workspace-prev": ["mod", "ArrowUp"],
+        "workspace-next": ["mod", "ArrowDown"],
         "workspace-tab-prev": ["ctrl", "shift", "Tab"],
         "workspace-tab-next": ["ctrl", "Tab"],
-        "workspace-tab-jump-index": ["mod", "alt", "1-9"],
+        "workspace-tab-jump-index": ["mod", "1-9"],
         "workspace-tab-close-current": ["meta", "W"],
         "workspace-pane-split-right": ["mod", "\\"],
         "workspace-pane-close": ["mod", "shift", "W"],
@@ -752,8 +778,8 @@ describe("getWorkspaceIndexJumpModifierKey", () => {
     expect(getWorkspaceIndexJumpModifierKey({ isMac: false, isDesktop: false })).toBe("Alt");
   });
 
-  it("uses Cmd (Meta) on desktop Mac, not Control or Alt", () => {
-    expect(getWorkspaceIndexJumpModifierKey({ isMac: true, isDesktop: true })).toBe("Meta");
+  it("has no single modifier on desktop Mac because the jump uses Cmd+Alt", () => {
+    expect(getWorkspaceIndexJumpModifierKey({ isMac: true, isDesktop: true })).toBeNull();
   });
 
   it("uses Ctrl on desktop non-Mac, not Meta or Alt", () => {
