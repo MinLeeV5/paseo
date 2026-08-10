@@ -1,0 +1,1562 @@
+packages/app/src/workspace-pins/run.test.ts
+  988004d92fa5999f 49-63
+packages/app/src/components/ui/menu/menu-anchor.ts
+  988004d92fa5999f 1-161
+packages/app/src/desktop/browser/pane/index.electron.tsx
+  988004d92fa5999f 31,55-63,65-66,68,550,589-604,625-631,634,749-750,763,771-792,795,873-879,894-898,907,919-925,935-959,1601-1619,1636-1637,1642,1654-1657,1716-1717,1770-1774,1980
+packages/app/src/subagents/track.tsx
+  988004d92fa5999f 203-206
+packages/server/src/server/agent/create-agent/create.test.ts
+  988004d92fa5999f 25-40,257,292,343,395,496,534
+packages/app/src/desktop/browser/automation/handler.ts
+  988004d92fa5999f 8-13,216-218
+packages/server/scripts/supervisor.logging.test.ts
+  988004d92fa5999f 16,20,52,77,90,192-336
+packages/app/src/hooks/use-agent-history.test.ts
+  988004d92fa5999f 20,26,68,78,88,138,291-557
+packages/desktop/src/main.ts
+  988004d92fa5999f 478-489
+packages/server/src/server/hub/test-utils/hub-cli-entry.ts
+  988004d92fa5999f 2-13,16-18
+packages/app/e2e/browser/add-project-flow.spec.ts
+  988004d92fa5999f 16,69,75-76,152,161,174,181,186-187,221
+packages/app/e2e/browser/provider-subagents.real.spec.ts
+  988004d92fa5999f 18-19,37,44-47,49,59,79-89,94-124
+packages/app/src/projects/host-projects.test.ts
+  988004d92fa5999f 9,11,100-135
+packages/server/src/server/daemon-e2e/terminal-byte-headless-parity.e2e.test.ts
+  988004d92fa5999f 1-341
+packages/app/e2e/browser/sidebar-host-filter-multi.spec.ts
+  988004d92fa5999f 7,32
+packages/app/e2e/browser/sessions-search-hosts.spec.ts
+  988004d92fa5999f 1-148
+packages/server/src/server/workspace-reconciliation-service.ts
+  988004d92fa5999f 388-393
+.agents/skills/release-stable/SKILL.md
+  988004d92fa5999f 9
+packages/app/src/styles/surface-backdrop.ts
+  988004d92fa5999f 1-24
+packages/server/src/server/agent/agent-manager.test.ts
+  988004d92fa5999f 444-447,451-452,454-455,459-463,465-467,470-476,478,512,556-559,973,996,999,1010,1013,1016-1017,1019,1023,1025,1034-1035,1097,1626,1657,1690,1720,1892,1948-2105,2134,2188,2237,2331,2659-2662,2702,2764,3128-3168
+docs/agent-lifecycle.md
+  988004d92fa5999f 27-34,70-74,117,143,189-194
+packages/app/src/i18n/resources/en.ts
+  988004d92fa5999f 82,86,218,271-274,277,432,539,945-952,1000-1031,1057,1099-1100,1163-1169,1178-1186,1836,1846-1860,1932,1941-1945,2006,2062,2064,2067,2069-2070
+packages/app/src/keyboard/shortcut-override-store.test.ts
+  988004d92fa5999f 1-183
+packages/app/e2e/browser/new-workspace-host-project-preservation.spec.ts
+  988004d92fa5999f 16,33,154,202-226
+packages/server/src/server/test-utils/workspace-git-service-stub.ts
+  988004d92fa5999f 85-88,91
+README.md
+  988004d92fa5999f 10-11,84
+packages/app/app.config.js
+  988004d92fa5999f 4,8,205,214
+packages/server/src/server/agent/providers/claude/agent.background-subagent.test.ts
+  988004d92fa5999f 1-3,8-9,23-39,111-113,155-156,160-173,183-196,202-216,228-295
+public-docs/hub/daemons.md
+  988004d92fa5999f 1-104
+packages/app/e2e/browser/sidebar-model-b.spec.ts
+  988004d92fa5999f 8,136
+packages/app/src/navigation/host-runtime-bootstrap.ts
+  988004d92fa5999f 15,29,31-36
+packages/app/native-release-version.js
+  988004d92fa5999f 1-2,4-8,10-14,16-17,19-20,22-31,35-37,41
+packages/app/src/components/ui/highlighted-text-segments.test.ts
+  988004d92fa5999f 1-50
+packages/app/src/terminal/runtime/terminal-stream-controller.ts
+  988004d92fa5999f 16,108,114
+packages/protocol/src/messages.ts
+  988004d92fa5999f 259,262-263,271,287-309,365-380,389-390,1160-1163,1377-1378,2533-2538,2576,2582-2583,2585,2591-2615,2976-2979,2984-2985,3427-3440,3444-3451,3476-3479,4233-4239,5180-5182,5194-5195,5465-5466,6188
+docs/data-model.md
+  988004d92fa5999f 382
+packages/app/src/components/split-container.tsx
+  988004d92fa5999f 716
+packages/app/src/components/file-actions-menu.tsx
+  988004d92fa5999f 15-18,30,40,49-52,59,64-67,70-74,129,134-135,149,156-232,234-247,262,271
+packages/app/src/components/file-icon-svg.ts
+  988004d92fa5999f 1-39
+packages/app/src/components/sidebar/sidebar-row-backdrop.ts
+  988004d92fa5999f 1-27
+packages/app/src/components/terminal-webview-message-routing.test.ts
+  988004d92fa5999f 1-43
+packages/app/src/data/push-router.ts
+  988004d92fa5999f 11-16,253,264-273
+packages/protocol/src/terminal-key-input.test.ts
+  988004d92fa5999f 5-56
+packages/app/src/review/surface.test.tsx
+  988004d92fa5999f 98
+packages/app/src/agent-stream/turn-footer.tsx
+  988004d92fa5999f 25
+packages/server/src/server/agent/provider-options.ts
+  988004d92fa5999f 1-77
+packages/app/src/terminal/runtime/terminal-key-dispatch.test.ts
+  988004d92fa5999f 1-81
+packages/app/src/terminal/runtime/terminal-paste.test.ts
+  988004d92fa5999f 1-48
+packages/protocol/src/messages.terminal-restore.test.ts
+  988004d92fa5999f 61-84
+packages/server/src/server/agent/providers/opencode/tool-call-mapper.ts
+  988004d92fa5999f 46
+packages/app/e2e/support/helpers/hosts.ts
+  988004d92fa5999f 2,133-139,198,226-232,239-243,252,254-257
+packages/app/src/terminal/runtime/terminal-emulator-runtime.browser.test.ts
+  988004d92fa5999f 18,30,140-156,236,239,253,268-353,368,439-464
+public-docs/schedules.md
+  988004d92fa5999f 22-23
+packages/app/src/workspace-pins/run.ts
+  988004d92fa5999f 1,34-36
+public-docs/hub/self-hosting/discord-app.md
+  988004d92fa5999f 1-49
+docs/mobile-panels.md
+  988004d92fa5999f 73-76
+packages/app/src/components/status-ring/index.web.tsx
+  988004d92fa5999f 1-26
+packages/app/src/composer/input/input.tsx
+  988004d92fa5999f 24,58,146-151,230,238,247,249,272,336,341,345,347-353,588-654,656,667,679,708,723,743,1045-1047,1091-1093,1145-1147,1149,1622,1624,1631,1633,1647,1651,1653-1657,1659-1670,1672-1673,1675,1678,1718-1740,1747,1762,1786,1845,1850-1853,1880-1886,1939-1943,1945-1948
+packages/app/src/screens/new-workspace/project-picker.ts
+  988004d92fa5999f 27,88,111,115
+packages/server/src/server/workspace-archive-record-scoped.e2e.test.ts
+  988004d92fa5999f 1-2,303-413
+public-docs/hub/api.md
+  988004d92fa5999f 1-269
+public-docs/hub/triggers/discord.md
+  988004d92fa5999f 1-54
+packages/app/modules/paseo-native-trace/android/src/main/AndroidManifest.xml
+  988004d92fa5999f 1
+packages/app/src/components/ui/press-highlight.shape.test.ts
+  988004d92fa5999f 1-38
+packages/app/e2e/mobile/agent-device/file-context-menu.ios.ad
+  988004d92fa5999f 1-13
+packages/app/package.json
+  988004d92fa5999f 118-119,131
+packages/app/src/hooks/use-form-preferences.ts
+  988004d92fa5999f 32,50
+packages/app/src/performance/native-trace.ts
+  988004d92fa5999f 1-38
+packages/app/e2e/browser/sidebar-help.spec.ts
+  988004d92fa5999f 10-12
+packages/app/src/components/provider-diagnostic-models.test.ts
+  988004d92fa5999f 45-61
+packages/server/scripts/measure-git-observation.ts
+  988004d92fa5999f 20,98
+packages/app/e2e/browser/workspace-tab-switcher-rename.spec.ts
+  988004d92fa5999f 1-76
+packages/app/src/i18n/resources.test.ts
+  988004d92fa5999f 9,113,126,137,154,167-175,239-241,249-251
+packages/app/src/components/diff-stat.tsx
+  988004d92fa5999f 39,44
+packages/app/plugins/with-android-profileable.js
+  988004d92fa5999f 1-15
+public-docs/hub/triggers/github.md
+  988004d92fa5999f 1-53
+packages/app/src/hosts/host-badge.tsx
+  988004d92fa5999f 4-5,8-13,16-24,29-30,33,36-37,39-41,43,46-48,50-53,60-90,96-100,102,104-105,109-118
+packages/app/src/types/stream.ts
+  988004d92fa5999f 1576
+packages/protocol/src/binary-frames/terminal.test.ts
+  988004d92fa5999f 34-35,37-43
+packages/server/src/server/agent/providers/claude/agent.test.ts
+  988004d92fa5999f 9,422,435,466,631-691,719-726,735-742,833,2654-2764
+packages/app/src/runtime/websocket-test-global-setup.ts
+  988004d92fa5999f 1-75
+packages/website/package.json
+  988004d92fa5999f 27
+packages/app/src/provider-selection/resolve-agent-form.test.ts
+  988004d92fa5999f 64-67,127-199,923,1006-1021,1078,1081,1102,1119,1131,1136-1160
+packages/app/src/terminal/native-renderer/headless-terminal-state.ts
+  988004d92fa5999f 1-421
+packages/client/src/terminal-stream-router.ts
+  988004d92fa5999f 79
+packages/app/src/hooks/use-compact-time-ago.ts
+  988004d92fa5999f 1-68
+packages/protocol/src/agent-types.ts
+  988004d92fa5999f 77-78,456-475,489-490
+packages/app/src/components/sidebar-resize-handle-layout.test.ts
+  988004d92fa5999f 1-21
+packages/app/src/terminal/native-renderer/terminal-selection.ts
+  988004d92fa5999f 1-351
+packages/app/src/utils/test-daemon-connection.ts
+  988004d92fa5999f 100-103,118,231
+packages/server/scripts/supervisor.ts
+  988004d92fa5999f 5-9,37-40,96-104,141,191-224,253,267,270-286,302-305,334,336-337,388,404
+public-docs/hub/activity.md
+  988004d92fa5999f 1-59
+packages/app/src/data/provider-snapshot-cache.test.ts
+  988004d92fa5999f 1-65
+packages/protocol/src/client-capabilities.ts
+  988004d92fa5999f 23-26
+CLAUDE.md
+  988004d92fa5999f 37,60
+packages/app/src/components/sidebar/workspace-meta-row/check-indicator.tsx
+  988004d92fa5999f 1-102
+packages/app/src/i18n/resources/ja.ts
+  988004d92fa5999f 84,88,220,276-279,282,438,545,947-954,1002-1033,1059,1101-1102,1165-1171,1180-1188,1847,1857-1871,1943,1952-1956,2017,2074,2076,2079,2081-2082
+packages/app/src/desktop/browser/resident-webviews.browser.test.ts
+  988004d92fa5999f 3,8,10-11,14,62-64,68-83,116-117,120,124-229,327-328,330,347-349,354,361,365-425
+packages/app/src/terminal/native-renderer/headless-terminal-output-drain.test.ts
+  988004d92fa5999f 1-270
+packages/app/src/desktop/host.ts
+  988004d92fa5999f 154
+packages/app/src/components/ui/overlay-scrollbar/use-overlay-flat-list-scrollbar.tsx
+  988004d92fa5999f 1-7,9-19,21-24,26-30
+packages/server/src/server/test-utils/fake-agent-client.ts
+  988004d92fa5999f 57,67,82-85,325,342-345,863-866,870,1157-1160,1190,1194-1199,1208,1231
+packages/app/src/components/terminal-webview-message-routing.ts
+  988004d92fa5999f 1-17
+packages/app/src/terminal/native-renderer/terminal-size-measurement.test.ts
+  988004d92fa5999f 1-14
+packages/app/src/components/host-status-dot.tsx
+  988004d92fa5999f 2,11-17,20,24-33
+packages/app/src/components/sidebar/display-preferences/row-items.test.ts
+  988004d92fa5999f 1-76
+packages/client/src/daemon-client.test.ts
+  988004d92fa5999f 3-8,42-59,187-236,740,4738-4812,5183,5197
+packages/server/src/server/workspace-auto-name.ts
+  988004d92fa5999f 27,44,183-193
+packages/app/src/i18n/locales.ts
+  988004d92fa5999f 1,18,31,42,54,65,76,87,98,103-113,120,131,142,149-158,193-196
+packages/app/src/terminal/runtime/terminal-resize-repro.browser.test.ts
+  988004d92fa5999f 164
+packages/app/src/components/sidebar/workspace-meta-row/meta-items.test.ts
+  988004d92fa5999f 1-90
+packages/server/src/server/agent/providers/opencode/subagent-presentation.test.ts
+  988004d92fa5999f 1-80
+packages/server/src/server/workspace-archive-service.ts
+  988004d92fa5999f 22,35,41,52,100,124-130,135-136,198-200,206,208,211-213,242,247-267,413-417,470-473,475-479
+packages/server/src/server/workspace-create-git-fanout.local.e2e.test.ts
+  988004d92fa5999f 1-685
+packages/server/src/server/agent/providers/omp/usage-poller.ts
+  988004d92fa5999f 1-2,4-6,8-78,80-88,90-96,98-103,105-126,128-129,131-142,145-147,149-151,153,155-157,159-160,163-167
+packages/app/src/hooks/use-settings/index.ts
+  988004d92fa5999f 24-25,29-30,50,65-66,70-71,91,95-111,191,199,201,204-205
+packages/website/src/docs.ts
+  988004d92fa5999f 39-40,164,170-173,175,193,197-205,208,217,260,284-286
+packages/app/src/desktop/browser/resident-webviews.ts
+  988004d92fa5999f 6-7,11,16,18,78-86,100-102,106-108,112,118-145,207-305,325-329,412-416,428-431,436,439,449,451,454,462
+packages/app/src/screens/workspace/workspace-desktop-tabs-row.tsx
+  988004d92fa5999f 514
+packages/app/e2e/mobile/agent-device/native-terminal-selection-panels.android.ad
+  988004d92fa5999f 1-21
+packages/app/src/components/ui/highlighted-text.tsx
+  988004d92fa5999f 1-65
+packages/app/e2e/browser/composer-control-density.spec.ts
+  988004d92fa5999f 1-93
+packages/server/src/server/bootstrap.ts
+  988004d92fa5999f 120,609,1044-1045,1086,1093,1118,1194,1207,1573
+packages/app/src/desktop/browser/store/index.ts
+  988004d92fa5999f 10,12,19-24,29,68-70,79-82
+packages/app/src/screens/workspace/workspace-tab-trailing-accessory.tsx
+  988004d92fa5999f 1-142
+packages/server/src/server/agent-history-search.ts
+  988004d92fa5999f 1-188
+public-docs/hub/workflows.md
+  988004d92fa5999f 1-752
+packages/expo-two-way-audio/ios/ExpoTwoWayAudioModule.swift
+  988004d92fa5999f 42-53
+packages/app/src/assistant-file-links/resolver.ts
+  988004d92fa5999f 12
+packages/cli/src/commands/hub/disconnect.ts
+  988004d92fa5999f 1-52
+packages/app/src/desktop/settings/desktop-settings.ts
+  988004d92fa5999f 16-18,27,33-35,154,159-164,184-187,198
+packages/app/src/components/sidebar/sidebar-workspace-row.tsx
+  988004d92fa5999f 3,35-42,267-268,288-298,306-312,328,345-346,348,355-356,365,392,409,428,431-432,434-435,441,448-451,453,456,478,483,491-492,518-519
+packages/app/src/i18n/resources/ar.ts
+  988004d92fa5999f 84,88,220,272-275,278,433,540,935-942,990-1021,1047,1089-1090,1153-1159,1168-1176,1825,1835-1849,1922,1931-1935,1996,2052,2054,2057,2059-2060
+packages/app/src/terminal/native-renderer/terminal-input.native.tsx
+  988004d92fa5999f 1-282
+packages/server/src/server/hub/execution-session.websocket.test.ts
+  988004d92fa5999f 2,138,140,142,144-148,150-152,160,162-164,169-197,205,220-225,234,237,242-244,247,262,270,279-280,285-287,296,307-308
+packages/server/src/server/schedule/service.ts
+  988004d92fa5999f 988
+packages/server/src/server/agent/providers/omp/agent.test.ts
+  988004d92fa5999f 2,6,70-91,236-272
+packages/app/src/components/highlighted-code-block.tsx
+  988004d92fa5999f 21-25,78-81,93-96,101,106-108,110-112,225
+packages/server/src/server/hub/daemon-executions.ts
+  988004d92fa5999f 7,10,27-28,30,175,180-181,198-206,219,261,270-272,276,351-371,378-384
+packages/app/src/terminal/native-renderer/terminal-input-resize-policy.ts
+  988004d92fa5999f 1-5
+packages/app/src/utils/relative-time-ticker.ts
+  988004d92fa5999f 1-96
+packages/protocol/src/provider-snapshot-codec.ts
+  988004d92fa5999f 1-119
+packages/server/src/utils/path.test.ts
+  988004d92fa5999f 45-51
+packages/app/src/schedules/schedule-form-model.ts
+  988004d92fa5999f 14,225,251,793-844,855-867,982,990,992-1002,1072-1073,1075-1084,1102-1106
+packages/app/src/panels/reconnect-toast-state.test.ts
+  988004d92fa5999f 1-17
+packages/app/e2e/support/helpers/add-project-flow.ts
+  988004d92fa5999f 46,48,53-60
+packages/server/src/server/hub/execution-controller.ts
+  988004d92fa5999f 3,8-11,108-109,111,123,137,167-186
+packages/app/modules/paseo-native-trace/expo-module.config.json
+  988004d92fa5999f 1-6
+packages/app/e2e/support/helpers/relay-deployment.ts
+  988004d92fa5999f 1-131
+packages/app/src/assistant-selection-copy/surface.tsx
+  988004d92fa5999f 1-14
+packages/app/src/screens/settings/host-appearance-section.tsx
+  988004d92fa5999f 14,226-238,244,349-351
+packages/app/src/components/synced-loader.tsx
+  988004d92fa5999f 100-103,105
+packages/app/src/provider-selection/provider-selection.test.ts
+  988004d92fa5999f 69-86
+packages/server/src/server/agent/agent-projections.ts
+  988004d92fa5999f 160,241-243,351-360,404-415
+packages/app/src/components/sidebar/sidebar-workspace-row-content.tsx
+  988004d92fa5999f 1-2,5,7-11,15-18,22-27,29,38-41,126-127,141-143,163,175,189-191,194-198,221-224,228,236,244,278,283-284,303-313,339-340,342-348,384-386,389-390,396-397,402-409,411-425,428-445,535-538,543-544,546,549-550,555-556,564,573,577,585
+packages/server/src/server/agent/providers/acp-agent.test.ts
+  988004d92fa5999f 1791-1857
+packages/server/src/server/git-metadata-event-rules.test.ts
+  988004d92fa5999f 1-47
+packages/server/src/utils/checkout-git.test.ts
+  988004d92fa5999f 1815,1819-1820,1827,1832-1834,1838-1914,4828
+packages/app/src/i18n/resources/pt-BR.ts
+  988004d92fa5999f 84,88,220,277-280,283,439,546,959-966,1014-1045,1071,1113-1114,1177-1183,1192-1200,1858,1868-1882,1957,1966-1970,2031,2087,2089,2092,2094-2095
+packages/server/src/server/agent/providers/claude/agent.sub-agent-replay.test.ts
+  988004d92fa5999f 1,20-21,62,66,69-73,86-109,115-120,122-161,163-172,174-205,209-221,231,233,239-244,326-538
+packages/app/src/components/tree-primitives.tsx
+  988004d92fa5999f 15-23,31-33,66-76,90-91,96-100,102
+README.ja.md
+  988004d92fa5999f 10-11
+packages/app/src/hooks/use-settings/storage.test.ts
+  988004d92fa5999f 93-112,258,433-453
+packages/app/src/runtime/websocket-factory.web.ts
+  988004d92fa5999f 1-6
+packages/app/src/create-agent-preferences/preferences.ts
+  988004d92fa5999f 25-29,42-44,49
+packages/server/src/server/agent/agent-storage.ts
+  988004d92fa5999f 7,20-29,119-132,186-192,199,276-289
+packages/website/src/canonical-url.ts
+  988004d92fa5999f 1-17
+packages/app/src/components/terminal-copy-paste-actions.tsx
+  988004d92fa5999f 1-141
+packages/app/e2e/fixtures/claude-workflow/inspect-project.js
+  988004d92fa5999f 1-32
+packages/app/src/git/diff-folder-row.tsx
+  988004d92fa5999f 15,17,84-86,110,121,125-128
+packages/server/src/server/agent/agent-storage.test.ts
+  988004d92fa5999f 41-43,162,194,434,462,469
+packages/app/src/components/ui/menu/menu-sheet-layout.test.ts
+  988004d92fa5999f 1-22
+packages/server/src/server/agent/providers/claude/options.ts
+  988004d92fa5999f 1-102
+packages/app/src/timeline/viewed-timeline-sync.ts
+  988004d92fa5999f 41,115-135,379,381-385,387-388,405,410,416-418,442-444,469
+packages/server/src/server/agent/providers/opencode-agent.ts
+  988004d92fa5999f 86-91,93-97,272-275,329,350,363,376,392,404,1706-1707,1748,1786-1787,2129-2184,2210-2212,2218-2226,2233-2234,2237,2266,2271-2318,2341,2348,2371,2388,2418-2425,2443,2999-3000,3007-3021,3115-3118,3151,3514-3517,3531,3712-3755,3774,4548,4581,4616,4660-4699
+packages/server/src/terminal/terminal-session-controller.test.ts
+  988004d92fa5999f 77,149-151
+packages/app/e2e/browser/terminal-split-resize.spec.ts
+  988004d92fa5999f 4,27-32,49-53,55,62,76,100
+packages/app/e2e/support/helpers/mock-agent.ts
+  988004d92fa5999f 17,32
+packages/server/src/server/agent/providers/pi/tool-call-mapper.test.ts
+  988004d92fa5999f 139-169
+public-docs/hub/self-hosting/github-app.md
+  988004d92fa5999f 1-80
+packages/app/e2e/support/helpers/local-elixir-relay.ts
+  988004d92fa5999f 1-129
+packages/server/src/server/daemon-client.e2e.test.ts
+  988004d92fa5999f 16,319-400,946-1055,1191-1221
+packages/app/src/constants/build-profile.ts
+  988004d92fa5999f 5-7
+packages/server/src/server/workspace-git-fetch.test.ts
+  988004d92fa5999f 1-78
+packages/server/src/server/agent/providers/claude/models.ts
+  988004d92fa5999f 8,10,26-40,65-70,172-173
+packages/website/src/styles.css
+  988004d92fa5999f 299-345,357,360-361
+packages/client/src/daemon-client.ts
+  988004d92fa5999f 321,325-330,799,1048-1067,1577-1619,1634,1651-1655,1676,1712,1866,2041,2120,4610,4618,5517-5532,5603-5617,5625-5627,5632-5633,5660-5663,5669-5672,5684-5688,5699-5703
+packages/app/src/components/sidebar/sidebar-help-menu.tsx
+  988004d92fa5999f 19,71,74,81,130,171-176
+packages/app/src/components/sidebar/workspace-meta-row/check-summary.ts
+  988004d92fa5999f 1-72
+packages/client/src/compat/normalize-provider-models.ts
+  988004d92fa5999f 3,63-65
+public-docs/hub/configuration/hub-yml.md
+  988004d92fa5999f 1-200
+.agents/skills/release-beta/SKILL.md
+  988004d92fa5999f 3,9
+packages/app/src/terminal/native-renderer/native-terminal-benchmark-payload.ts
+  988004d92fa5999f 1-25
+packages/app/src/panels/provider-subagent-panel.tsx
+  988004d92fa5999f 144,187-197,216-226
+packages/app/src/components/status-ring/index.tsx
+  988004d92fa5999f 1-32
+packages/app/src/terminal/native-renderer/terminal-renderer-capability.ts
+  988004d92fa5999f 1-11
+packages/app/src/components/terminal-resize-debouncer.ts
+  988004d92fa5999f 1-47
+packages/app/src/hooks/use-keyboard-shortcut-overrides.ts
+  988004d92fa5999f 2-7,12,15,18,33,39-42,47-77,81
+packages/app/src/terminal/native-renderer/terminal-resize-policy.test.ts
+  988004d92fa5999f 1-292
+packages/desktop/e2e/keyboard-shortcut-unassign.spec.ts
+  988004d92fa5999f 1-168
+packages/app/e2e/browser/changes-pane.spec.ts
+  988004d92fa5999f 204-206,212-213,215,218-221,223-227,230,294,328,331-333,336,343,347,491,519
+packages/server/src/server/agent/providers/opencode-agent.test.ts
+  988004d92fa5999f 1939-1984,3298,4095,4143,4150-4675,4734,4739,4747,4809,4836-4912
+packages/app/src/runtime/host-runtime.test.ts
+  988004d92fa5999f 1689-1732
+packages/server/src/server/workspace-git-fetch.ts
+  988004d92fa5999f 1-139
+packages/app/e2e/browser/new-workspace-launch-terminal.spec.ts
+  988004d92fa5999f 1-101
+packages/app/src/hooks/use-agent-form-state.ts
+  988004d92fa5999f 15-16,161,171,182,213-234,321-323,433,442,444,454,466,476,488,499,505-513,517,528,536,549,583,585
+packages/desktop/src/settings/desktop-settings.ts
+  988004d92fa5999f 9-11,20,45-47,83,96,109-115,143-149,195
+packages/app/src/components/markdown-text.android.tsx
+  988004d92fa5999f 10,15
+packages/app/src/utils/split-markdown-blocks.ts
+  988004d92fa5999f 1-3,13-14,16,19-24,31,46-60
+packages/server/src/server/agent/providers/codex-app-server-agent.test.ts
+  988004d92fa5999f 266-269,271,273-281,292,332,470-604,1397,1936-1980
+packages/server/src/server/agent/providers/codex-app-server-agent.ts
+  988004d92fa5999f 103-107,670-672,675,680-681,683-691,693-696,698-700,703-708,711,716,718-723,726,734,742,748,752-754,761-762,765-766,772,1987-1990,1995-2001,2005-2039,3180-3185,3257,3278-3279,3281-3283,3357,3389-3408,3491-3494,3516,3762-3763,3826-3831,3839,3859-3860,3871,3918-3945,3957-3958,3972-3973,4085,4193-4194,4432,4435-4436,4538,4544,4550-4553,4570-4572,4576,4581,4583,4585,4600,4619,4804,4806,4818-4819,4828-4857,4860-4863,4871-4872,4956,4958,6208,6212
+docs/release.md
+  988004d92fa5999f 12-13,20-22,32-62,65,68,80-82,105,115,162,171,289-291,293,342-351,353-359,361-365,373-377,381-382,390-395,476,478-480,484-485,506-507,550,564,570,574,576-579,581,587-590,592,594,596,598,600-601,606-608,610,612,614,616,618,620-621,628
+packages/app/src/components/material-file-icon.tsx
+  988004d92fa5999f 3
+packages/app/src/components/ui/scrollable-code-surface.tsx
+  988004d92fa5999f 58
+packages/server/src/server/agent/providers/omp/test-utils/fake-omp.ts
+  988004d92fa5999f 115,242-244
+packages/server/src/server/websocket-server.relay-reconnect.test.ts
+  988004d92fa5999f 936-937
+packages/app/src/components/ui/combobox.tsx
+  988004d92fa5999f 997
+packages/server/src/terminal/activity/terminal-activity-tracker.ts
+  988004d92fa5999f 50-56
+packages/app/src/composer/index.tsx
+  988004d92fa5999f 92,191-205,311,314,316,904-915,1000,1009,1014,1104-1107,1109,1142,1826,1846,2010,2012-2020,2145,2212-2214
+packages/app/src/components/status-ring/frame.tsx
+  988004d92fa5999f 1-121
+packages/app/src/create-agent-preferences/test-utils/fake-preference-storage.ts
+  988004d92fa5999f 7,24,31-33,62-67
+packages/app/src/utils/time.test.ts
+  988004d92fa5999f 2-8,25-62
+packages/server/src/server/agent/providers/pi/agent.ts
+  988004d92fa5999f 2194,2199
+packages/cli/src/commands/hub/credentials.test.ts
+  988004d92fa5999f 1-195
+public-docs/hub/triggers/slack.md
+  988004d92fa5999f 1-55
+packages/client/package.json
+  988004d92fa5999f 23-26
+docs/development.md
+  988004d92fa5999f 283-294
+packages/app/src/components/terminal-resize-debouncer.test.ts
+  988004d92fa5999f 1-68
+packages/server/src/utils/checkout-git.ts
+  988004d92fa5999f 3,33,204-205,512,514,556,645,658,662,716,726,790-793,809,869,1164-1169,1171,1222-1228,1235-1252,1498,1502-1510,1525-1528,1534-1541,1562-1569,1608,1619-1632,1634,1646,1650,1653-1657,1660-1666,1724,1788,1901,1912,1922-1924,1968,1984,1990,2148,2150-2159,2168,2170,2186,2188,2400,2404-2411,2427,2567,2595-2598,2603-2609,2613,2656,2668-2669,2737-2847,3018,3022-3031,3045,3048-3049,3058,3062,3102,3146,3185-3189,3208,3213-3223,3225-3228,3230-3240,3242-3247,3249-3257,3259-3265,3267-3271,3274-3277,3279-3280,3282-3292,3294-3298,3300,3304,3306,3309,3311-3312,3314,3404-3408,3415,3480-3484,3500,3814-3818,3825
+packages/app/src/components/sidebar/workspace-trailing/index.tsx
+  988004d92fa5999f 1-83
+packages/app/src/new-workspace-launch/launch-control.tsx
+  988004d92fa5999f 1-261
+packages/app/src/provider-selection/model-catalog.ts
+  988004d92fa5999f 1-21
+public-docs/cli.md
+  988004d92fa5999f 34,63,196-221
+packages/app/src/assistant-selection-copy/content.web.ts
+  988004d92fa5999f 1-487
+docs/browser-capture-harness.md
+  988004d92fa5999f 8,85-97
+packages/app/e2e/browser/viewed-agent-timelines.spec.ts
+  988004d92fa5999f 15,101,109,111,122,183,201-214
+packages/app/src/components/ui/menu/menu-anchor.test.ts
+  988004d92fa5999f 1-77
+packages/app/src/desktop/browser/store/state.ts
+  988004d92fa5999f 1-6,16,26-81,121,140-142,146,157-158
+packages/app/src/i18n/resources/ru.ts
+  988004d92fa5999f 84,88,220,274-277,280,436,544,957-964,1012-1043,1069,1111-1112,1175-1181,1190-1198,1861,1871-1885,1959,1968-1972,2034,2092,2094,2097,2099-2100
+packages/server/src/server/websocket-server.ts
+  988004d92fa5999f 7,37,182,249-252,255,546,614,617,1360,1545-1548,1553-1554,2385
+packages/server/src/server/workspace-git-service.test.ts
+  988004d92fa5999f 12-14,267-270,281,517-789,849-855,862-865,870,895-896,909-1067,1358-1361
+public-docs/index.md
+  988004d92fa5999f 53
+packages/app/src/components/markdown-text.web.tsx
+  988004d92fa5999f 11,16,33,38-47,49,68-72
+docs/providers.md
+  988004d92fa5999f 5-39,110
+packages/website/src/components/landing-page.tsx
+  988004d92fa5999f 47-54,100,253,258,268,274-282,285-292,1472-1502
+packages/website/src/routes/hub.tsx
+  988004d92fa5999f 2-11,16,19-21,23,26,28,30,33-35,37,39-43,50-67,69-80,82-86,88,90-101,103-138,140-143,147-154,157-160,163-375,384-407,409-412,414-420,422-424,426-428,430-444
+packages/website/src/components/docs-nav.tsx
+  988004d92fa5999f 3,16,24-39,51,55,59,85-86,90-91,93,96-121,124-143
+packages/app/src/components/status-ring/clock.ts
+  988004d92fa5999f 1-58
+packages/app/src/components/ui/press-highlight.tsx
+  988004d92fa5999f 1-11
+packages/app/src/components/sidebar/workspace-meta-row/index.tsx
+  988004d92fa5999f 1-339
+packages/cli/src/commands/hub/index.ts
+  988004d92fa5999f 2,4-20,23-31,34-36,38-45,49-51,53-65,69-70,74-97
+packages/app/src/screens/settings/keyboard-shortcuts-section.tsx
+  988004d92fa5999f 3,5-7,11-16,22-23,31,40-51,78-80,87,94-96,103,110-113,122-124,131,137-236,240-242,249,254-256,263,269-278,283-290,293,297-302,304-319,331,420-423,456-463,470-472,481,517-536,541-542
+packages/app/e2e/browser/terminal-stuck-size.spec.ts
+  988004d92fa5999f 2,93-109,160,181,187-203
+packages/app/src/desktop/components/desktop-permission-row.tsx
+  988004d92fa5999f 3,22-26,56-58
+packages/app/src/desktop/permissions/use-desktop-permissions.ts
+  988004d92fa5999f 17,23-28,38-40,126,132-133,135-142,145-148,166
+packages/server/src/services/quota-fetcher/providers/kimi.ts
+  988004d92fa5999f 1,4,7,10,15,18-43,45-46,49-257,260-273,289,295-296,298,305,312,319-443,445,453,455-460
+packages/server/src/server/session/provider/provider-catalog-session.test.ts
+  988004d92fa5999f 16,23,54,119-133,149-202,220-249
+packages/app/src/screens/settings/appearance/appearance-section.tsx
+  988004d92fa5999f 81,93
+packages/server/src/utils/worktree-metadata.ts
+  988004d92fa5999f 12-14,18,25,141-154,158-161,163-164,171-187,192,197-200,206,228,252,271
+packages/app/src/terminal/runtime/terminal-restore-options.ts
+  988004d92fa5999f 7,21
+packages/app/src/utils/rich-clipboard.ts
+  988004d92fa5999f 1,3,29-64
+packages/cli/src/commands/hub/reporter.ts
+  988004d92fa5999f 1-22
+packages/client/src/daemon-client-websocket-transport.ts
+  988004d92fa5999f 8-21,26-28,30-39
+packages/app/src/assistant-selection-copy/surface.web.tsx
+  988004d92fa5999f 1-32
+packages/app/src/components/project-edit-sheet.tsx
+  988004d92fa5999f 165
+packages/server/src/server/agent/providers/claude/subagents/workflow-replay-source.ts
+  988004d92fa5999f 1-252
+docs/android.md
+  988004d92fa5999f 70-80
+packages/app/src/components/terminal-webview-readiness.ts
+  988004d92fa5999f 1-13
+packages/app/e2e/support/helpers/seed-client.ts
+  988004d92fa5999f 163-165,167-170
+packages/app/src/components/sidebar/display-preferences/checks-display.ts
+  988004d92fa5999f 1-27
+packages/app/src/components/ui/menu/menu-context.test.tsx
+  988004d92fa5999f 1-63
+packages/app/src/terminal/webview/terminal-emulator-webview-entry.ts
+  988004d92fa5999f 33,36,53-60,253-255,263-266,310-318
+packages/app/src/terminal/native-renderer/terminal-grid-view.native.tsx
+  988004d92fa5999f 1-469
+packages/server/src/server/agent/providers/omp/agent.ts
+  988004d92fa5999f 103,138,186,872,887-901,966,991,1121,1123-1124,1159,1777,2134,2143,2149,2175-2176,2191,2214,2255,2297
+packages/app/src/components/sidebar-workspace-list.tsx
+  988004d92fa5999f 36,114-119,121,150-153,175,178,181,379,384,392-393,504,514,656,659,662-663,665-666,672,679-682,684,687,814-815,877,924-934,955,997,1000-1001,1003,1008,1026-1027,1029,1083,1103-1113,1121,1124,1160-1161,1163,1172-1173,1822-1826,1935-1942,2436-2444,2447-2452,2454-2459,2468-2472,2474-2475,2556,2597-2599,2639
+packages/server/src/server/daemon-e2e/terminal.e2e.test.ts
+  988004d92fa5999f 1267-1328
+packages/app/src/utils/color.test.ts
+  988004d92fa5999f 1-62
+packages/app/e2e/browser/settings-host-selection.spec.ts
+  988004d92fa5999f 1-52
+public-docs/why.md
+  988004d92fa5999f 41
+packages/app/src/terminal/runtime/terminal-key-dispatch.ts
+  988004d92fa5999f 1-55
+packages/app/src/components/explorer-sidebar.tsx
+  988004d92fa5999f 1,11,41-44,180-182,201-209,221-223,225-232,253
+packages/app/src/screens/workspace/workspace-source-of-truth.test.ts
+  988004d92fa5999f 108,129,148,172,188
+packages/app/src/desktop/components/desktop-permissions-section.tsx
+  988004d92fa5999f 3-4,12-16,38
+packages/app/e2e/browser/host-appearance.spec.ts
+  988004d92fa5999f 102-103,111,113,117-123
+packages/app/src/screens/workspace/workspace-tab-trailing-accessory.test.tsx
+  988004d92fa5999f 1-233
+packages/app/src/utils/host-routes.test.ts
+  988004d92fa5999f 265-268
+packages/server/src/terminal/worker-terminal-manager.test.ts
+  988004d92fa5999f 355,357-358
+packages/app/src/keyboard/shortcut-help-search.test.ts
+  988004d92fa5999f 1-113
+packages/server/src/server/agent/providers/pi/rpc-types.ts
+  988004d92fa5999f 163-165
+packages/server/src/server/hub/daemon-executions.test.ts
+  988004d92fa5999f 30-210,257
+packages/app/src/screens/settings/appearance/apply-appearance.test.ts
+  988004d92fa5999f 8-15,17,25,92,98,101-110
+packages/cli/src/commands/hub/login.ts
+  988004d92fa5999f 1-61
+packages/app/src/keyboard/availability.test.ts
+  988004d92fa5999f 1-11
+packages/cli/src/commands/schedule/types.ts
+  988004d92fa5999f 32
+packages/app/e2e/browser/appearance-theme-picker.spec.ts
+  988004d92fa5999f 1-36
+docs/i18n.md
+  988004d92fa5999f 12,17,27,93
+packages/app/src/styles/theme.test.ts
+  988004d92fa5999f 1-20
+packages/server/src/server/agent/providers/mock-load-test-agent.ts
+  988004d92fa5999f 60,65-70,86-101,117-122,646,655-658,724-725
+public-docs/hub/self-hosting/slack-app.md
+  988004d92fa5999f 1-69
+packages/app/src/hooks/use-settings/storage.ts
+  988004d92fa5999f 5-15,26-27,33-37,63,70-72,87-94,102,109-111,239-247,251,253,255,261-263,270,273-278,292-323,358,422,424-425,429,436-441,445
+packages/app/src/terminal/runtime/terminal-paste.ts
+  988004d92fa5999f 1-38
+packages/app/src/components/sidebar-agent-list-skeleton.tsx
+  988004d92fa5999f 4-6,122-125
+packages/app/src/terminal/runtime/terminal-virtual-keyboard.ts
+  988004d92fa5999f 1-68
+packages/app/src/add-project-flow/model.ts
+  988004d92fa5999f 20,25-28,31,63-65,70,217
+packages/app/src/utils/__tests__/split-markdown-blocks.test.ts
+  988004d92fa5999f 70-77
+packages/cli/src/commands/hub/deploy-input.ts
+  988004d92fa5999f 1-397
+packages/app/src/components/project-icon-view.tsx
+  988004d92fa5999f 2,6,8-30,35,41,45-46,49-51,54,59
+packages/app/src/utils/terminal-renderer-readiness.ts
+  988004d92fa5999f 24-34
+packages/server/src/server/agent/provider-registry.ts
+  988004d92fa5999f 2-3,20,40,49-52,77-87,135,138-183,356-366,389,408-410,412,414,528,575-581,583,603-618,630,651-653,666-668,675-676,720,779-781,790-793,833
+packages/server/src/server/session/agent-updates/agent-updates-service.test.ts
+  988004d92fa5999f 102,107-109,159-161,339-386
+packages/app/src/components/root-error-boundary.test.tsx
+  988004d92fa5999f 1-95
+docs/floating-panels.md
+  988004d92fa5999f 127-131,133,244-265,288-290
+packages/app/modules/paseo-native-trace/package.json
+  988004d92fa5999f 1-5
+packages/app/src/components/ui/context-menu.tsx
+  988004d92fa5999f 3,18,20-54,57-58,61-62,70-71,73-75,79-81,89,94,97,102,105,112,121,127,129-130,166,189,199,202
+packages/app/src/data/providers-snapshot.ts
+  988004d92fa5999f 24,30
+packages/app/src/git/pull-request-panel/data.ts
+  988004d92fa5999f 8,149-151,153
+packages/app/src/screens/workspace/workspace-header-source.ts
+  988004d92fa5999f 14-19,73
+packages/app/src/components/workspace-setup-dialog.tsx
+  988004d92fa5999f 32,464,472
+packages/app/src/screens/settings-screen.tsx
+  988004d92fa5999f 31,77,82,113,126-129,159-164,468-469,477-478,492-511,1154-1156,1158-1165,1208-1214,1438-1439,1445-1446
+packages/app/src/styles/unistyles.ts
+  988004d92fa5999f 9,20,42
+packages/app/src/terminal/native-renderer/terminal-selection.test.ts
+  988004d92fa5999f 1-343
+packages/app/src/terminal/runtime/terminal-emulator-runtime.ts
+  988004d92fa5999f 31,47,67-93,176,202,205,218-221,306,344,361-362,364,384-390,396-403,407,492,497-499,512-514,519,525,530,538,640-643,674,725
+packages/app/src/desktop/browser/automation/handler.test.ts
+  988004d92fa5999f 414-418
+packages/cli/src/commands/hub/deploy.ts
+  988004d92fa5999f 1-137
+packages/cli/src/commands/hub/logout.ts
+  988004d92fa5999f 1-108
+packages/desktop/src/features/auto-updater.test.ts
+  988004d92fa5999f 7-27,31,36,41,48-98
+packages/protocol/src/terminal-profiles.test.ts
+  988004d92fa5999f 4-5,8,10,24-98,113-165,226-296
+packages/app/src/utils/agent-command-autocomplete.ts
+  988004d92fa5999f 1-5
+packages/app/e2e/browser/workspace-model-restart.spec.ts
+  988004d92fa5999f 24,401,506,511-514
+packages/app/e2e/support/helpers/claude-workflow.ts
+  988004d92fa5999f 1-5,7-8,10-19,21-26,29-34,37-43,45-54,56-62,64-74
+packages/app/src/terminal/runtime/terminal-virtual-keyboard.test.ts
+  988004d92fa5999f 1-108
+packages/app/src/agent-stream/strategy-web.test.tsx
+  988004d92fa5999f 8,30-33,636,659,661-662,699,715-722,933-1340
+packages/app/src/components/tool-call-sheet.tsx
+  988004d92fa5999f 117
+packages/app/e2e/support/helpers/workspace.ts
+  988004d92fa5999f 2,162-232
+packages/website/src/components/brand-icons.tsx
+  988004d92fa5999f 1-46
+packages/app/src/components/sidebar/use-open-kebab-menu-visibility.ts
+  988004d92fa5999f 1-20
+packages/app/src/components/ui/menu/menu-sheet-layout.ts
+  988004d92fa5999f 1-6
+packages/app/src/components/ui/normalize-display-chord.test.ts
+  988004d92fa5999f 1-34
+packages/protocol/src/terminal-key-input.ts
+  988004d92fa5999f 128-131,168-183,186,188,190,192,247
+packages/server/src/server/agent/providers/claude/subagents/workflow-output.test.ts
+  988004d92fa5999f 1-65
+packages/protocol/src/terminal-input-mode.ts
+  988004d92fa5999f 9-10,16-17,21,23,66-68,75-76,125-126,135-136,156-161,206-223,226
+packages/server/src/server/agent/providers/kimi-acp-agent.test.ts
+  988004d92fa5999f 1-221
+packages/app/e2e/support/helpers/workspace-ui.ts
+  988004d92fa5999f 98-99,102-103,115-120
+packages/server/src/server/agent/providers/opencode/subagent-presentation.ts
+  988004d92fa5999f 1-92
+packages/protocol/tests/validation/ws-outbound.test.ts
+  988004d92fa5999f 141-176
+packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/AudioEngine.kt
+  988004d92fa5999f 172-217,376,378,448-455,481,483
+packages/app/src/terminal/native-renderer/terminal-mount-policy.ts
+  988004d92fa5999f 1-8
+packages/app/src/terminal/runtime/terminal-stream-controller.test.ts
+  988004d92fa5999f 42-47,65,67-72,150-152,242
+public-docs/hub/github.md
+  988004d92fa5999f 1-192
+packages/server/src/server/agent/providers/claude/model-manifest.ts
+  988004d92fa5999f 7,31-32,46,50-51,55,166,187-188,199-201,210,212-227,282,388-393
+packages/app/src/new-workspace-launch/composer-state.ts
+  988004d92fa5999f 1-103
+packages/desktop/e2e/appearance-font-size.electron.mjs
+  988004d92fa5999f 1-48
+packages/website/src/docs-example-directive.ts
+  988004d92fa5999f 1-54
+packages/website/src/routes/__root.tsx
+  988004d92fa5999f 4,12-19,27-34,44,69
+nix/npm-deps.hash
+  988004d92fa5999f 1
+packages/app/e2e/browser/sidebar-workspace-pin-shortcut.spec.ts
+  988004d92fa5999f 6,43
+packages/app/modules/paseo-native-trace/android/build.gradle
+  988004d92fa5999f 1-15
+packages/app/e2e/browser/schedules-edit-model-hydration.spec.ts
+  988004d92fa5999f 143-144
+packages/app/src/assistant-file-links/use-file-link.ts
+  988004d92fa5999f 245,247-248
+packages/app/src/components/terminal-emulator.tsx
+  988004d92fa5999f 26,31,47-48,50-51,102,108-109,116-121,131,229-240,260-266,270-276,281,295-298,302-308,313,513,533
+packages/app/src/create-agent-preferences/preferences.test.ts
+  988004d92fa5999f 52-70,162-189
+packages/app/src/terminal/native-renderer/terminal-mount-policy.test.ts
+  988004d92fa5999f 1-29
+docs/hub.md
+  988004d92fa5999f 5-7,49-72,82-86,104-105,112-113
+packages/cli/src/commands/hub/authority.ts
+  988004d92fa5999f 1-34
+packages/app/src/components/ui/press-highlight.shape.ts
+  988004d92fa5999f 1-48
+packages/desktop/src/features/auto-updater.ts
+  988004d92fa5999f 65-75,152-163,177,183-193
+packages/app/src/components/markdown/renderer.tsx
+  988004d92fa5999f 114
+packages/app/vitest.config.ts
+  988004d92fa5999f 25,44
+packages/server/src/server/agent/agent-manager.ts
+  988004d92fa5999f 14,197-200,277-285,741,822,826,1237,1323,1450,1456,3301-3314,4899-4900,4902-4919,4922-4930
+packages/app/src/styles/markdown-styles.test.ts
+  988004d92fa5999f 88,101
+packages/app/src/terminal/webview/terminal-emulator-webview-html.ts
+  988004d92fa5999f 5
+packages/app/src/screens/settings/host-page.tsx
+  988004d92fa5999f 22,1550-1552,1554
+packages/server/src/server/workspace-git-service.observation.integration.test.ts
+  988004d92fa5999f 9-12,89,200-212,395
+packages/app/src/provider-selection/resolve-agent-form.ts
+  988004d92fa5999f 12,102,128-136,142-157,341-343,346-348,360,362-370,377-381,435,494-496,533-537,545-568,642,644,647-650,680,682,685-688
+packages/server/src/terminal/terminal-session-controller.ts
+  988004d92fa5999f 36,134,244,665-668,723-724
+packages/server/src/server/workspace-reconciliation-service.test.ts
+  988004d92fa5999f 77-83,188-195,244-301
+packages/website/src/components/site-header.tsx
+  988004d92fa5999f 2,51,60
+packages/cli/src/commands/hub/connect.ts
+  988004d92fa5999f 1-63
+packages/server/src/utils/git-process-scheduler.ts
+  988004d92fa5999f 18-19,47-50,55,60,71-74,77-78,80-88,91-120
+public-docs/configuration.md
+  988004d92fa5999f 192
+packages/app/src/new-workspace-launch/target.ts
+  988004d92fa5999f 1-49
+packages/app/src/terminal/native-renderer/terminal-scrollback.test.ts
+  988004d92fa5999f 1-173
+packages/app/src/components/terminal-emulator-webview.native.tsx
+  988004d92fa5999f 1-688
+packages/app/e2e/browser/composer-attachments.spec.ts
+  988004d92fa5999f 7,67-80
+public-docs/hub/quickstart.md
+  988004d92fa5999f 1-112
+packages/app/src/components/terminal-emulator-native-grid.native.tsx
+  988004d92fa5999f 1-1052
+packages/website/src/release.ts
+  988004d92fa5999f 3,6
+packages/app/src/screens/settings/appearance/apply-appearance.ts
+  988004d92fa5999f 11-13,21,61-68,74-80,82
+packages/app/src/components/tool-call-details.tsx
+  988004d92fa5999f 743
+packages/desktop/src/preload.ts
+  988004d92fa5999f 114
+packages/server/src/server/git-metadata-event-rules.ts
+  988004d92fa5999f 1-177
+packages/app/modules/paseo-native-trace/android/src/main/java/sh/paseo/trace/PaseoNativeTraceModule.kt
+  988004d92fa5999f 1-19
+packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioModule.kt
+  988004d92fa5999f 36-40
+packages/app/src/hooks/use-providers-snapshot.test.ts
+  988004d92fa5999f 6-7,84-98,115,123-128,132-194,215,236,256,277,301,359-377
+docs/design.md
+  988004d92fa5999f 224-226,228,230,232,251
+packages/server/src/server/workspace-git-noop-fetch.local.e2e.test.ts
+  988004d92fa5999f 1-466
+packages/app/src/projects/host-project-model.ts
+  988004d92fa5999f 74
+packages/app/src/components/ui/shortcut.tsx
+  988004d92fa5999f 4-5,19-21,28-36
+packages/app/src/terminal/native-renderer/terminal-custom-glyph.ts
+  988004d92fa5999f 1-119
+packages/app/e2e/browser/sessions-search.spec.ts
+  988004d92fa5999f 1-142
+packages/app/src/provider-selection/provider-selection.ts
+  988004d92fa5999f 11-12,80-81,84
+packages/protocol/src/schedule/types.ts
+  988004d92fa5999f 36
+packages/server/src/server/workspace-setup-runtime.ts
+  988004d92fa5999f 1-36
+public-docs/workspaces.md
+  988004d92fa5999f 53
+packages/app/src/screens/projects-screen.tsx
+  988004d92fa5999f 169
+packages/app/src/types/stream.test.ts
+  988004d92fa5999f 619-642
+packages/server/src/server/agent/providers/kimi-acp-agent.ts
+  988004d92fa5999f 1-97
+packages/server/src/server/agent/tools/paseo-tools.ts
+  988004d92fa5999f 5,635-644,704,710-711,748,1428-1429,1453
+packages/app/src/terminal/native-renderer/font.native.ts
+  988004d92fa5999f 1-57
+packages/app/src/hooks/use-container-width.test.ts
+  988004d92fa5999f 6,21-29
+packages/app/src/terminal/runtime/terminal-restore-options.test.ts
+  988004d92fa5999f 10,20,34,42-48
+packages/app/src/utils/status-dot-color.ts
+  988004d92fa5999f 11-17,19,22,25,28
+packages/website/src/components/agent-icons.tsx
+  988004d92fa5999f 1-84
+packages/app/e2e/browser/claude-workflow-subagent.real.spec.ts
+  988004d92fa5999f 1-55
+packages/server/src/server/agent/providers/claude/subagents/workflow-replay-source.test.ts
+  988004d92fa5999f 1-197
+packages/app/src/composer/agent-controls/utils.test.ts
+  988004d92fa5999f 56-77
+packages/server/src/utils/checkout-git-ref-derived.test.ts
+  988004d92fa5999f 1-185
+packages/website/src/changelog.ts
+  988004d92fa5999f 1-89
+packages/app/src/terminal/native-renderer/terminal-row-model.test.ts
+  988004d92fa5999f 1-120
+packages/app/src/components/root-error-boundary.tsx
+  988004d92fa5999f 2,4,6-8,54-57,63,65-72,75-84,88-101,103,105-106,116,119-123,125-127,132-133,137-139,141-142,145,148,150-151,153-154,156-161
+packages/cli/src/commands/hub/login-flow.ts
+  988004d92fa5999f 3,5,39-41,43-44,47-48,50-53,60,63-74,79-81,87-88,94-97,100
+packages/server/src/server/daemon-worker.ts
+  988004d92fa5999f 30-33,235-241,275-277
+packages/app/src/components/terminal-pane-focus-claim.ts
+  988004d92fa5999f 11,13,20-73,82
+packages/server/src/server/persistence-hooks.ts
+  988004d92fa5999f 69,73-74,95-96
+packages/app/src/keyboard/shortcut-override-store.ts
+  988004d92fa5999f 1-116
+scripts/test-mobile-agent-device.sh
+  988004d92fa5999f 1-49
+packages/app/e2e/fixtures/claude-workflow/one-child.js
+  988004d92fa5999f 1-30
+packages/app/src/assistant-selection-copy/content.browser.test.ts
+  988004d92fa5999f 1-555
+packages/app/src/components/retained-panel.tsx
+  988004d92fa5999f 1
+packages/app/src/components/sidebar/sidebar-status-list.tsx
+  988004d92fa5999f 42,44-52,67-80,144,273,300,402,404,406,408,424,436-440,466,483,496-500,622,660,683-687,690-691,694,697-698,705,708-709,711-712,718-723,732,750-752,761-762,769,772-773,776,801,805,819,823,836,838,840,842-843,845,866,869,871,874,878,881,901-903,947,958
+packages/app/src/components/ui/menu/menu-context.ts
+  988004d92fa5999f 1-182
+packages/app/src/voice/audio-engine.native.ts
+  988004d92fa5999f 146-162,242,302,335,343
+packages/server/src/server/agent/providers/claude/models.test.ts
+  988004d92fa5999f 55,85,139,167-172,325-344,363,379,385-386,453,458-493,500-504
+packages/server/src/server/agent/providers/opencode/tool-call-mapper.test.ts
+  988004d92fa5999f 460,470-471,480
+packages/server/src/server/paseo-worktree-service.ts
+  988004d92fa5999f 31,67-71
+public-docs/hub/hosted.md
+  988004d92fa5999f 1-13
+packages/app/src/mobile-panels/gesture-intent.ts
+  988004d92fa5999f 1-24
+packages/app/src/terminal/native-renderer/terminal-size-measurement.ts
+  988004d92fa5999f 1-29
+packages/app/src/components/ui/menu/menu-sub.tsx
+  988004d92fa5999f 1-144
+packages/protocol/src/messages.hub.test.ts
+  988004d92fa5999f 83-161
+packages/server/src/server/hub/relationship-controller.test.ts
+  988004d92fa5999f 668
+packages/server/src/server/hub/provider-policy.real.e2e.test.ts
+  988004d92fa5999f 1-537
+packages/server/src/server/agent/provider-snapshot-manager.ts
+  988004d92fa5999f 9-17,152-158,282-284,330
+packages/app/src/components/file-change-icon.tsx
+  988004d92fa5999f 1-43
+packages/app/e2e/support/helpers/new-workspace.ts
+  988004d92fa5999f 238-264,378-392
+packages/app/src/screens/workspace/workspace-screen.tsx
+  988004d92fa5999f 42-43,72,126,180,193,456,461,472,481,486,498,780-792,887-892,967,994-1001,1003,1044,1046,1050,1054,1060-1065,1149-1189,1194,1229,1267-1274,1404,1439,1448,1923,3784,3952-3954,3956-3958,3995-4004,4008,4013-4017
+packages/app/src/terminal/native-renderer/terminal-input.native.test.ts
+  988004d92fa5999f 1-231
+packages/server/src/server/agent/providers/claude/subagents/live-source.test.ts
+  988004d92fa5999f 2,136,139-213
+packages/website/src/components/docs-markdown.tsx
+  988004d92fa5999f 3,72-93,95-96
+packages/app/src/components/sidebar/sidebar-workspace-title.test.ts
+  988004d92fa5999f 58,62
+packages/website/src/latest-release.ts
+  988004d92fa5999f 21-26,37,86-87,89-90,92,94,101-139,185-191,195-196
+packages/cli/src/commands/hub/deploy.test.ts
+  988004d92fa5999f 1-765
+packages/app/e2e/browser/workspace-draft-thinking-preferences.spec.ts
+  988004d92fa5999f 1-190
+packages/app/e2e/browser/agent-tab-image-stability.spec.ts
+  988004d92fa5999f 48,54-55,57,59-144,148-150,152-170
+README.zh-CN.md
+  988004d92fa5999f 10-11
+packages/app/src/terminal/native-renderer/terminal-resize-policy.ts
+  988004d92fa5999f 1-119
+packages/server/vitest.config.ts
+  988004d92fa5999f 22-24
+packages/server/src/server/agent/agent-sdk-types.ts
+  988004d92fa5999f 1-5,81-82,109-114,605-606,736-737
+packages/app/src/command-center/root-registration.tsx
+  988004d92fa5999f 18,81,92-93,209-212,229-244
+public-docs/web-ui.md
+  988004d92fa5999f 66
+packages/app/src/terminal/native-renderer/terminal-custom-glyph.test.ts
+  988004d92fa5999f 1-88
+packages/app/src/components/sidebar/display-preferences/row-items.ts
+  988004d92fa5999f 1-66
+packages/website/src/routes/changelog.tsx
+  988004d92fa5999f 3-8,37,49,66
+packages/app/src/composer/agent-controls/utils.ts
+  988004d92fa5999f 58-62
+packages/protocol/src/provider-manifest.ts
+  988004d92fa5999f 178-184
+packages/app/e2e/browser/new-workspace-launch-composer.spec.ts
+  988004d92fa5999f 1-86
+packages/app/src/components/ui/dropdown-menu.tsx
+  988004d92fa5999f 1,3-35,39
+packages/app/src/terminal/native-renderer/terminal-row-model.ts
+  988004d92fa5999f 1-253
+packages/app/src/app/_layout.tsx
+  988004d92fa5999f 29,99,136,652,677,949,963-966,970-973,1005-1009
+packages/protocol/src/messages.terminal-resize.test.ts
+  988004d92fa5999f 1-35
+README.ko.md
+  988004d92fa5999f 1-173
+packages/app/src/components/provider-diagnostic-sheet.tsx
+  988004d92fa5999f 26
+packages/app/src/navigation/host-runtime-bootstrap.test.ts
+  988004d92fa5999f 10,13,17,21,24-28,41-89
+packages/app/src/components/ui/overlay-scrollbar/use-overlay-flat-list-scrollbar.web.tsx
+  988004d92fa5999f 1-200
+packages/app/e2e/support/helpers/rewind-flow.ts
+  988004d92fa5999f 163
+packages/app/src/components/ui/menu/menu-root.tsx
+  988004d92fa5999f 1-95
+packages/app/src/desktop/browser/store/state.test.ts
+  988004d92fa5999f 5,7,62,69-80,163-189
+packages/app/src/agent-stream/chat-outline/rail.web.tsx
+  988004d92fa5999f 15
+packages/desktop/electron-builder.yml
+  988004d92fa5999f 20-25
+packages/app/src/components/status-ring/clock.web.ts
+  988004d92fa5999f 1-35
+packages/app/src/components/hosts/host-filter.tsx
+  988004d92fa5999f 23,36,69
+packages/app/e2e/support/helpers/composer-control-density.ts
+  988004d92fa5999f 1-55
+packages/app/src/components/ui/menu/menu-overlay.tsx
+  988004d92fa5999f 1-469
+docs/timeline-sync.md
+  988004d92fa5999f 61-62,110-117
+packages/app/src/composer/agent-controls/index.tsx
+  988004d92fa5999f 35,67,524-525,1454
+packages/desktop/src/features/browser-automation/ipc.test.ts
+  988004d92fa5999f 23,26,30,43-47,69-72,74-77,88-92,113,160-162,210,596-641
+packages/server/src/server/session.workspaces.test.ts
+  988004d92fa5999f 3090-3252,9301-9306,9357-9362,9432-9437
+packages/website/vite.config.ts
+  988004d92fa5999f 46,87
+packages/app/src/components/terminal-pane.tsx
+  988004d92fa5999f 4,8-14,24-37,43,52,56-60,62,65,93,101,103,112,169-202,225,230-231,239-245,263-265,268,273,282-283,286-314,359-360,374,381,395,418,421-423,428-436,442,447,449,488-547,560-564,578-579,581-583,589-594,598-605,634-635,637-641,693-701,709-715,717,783-793,797-807,809-831,834-846,858-888,933,935,949,957,978-1025,1050,1056-1057,1068,1083-1088,1102-1109,1139-1143
+packages/app/src/i18n/resources/fr.ts
+  988004d92fa5999f 86,90,222,277-280,283,438,545,969-976,1024-1055,1081,1123-1124,1187-1193,1202-1210,1880,1890-1904,1979,1988-1992,2054,2111,2113,2116,2118-2119
+packages/app/src/screens/workspace/workspace-tab-presentation.tsx
+  988004d92fa5999f 3,11-18,35,118-124,128,130-133,140,144-146,148,158,162,168-176,178-182,203-207,209,211,213,222-242,269-270,274-278,282-285,288,291,294
+packages/app/src/utils/working-directory-suggestions.ts
+  988004d92fa5999f 1
+packages/server/src/terminal/terminal-worker-process.ts
+  988004d92fa5999f 133-153
+packages/website/src/docs-rehype.ts
+  988004d92fa5999f 3,8,10
+packages/app/src/components/material-file-icons.ts
+  988004d92fa5999f 1-5,132
+packages/app/src/screens/sessions-screen.tsx
+  988004d92fa5999f 1,8,13,16-17,21-61,77-78,80-96,114-119,121-122,128-134,136,138-150,155,157-175,178,192-193,195-203,206,208,215-216,229-231,258-278
+packages/app/e2e/browser/workspace-navigation-regression.spec.ts
+  988004d92fa5999f 33,41-42,204-256
+packages/app/src/styles/theme.ts
+  988004d92fa5999f 110,112-114,116-117,130-149,151-155,159-207,262,314-315,381,390,392,419-420,442-443,464-465,486-487,508-509,514,677-700,734-741,749-750,759,769
+packages/app/e2e/browser/relay-deployment-reconnect.real.spec.ts
+  988004d92fa5999f 1-71
+packages/app/src/components/keyboard-shortcuts-dialog.tsx
+  988004d92fa5999f 10-15,28-31,33-38,73,80-84,142-147
+packages/app/src/components/sidebar-resize-handle.tsx
+  988004d92fa5999f 5-8,10,13,15,27-40,43-49,88-123,140-170
+packages/app/e2e/support/helpers/composer.ts
+  988004d92fa5999f 10,75-96
+packages/app/src/hooks/use-settings/fakes.ts
+  988004d92fa5999f 32-34
+packages/app/src/components/ui/overlay-scrollbar/geometry.ts
+  988004d92fa5999f 1-63
+packages/server/src/server/agent/providers/claude/agent.ts
+  988004d92fa5999f 31,37,58-62,71-75,99,378-381,956-958,1027-1057,1492-1495,1567,1571,1655-1662,1851,2030,2038-2039,2307,2323,2940-2944,2955-2956,2981,3070,3088-3093,3144,3148,3174,3182,3469-3512,3767-3770,3776-3785,3850,4070-4076,4385,4567-4571,4577-4580,4587,4599,4609-4640,4652,4655-4659,4680-4683,5473-5474,5487-5505,5520,5538-5554
+packages/server/src/server/agent/providers/claude/sidechain-tracker.ts
+  988004d92fa5999f 62,72,76,157-169,179
+packages/app/src/components/ui/menu/menu-surface.tsx
+  988004d92fa5999f 1-445
+packages/app/e2e/browser/new-workspace.spec.ts
+  988004d92fa5999f 27-30,38-45,54,82,757-890
+packages/app/src/components/ui/combobox-options.ts
+  988004d92fa5999f 1-5
+packages/app/src/components/terminal-webview-readiness.test.ts
+  988004d92fa5999f 1-64
+packages/app/e2e/browser/claude-workflow-project-inspection.real.spec.ts
+  988004d92fa5999f 1-66
+packages/app/src/keyboard/keyboard-shortcuts.ts
+  988004d92fa5999f 8-12,46-47,92-99,380-381,387,400,413,421,428,441,454,462-463,486-487,740,1019-1040,1042,1053-1055,1058-1062,1067,1075-1079,1378-1399,1403-1405,1412,1417-1425,1428,1432-1437,1439-1454,1458-1468,1470-1499,1537
+packages/server/src/server/agent/providers/pi/tool-call-mapper.ts
+  988004d92fa5999f 343-346,395-416
+packages/server/src/server/hub/execution-controller.test.ts
+  988004d92fa5999f 14-17,67-82,108-188
+packages/server/src/terminal/terminal-session-controller.resize.test.ts
+  988004d92fa5999f 1-123
+packages/server/src/server/agent/provider-snapshot-manager.test.ts
+  988004d92fa5999f 443-474
+packages/server/src/server/agent/providers/claude/subagents/replay-source.ts
+  988004d92fa5999f 5,156,158-160,164,166-182,184,187,189,191-192,196,201-206,209-221,225-226,230,248,278-280,298-301,306,322-323
+packages/server/src/terminal/terminal.test.ts
+  988004d92fa5999f 26,29-30,121-146,149,154-166,257-283,301-304,307-371,384-412,1224-1344
+docs/unistyles.md
+  988004d92fa5999f 348
+packages/server/src/utils/worktree.posix.test.ts
+  988004d92fa5999f 26-32,446,461-469,478-606
+public-docs/hub/security.md
+  988004d92fa5999f 1-328
+docs/mobile-testing.md
+  988004d92fa5999f 3-44,255-273,342-445
+packages/app/src/components/file-icon-svg.test.ts
+  988004d92fa5999f 1-46
+packages/protocol/src/terminal-input-mode.test.ts
+  988004d92fa5999f 54-55,72-73,78-118
+packages/app/e2e/browser/chat-outline.spec.ts
+  988004d92fa5999f 37-40
+packages/server/src/server/hub/test-utils/hub-action-sink.ts
+  988004d92fa5999f 1-131
+public-docs/hub/faq.md
+  988004d92fa5999f 1-57
+packages/cli/src/commands/hub/client.ts
+  988004d92fa5999f 2-3,6-30,32-66,68-72,74-79,82-93,95-99,101-103,105-109,112-113,119-172,175-181,185-188,190-191,194-196,201-244,246-247,249-252,254-295
+packages/cli/src/commands/hub/origin.ts
+  988004d92fa5999f 1-33
+packages/app/src/components/provider-diagnostic-models.ts
+  988004d92fa5999f 2,30-33
+packages/app/src/utils/status-indicator-geometry.ts
+  988004d92fa5999f 1-3
+packages/app/src/review/surface.tsx
+  988004d92fa5999f 19,510
+packages/app/src/utils/terminal-renderer-readiness.test.ts
+  988004d92fa5999f 5,97-133
+packages/server/src/server/workspace-git-service.primitive.test.ts
+  988004d92fa5999f 22,337-340,356-359,902-913
+packages/app/src/i18n/locales.test.ts
+  988004d92fa5999f 12-13,29,41,49,56,78,83,101,113,119-122
+packages/server/src/terminal/terminal-size-ownership.ts
+  988004d92fa5999f 1-38
+packages/app/src/components/sidebar/sidebar-workspace-title.ts
+  988004d92fa5999f 21,28
+packages/app/src/components/ui/search-field.tsx
+  988004d92fa5999f 1-113
+packages/server/src/terminal/terminal.ts
+  988004d92fa5999f 152-155,250-258,267-326,368-382,1311-1313
+packages/app/src/components/ui/alert.tsx
+  988004d92fa5999f 34,37-38,77
+packages/protocol/src/search/text-match.ts
+  988004d92fa5999f 1-10,17-30,48,50,52,54,76,79-238,242-254,263-264,269-285,287,289,292
+packages/app/src/components/sidebar/workspace-meta-row/check-summary.test.ts
+  988004d92fa5999f 1-108
+packages/server/src/server/session.test.ts
+  988004d92fa5999f 3448
+packages/server/src/server/hub/test-utils/relationship-harness.ts
+  988004d92fa5999f 206-209,236-238,251-253,428-456,458-460,462-463,465-472,483-485,661-663,667-671,674,679,771-795,847-854,922-953,1287,1290
+public-docs/hub/concepts.md
+  988004d92fa5999f 1-66
+packages/app/src/assistant-file-links/link.tsx
+  988004d92fa5999f 19,31-35,71,110,112,123-126
+packages/app/src/composer/input-mode.ts
+  988004d92fa5999f 1-46
+packages/app/src/terminal/native-renderer/headless-terminal-output-drain.ts
+  988004d92fa5999f 1-229
+packages/app/src/components/sidebar-resize-handle-layout.ts
+  988004d92fa5999f 1-57
+packages/app/e2e/mobile/agent-device/native-terminal-basic.android.ad
+  988004d92fa5999f 1-14
+packages/app/src/runtime/websocket-factory.ts
+  988004d92fa5999f 1-6
+packages/server/src/server/agent/providers/acp-agent.ts
+  988004d92fa5999f 378-404,411,531,550,794,834,957,962-976,2978,3084
+packages/server/src/server/agent/providers/opencode/tool-call-detail-parser.ts
+  988004d92fa5999f 199,212-213,364,367
+packages/app/e2e/mobile/agent-device/native-terminal-hardware-keyboard.ios.ad
+  988004d92fa5999f 1-10
+packages/app/src/terminal/native-renderer/terminal-input-resize-policy.test.ts
+  988004d92fa5999f 1-16
+packages/app/src/terminal/runtime/terminal-font.ts
+  988004d92fa5999f 1-32
+packages/app/src/components/ui/overlay-scrollbar/geometry.test.ts
+  988004d92fa5999f 1-49
+packages/app/src/keyboard/shortcut-string.test.ts
+  988004d92fa5999f 2,8,74-108
+packages/cli/src/commands/hub/projects.ts
+  988004d92fa5999f 1-91
+packages/server/src/server/agent/providers/omp/usage-poller.test.ts
+  988004d92fa5999f 1-174
+packages/app/src/terminal/native-renderer/terminal-grid-metrics.ts
+  988004d92fa5999f 1-68
+packages/protocol/src/binary-frames/terminal.ts
+  988004d92fa5999f 7
+packages/server/src/server/agent/providers/omp/test-utils/omp-harness.ts
+  988004d92fa5999f 21,73,81,413-414
+packages/app/src/command-center/workspace-registration.tsx
+  988004d92fa5999f 9-12,42
+packages/server/src/server/agent/providers/claude/subagents/workflow-output.ts
+  988004d92fa5999f 1-79
+packages/server/src/server/persistence-hooks.test.ts
+  988004d92fa5999f 30,37-43,57,60-66,78,98
+packages/app/src/components/ui/press-highlight.native.tsx
+  988004d92fa5999f 1-74
+packages/app/e2e/support/helpers/settings.ts
+  988004d92fa5999f 89-100
+packages/app/src/i18n/resources/es.ts
+  988004d92fa5999f 84,88,220,277-280,283,439,546,969-976,1024-1055,1081,1123-1124,1187-1193,1202-1210,1873,1883-1897,1974,1983-1987,2048,2105,2107,2110,2112-2113
+packages/website/src/canonical-url.test.ts
+  988004d92fa5999f 1-16
+packages/server/src/server/agent/providers/pi/agent.test.ts
+  988004d92fa5999f 556-610,665-719
+packages/app/e2e/browser/assistant-selection-copy.spec.ts
+  988004d92fa5999f 1-587
+docs/menus.md
+  988004d92fa5999f 1-156
+packages/app/src/assistant-selection-copy/markup.ts
+  988004d92fa5999f 1-75
+packages/server/src/server/checkout/status-projection.ts
+  988004d92fa5999f 36,65,85
+packages/cli/src/commands/hub/commands.test.ts
+  988004d92fa5999f 1-484
+packages/app/src/components/ui/press-highlight.types.ts
+  988004d92fa5999f 1-13
+packages/app/src/components/ui/menu/menu-item.tsx
+  988004d92fa5999f 1-421
+packages/app/src/utils/color.ts
+  988004d92fa5999f 1-95
+packages/app/src/mobile-panels/provider.tsx
+  988004d92fa5999f 6,61,66,89-90,97-108,247,252,255-264,289-297
+packages/app/e2e/support/helpers/packaged-web-daemon.ts
+  988004d92fa5999f 1-111
+packages/app/src/components/ui/menu/menu-navigation.test.ts
+  988004d92fa5999f 1-75
+packages/app/src/terminal/native-renderer/terminal-grid-metrics.test.ts
+  988004d92fa5999f 1-78
+packages/protocol/src/search/text-match.test.ts
+  988004d92fa5999f 3-22,87-191,203-238
+packages/server/src/server/agent/mcp-server.test.ts
+  988004d92fa5999f 2161-2166,3239-3293
+packages/server/src/server/workspace-git-service.observation.test.ts
+  988004d92fa5999f 10-11,69-80,106,122-140,144,155,160-163,377,379-385,393-396,401-404,409-415,444-1023,1273-1276,1331,1465,1472,1484-1486,1494-1906
+packages/app/src/utils/assistant-markdown-parser.ts
+  988004d92fa5999f 1-15
+packages/website/src/components/site-footer.tsx
+  988004d92fa5999f 37-41
+packages/app/e2e/mobile/agent-device/native-terminal-basic.ios.ad
+  988004d92fa5999f 1-13
+packages/app/src/keyboard/availability.ts
+  988004d92fa5999f 1-19
+packages/cli/src/commands/hub/error.ts
+  988004d92fa5999f 1-10
+packages/app/src/schedules/schedule-form-model.test.ts
+  988004d92fa5999f 35,45-58,99,116-117,153-156,162,246-306
+packages/server/src/utils/tree-kill.ts
+  988004d92fa5999f 41,47,56
+packages/app/src/agent-stream/use-scroll-to-message.web.ts
+  988004d92fa5999f 2,7,27,84-88,92,120
+packages/server/src/server/agent/provider-options.test.ts
+  988004d92fa5999f 1-181
+packages/app/src/screens/new-workspace-terminal.test.ts
+  988004d92fa5999f 1-247
+packages/app/src/i18n/resources/zh-CN.ts
+  988004d92fa5999f 84,88,220,272-275,278,433,540,927-934,982-1013,1039,1079-1080,1142-1148,1157-1165,1803,1813-1827,1899,1908-1912,1973,2028,2030,2033,2035-2036
+packages/app/src/terminal/native-renderer/terminal-renderer-capability.test.ts
+  988004d92fa5999f 1-32
+packages/app/src/runtime/host-runtime.ts
+  988004d92fa5999f 59-60,481,489,504,513,530,1361,1366,1401-1403,1405,1597,1603,1958,1988,1994-1996,2037,2052-2059,2171-2174,2334-2335
+packages/app/src/components/ui/menu/menu-navigation.ts
+  988004d92fa5999f 1-48
+packages/app/native-release-version.test.ts
+  988004d92fa5999f 1-27
+packages/app/src/hooks/use-keyboard-shortcuts.ts
+  988004d92fa5999f 32,63,74,79,89,108,114-120,139-148,424
+packages/app/src/screens/project-settings-screen.tsx
+  988004d92fa5999f 824
+packages/app/e2e/browser/schedules-project-target.spec.ts
+  988004d92fa5999f 220-221,331-332
+packages/app/src/terminal/native-renderer/terminal-performance.ts
+  988004d92fa5999f 1-3
+packages/server/src/server/schedule/service.test.ts
+  988004d92fa5999f 24-25,67-76,1749,1785-1788,1813-1816,2879,3199,3213
+packages/app/e2e/mobile/agent-device/native-terminal-selection-panels.ios.ad
+  988004d92fa5999f 1-20
+packages/app/src/terminal/native-renderer/terminal-selection-gesture.test.ts
+  988004d92fa5999f 1-354
+packages/app/src/git/pull-request-panel/data.test.ts
+  988004d92fa5999f 7,667-669,671
+packages/app/src/terminal/runtime/terminal-emulator-runtime.test.ts
+  988004d92fa5999f 81-85,99-103,269-273,277-281,301-303,310-311,315-324,507,510-529,589,595-598,617-620
+packages/cli/src/commands/hub/credentials.ts
+  988004d92fa5999f 1-170
+packages/server/src/server/workspace-git-service.ts
+  988004d92fa5999f 6,18,44-48,50,53-59,65,71-77,87-101,120,229-232,235,296,301,306,323,341-344,357-398,433,435,438-443,447-453,463,465,470-484,500,502,514,533-542,578,590,598,618,669-674,677,685,697,734,788,798,818,833,850,877,903,914,923,937,946,966,971-978,999-1004,1006,1021,1078,1182,1196-1201,1203-1205,1309,1311,1316-1317,1319,1328-1420,1422-1429,1431,1435-1439,1445-1450,1459-1460,1462-1471,1473-1481,1483-1488,1493-1496,1502,1504,1507,1528,1539-1540,1555-1559,1563-1592,1601-1606,1636,1665,1671-1678,1685-1686,1695,1790,1792,1795-1797,1833-1839,1841-1848,1850,1854-1858,1864-1866,1869-1872,1877-1895,1899-1900,1902-1904,1907,1910-1919,1921,1923-1928,1933-1936,1941-1944,1948-2183,2188,2194-2207,2210-2218,2227-2228,2230-2231,2241,2244,2274,2281,2283-2284,2367,2614-2616,2635-2636,2681,2703-2704,2710,2728-2731,2739-2744,2749,2762-2766,2773-2782,2785-2786,2793-2796,2818-2836,2854-2883,2960,3113-3114,3116-3123,3132-3143,3146-3198,3303-3307,3330-3334,3457
+packages/website/src/routes/download.tsx
+  988004d92fa5999f 1-3,19,22-28,30-31,42-50,56-73,88-89,92-93,95-99,101-102,108-109,111-112,116-117,129-131,133-134,136-142,147-156,159-164,166-167,182-188,190-196,216-289
+packages/app/e2e/browser/workspace-model-regressions.spec.ts
+  988004d92fa5999f 19,86
+packages/app/playwright.config.ts
+  988004d92fa5999f 7,37-42
+packages/app/src/screens/new-workspace-screen.tsx
+  988004d92fa5999f 12,36-42,81,87,90,95,101-104,108,153,182-186,189-204,265,295,306,318,333,346,486,630,640,645-672,1205,1219,1229-1238,1282,1333-1339,1345,1366-1367,1369,1376,1406,1420-1443,1449,1457,1476,1485,1507-1517,1522-1527,1535-1536,1564,1579,1592-1623,1645,1778-1789,1792-1794,1996-2006,2054,2095,2100,2104,2107-2113,2115-2130,2132-2133,2143,2146-2148,2150-2151,2272-2278,2293-2348,2405-2407,2409,2412-2415,2428-2433,2468,2470,2472,2477
+packages/app/src/styles/identity-colors.ts
+  988004d92fa5999f 47-96
+packages/cli/src/commands/hub/daemon-client.ts
+  988004d92fa5999f 1-38
+packages/cli/src/commands/hub/login-flow.test.ts
+  988004d92fa5999f 1,3-4,6-7,14,19,24-25,28-33,36,38-41,44-46,48,50-51,53-54,57,59-60,64-89,98-99,103-104
+packages/app/.eas/workflows/release-ios-beta.yml
+  988004d92fa5999f 1-25
+packages/app/src/components/ui/normalize-display-chord.ts
+  988004d92fa5999f 1-28
+packages/app/src/data/provider-snapshot-cache.ts
+  988004d92fa5999f 1-129
+packages/app/src/components/sidebar/sidebar-workspace-menu.tsx
+  988004d92fa5999f 6,27-30,77-82,85-88,125,217-218,222,232,256,266,281,291-292,311-313,322,361-363
+packages/server/src/utils/worktree.ts
+  988004d92fa5999f 40,453,461,484,489-490,529-540,551,555,641,668,1293,1323-1325,1327,1361
+packages/app/e2e/browser/new-workspace-entry.spec.ts
+  988004d92fa5999f 7,22-25,73-77,89-92
+public-docs/hub/index.md
+  988004d92fa5999f 1-88
+packages/app/src/mobile-panels/gesture-intent.test.ts
+  988004d92fa5999f 1-39
+packages/app/src/agent-stream/view.tsx
+  988004d92fa5999f 87,292-299,502-503,507-510,537,548,1037,1093
+packages/server/src/server/agent/providers/claude/subagents/replay-source.test.ts
+  988004d92fa5999f 102,129,142,162-163,168-282
+packages/app/src/create-agent-preferences/optimistic-preferences.test.ts
+  988004d92fa5999f 1-30
+packages/server/src/server/session.ts
+  988004d92fa5999f 34,37-41,95-99,245-251,354-362,480,695,754,897,1010,2645-2649,2651-2668,2670,2672-2681,3515-3527,4074,4394,4439-4450,4487-4544,6139-6140,6180-6183,6194,6204
+packages/app/src/components/sidebar/display-preferences/menu.tsx
+  988004d92fa5999f 1-3,6-28,30,32-39,42-43,45-47,49-52,54-59,61-64,66-128,139-199,202-203,205-206,209-234,237-243,245-246,249-250,254-262,264,266-270,272-278,280-283,285,287-361,365-414,417,422,425-426,437,442,445
+packages/app/src/screens/new-workspace/project-picker.test.tsx
+  988004d92fa5999f 1-82
+packages/app/src/components/ui/status-badge.tsx
+  988004d92fa5999f 48-49,51-52,55-56,64,67
+packages/website/src/docs-example-target.ts
+  988004d92fa5999f 1-9
+packages/app/src/components/file-explorer-pane.tsx
+  988004d92fa5999f 15,17,23,25-27,30-33,41-42,184-206,208-209,217,237,290,531,553,575,685-708,1076,1085,1089-1092
+packages/app/src/components/hosts/host-picker.tsx
+  988004d92fa5999f 269
+packages/server/src/terminal/terminal-size-ownership.test.ts
+  988004d92fa5999f 1-60
+packages/website/src/server-entry.ts
+  988004d92fa5999f 3,40-47
+packages/app/e2e/browser/new-workspace-launch-memory.spec.ts
+  988004d92fa5999f 1-101
+packages/app/src/components/sidebar/sidebar-group-toggle-row.tsx
+  988004d92fa5999f 7,19-28,32,37,47-49,51,87,89-94,103-107,109-110
+packages/app/src/components/terminal-pane-focus-claim.test.ts
+  988004d92fa5999f 6,19-132,136,144,157
+packages/app/src/timeline/session-stream-reducers.test.ts
+  988004d92fa5999f 2718-2760
+packages/desktop/src/features/browser-automation/ipc.ts
+  988004d92fa5999f 77,192,205,210-212,253-255
+packages/desktop/src/features/notifications.ts
+  988004d92fa5999f 4,99,104
+packages/app/src/utils/test-daemon-connection.test.ts
+  988004d92fa5999f 104-126,160-178
+packages/server/src/server/agent/providers/codex/options.ts
+  988004d92fa5999f 1-91
+packages/server/src/server/agent/agent-projections.test.ts
+  988004d92fa5999f 5,32,183,186-187,210-211,331-340,354-407
+docs/custom-providers.md
+  988004d92fa5999f 699
+packages/app/src/components/sidebar/display-preferences/model.ts
+  988004d92fa5999f 1-152
+docs/terminal-performance.md
+  988004d92fa5999f 28
+packages/app/src/i18n/resources/ko.ts
+  988004d92fa5999f 1-2393
+packages/app/e2e/support/helpers/new-workspace-launch.ts
+  988004d92fa5999f 1-193
+packages/app/src/screens/new-workspace-picker-item.test.ts
+  988004d92fa5999f 4,7-8,108,124-125,131,147-148,153-156,175,177-198,218-219,224-226,245-252,254-258,260-263,266-306,308,311-321,323,325-340
+packages/app/e2e/browser/settings-i18n.spec.ts
+  988004d92fa5999f 24-41
+packages/app/src/terminal/native-renderer/terminal-key-events.ts
+  988004d92fa5999f 1-40
+packages/app/src/terminal/native-renderer/terminal-selection-gesture.ts
+  988004d92fa5999f 1-108
+packages/app/src/utils/rich-clipboard.test.ts
+  988004d92fa5999f 3,78-125
+packages/server/src/server/agent/provider-registry.test.ts
+  988004d92fa5999f 2,14-23,46-50,69,84-104,106-108,110-112,114-119,121-123,125-135,137-139,478-530,719-788,924-950,1291,1338,1344,1429,1495,1527-1565,1636-1666
+packages/desktop/e2e/browser-tabs.e2e.mjs
+  988004d92fa5999f 15,203-204,278-279,284-388,396-405,422-609,622-623,625,631-632,637,655-689,693-697,784-785,798,802
+packages/server/src/server/agent/providers/opencode/options.ts
+  988004d92fa5999f 1-78
+packages/server/src/server/worktree-session.ts
+  988004d92fa5999f 50,127,144,608,623-643,653,702,762,778-780
+packages/app/src/components/status-ring/geometry.ts
+  988004d92fa5999f 1-49
+packages/server/src/server/workspace-archive-service.test.ts
+  988004d92fa5999f 145,694-695,729-758
+packages/app/src/create-agent-preferences/optimistic-preferences.ts
+  988004d92fa5999f 1-43
+packages/app/src/components/ui/menu/index.ts
+  988004d92fa5999f 1-35
+packages/app/src/hooks/use-providers-snapshot.ts
+  988004d92fa5999f 11-15,37,39,41-61,70,75-80,149,152,216
+packages/app/e2e/support/helpers/agent-bottom-anchor.ts
+  988004d92fa5999f 105-106,116-150
+packages/app/src/keyboard/shortcut-help-search.ts
+  988004d92fa5999f 1-90
+packages/server/src/utils/git-process-scheduler.test.ts
+  988004d92fa5999f 49-69
+packages/cli/src/output/types.ts
+  988004d92fa5999f 68
+packages/server/src/utils/path.ts
+  988004d92fa5999f 100,102-111,150-154,158
+packages/app/src/hooks/use-debounced-value.ts
+  988004d92fa5999f 1-17
+packages/server/src/utils/run-git-command.ts
+  988004d92fa5999f 1,18,29-33,77-82,88-92,95-98,101,109-112,115,124-129,135-178,181-189,203,208-218,231,256,262,279,518-520
+packages/server/src/terminal/agent-hooks/claude/claude.real.e2e.test.ts
+  988004d92fa5999f 8,73,83-85,123-139,188-238
+public-docs/worktrees.md
+  988004d92fa5999f 55,58-59,278
+packages/app/src/create-agent-preferences/service.ts
+  988004d92fa5999f 53-55
+packages/app/src/terminal/native-renderer/terminal-screen-model.test.ts
+  988004d92fa5999f 1-258
+packages/app/src/keyboard/shortcut-string.ts
+  988004d92fa5999f 77-83,187-201,210-214,225-228
+packages/app/e2e/browser/sidebar-workspace.spec.ts
+  988004d92fa5999f 307-309,317-319
+packages/server/src/server/workspace-auto-name.test.ts
+  988004d92fa5999f 1-66
+packages/website/src/components/docs-outline.tsx
+  988004d92fa5999f 3,27
+packages/app/src/timeline/viewed-timeline-sync.test.ts
+  988004d92fa5999f 3,129-134,136,238,241-247,249,253-258,261-262,290-305,323-325,427,431-434,436-441,445,464-469,471,495,499-502,504-509,511,518,521-528,530,532,534-539,542-543,545-550,553,555,557,560-561,563,565-568,571,575-578,580-585,587-588,590-593,595,597-602,628-652
+packages/app/src/types/host-connection.test.ts
+  988004d92fa5999f 228-256
+packages/app/src/add-project-flow/model.test.ts
+  988004d92fa5999f 44
+packages/server/src/server/worktree-core.ts
+  988004d92fa5999f 19,54-58
+packages/app/src/panels/reconnect-toast-state.ts
+  988004d92fa5999f 1-18
+packages/expo-two-way-audio/ios/AudioEngine.swift
+  988004d92fa5999f 13,31-46,99,105,111,114,119-156,241-242,260-271,317,328,330,332-340,342,359,379-383,418-420
+packages/app/src/components/agent-list.tsx
+  988004d92fa5999f 25,37-38,372,443-449,470
+packages/app/src/runtime/websocket-transport.browser.test.ts
+  988004d92fa5999f 1,3,5-9,11-15,17-29,32-43
+packages/app/src/command-center/command-center.tsx
+  988004d92fa5999f 607
+packages/app/src/polyfills/navigator.ts
+  988004d92fa5999f 1-28
+packages/server/src/server/agent/providers/generic-acp-agent.ts
+  988004d92fa5999f 8,53,78
+packages/app/src/components/ui/isolated-bottom-sheet-modal/index.tsx
+  988004d92fa5999f 7,15-34,37,39-43,45-50,59,67
+packages/app/src/terminal/native-renderer/headless-terminal-state.test.ts
+  988004d92fa5999f 1-162
+packages/app/src/components/sidebar/workspace-meta-row/service-summary.test.ts
+  988004d92fa5999f 1-82
+packages/server/src/utils/run-git-command.test.ts
+  988004d92fa5999f 345-411
+docs/glossary.md
+  988004d92fa5999f 13,36-37
+packages/app/src/components/sidebar/workspace-meta-row/service-summary.ts
+  988004d92fa5999f 1-49
+packages/server/src/server/agent/providers/claude/agent.runtime-exit.test.ts
+  988004d92fa5999f 1-351
+packages/app/src/hooks/use-fine-pointer.ts
+  988004d92fa5999f 1-40
+packages/server/src/utils/directory-suggestions.test.ts
+  988004d92fa5999f 1,15,56,71,75-79,129-171,818-878
+packages/app/src/mobile-panels/gestures.ts
+  988004d92fa5999f 10,43,78-83,88,93,122,171-176,179,184,237,272-277,281,286,317,367-372,375,380
+packages/app/src/components/sidebar/workspace-meta-row/meta-items.ts
+  988004d92fa5999f 1-61
+packages/app/src/desktop/components/desktop-notifications-section.tsx
+  988004d92fa5999f 1-150
+packages/app/e2e/browser/agent-scroll-return.spec.ts
+  988004d92fa5999f 1-236
+packages/app/e2e/browser/sidebar-mobile-menu-sheets.spec.ts
+  988004d92fa5999f 1-49
+packages/app/src/runtime/daemon-start-service.test.ts
+  988004d92fa5999f 5-6,15-16,21,45-64,372-378
+packages/app/src/screens/new-workspace-terminal.ts
+  988004d92fa5999f 1-88
+docs/file-icons.md
+  988004d92fa5999f 7,9-14,16-27,29-30
+packages/app/src/utils/relative-time-ticker.test.ts
+  988004d92fa5999f 1-99
+packages/app/src/screens/new-workspace-picker-item.ts
+  988004d92fa5999f 3-4,35-36,88-91,93-96,99-108,128-180,212-298,300-304
+packages/desktop/src/settings/desktop-settings.test.ts
+  988004d92fa5999f 84,106,115-153,273
+packages/expo-two-way-audio/src/core.ts
+  988004d92fa5999f 24-37
+packages/app/e2e/support/helpers/sidebar.ts
+  988004d92fa5999f 169-181
+packages/app/src/components/terminal-emulator.native.tsx
+  988004d92fa5999f 1-9,11,13-14,17-18,20-23,25,27-33,35-37,39-40,42,45-46,48-50,52-54,56
+CHANGELOG.md
+  988004d92fa5999f 3,5-10,12-15,17,19-29,31,33,35-52,54,56-78,80,82-109,372
+packages/protocol/src/provider-snapshot-codec.test.ts
+  988004d92fa5999f 1-85
+packages/server/src/services/quota-fetcher/service.test.ts
+  988004d92fa5999f 1,3,41-45,48,53,56,424-426,1185-1404,1972-2110
+public-docs/connectivity.md
+  988004d92fa5999f 1-94
+packages/app/src/hosts/use-host-badges.ts
+  988004d92fa5999f 1-30
+packages/server/src/server/agent/providers/claude/subagents/live-source.ts
+  988004d92fa5999f 44-45,48,51,54,58-64,82,146-147,159-164,178,182,216-225,252-254,285-295,303,312-319,335-339,357-358,363-371
+docs/terminal-activity.md
+  988004d92fa5999f 56-60
+public-docs/security.md
+  988004d92fa5999f 5,61-62,69,136-145,154
+packages/server/src/utils/directory-suggestions.ts
+  988004d92fa5999f 5,34,76-80,87-88,121,123-127,134-137,160,189,198-199,224,231,327,336-344,580-618
+packages/website/src/latest-release.test.ts
+  988004d92fa5999f 2-6,26-47,59-93
+public-docs/hub/triggers/index.md
+  988004d92fa5999f 1-104
+packages/app/e2e/browser/new-workspace-meta-row-layout.spec.ts
+  988004d92fa5999f 1-87
+packages/app/src/components/left-sidebar.tsx
+  988004d92fa5999f 25,30-33,36,779-781,791-800,813-815,817-824,923,1018-1020,1022,1060-1062
+packages/cli/src/commands/hub/status-output.ts
+  988004d92fa5999f 1-47
+public-docs/troubleshooting.md
+  988004d92fa5999f 5
+packages/app/src/agent-stream/strategy-web.tsx
+  988004d92fa5999f 12,16,56,111-181,236-237,248,252,254-265,286,325,462-464,496,528-535,537-549,551-559,564-568,583-585,595,611-613,639-641,652,661-668,671,680-684,686,688-689,698,721,756,763,773-775,784,795-798,831,837-840,846-848,852-922,936-941,951-956,965-970,975,977-984,1101
+packages/app/src/lib/overlay-root.ts
+  988004d92fa5999f 33-36,40-43
+packages/app/src/panels/agent-panel.tsx
+  988004d92fa5999f 56-59,68,125-128,784,873-874,877-883,888-913,916-923,926-932,935-938,1796-1800
+packages/app/src/components/markdown-text.ios.tsx
+  988004d92fa5999f 16,21
+packages/app/src/types/turndown-plugin-gfm.d.ts
+  988004d92fa5999f 1-5
+packages/app/e2e/support/helpers/chat-outline.ts
+  988004d92fa5999f 80-82,97-101,103,106,109
+packages/app/src/components/add-project-flow.tsx
+  988004d92fa5999f 70,72,225-227,243,291-293,377,602-610,858-892,1027-1032
+packages/cli/src/commands/hub/origin.test.ts
+  988004d92fa5999f 1-18
+packages/app/src/hooks/use-container-width.ts
+  988004d92fa5999f 5-13,44-45
+packages/server/src/server/agent-history-search.test.ts
+  988004d92fa5999f 1-195
+packages/protocol/src/terminal-profiles.ts
+  988004d92fa5999f 4-18,20-29,32-107,127-308,315
+packages/app/src/git/diff-pane.tsx
+  988004d92fa5999f 67
+packages/app/src/utils/host-routes.ts
+  988004d92fa5999f 498
+packages/app/src/terminal/native-renderer/terminal-screen-model.ts
+  988004d92fa5999f 1-149
+packages/app/src/provider-selection/model-catalog.test.ts
+  988004d92fa5999f 1-23
+docs/hover.md
+  988004d92fa5999f 99-113,152
+packages/app/src/components/adaptive-modal-sheet.tsx
+  988004d92fa5999f 677
+packages/server/src/server/agent/providers/claude/task-notification-tool-call.ts
+  988004d92fa5999f 17,43,48,160-162,192-197,348-361
+public-docs/hub/self-hosting/index.md
+  988004d92fa5999f 1-127
+packages/app/src/i18n/i18next.ts
+  988004d92fa5999f 9,27
+packages/website/src/routeTree.gen.ts
+  988004d92fa5999f 29,157-161,401,460,522,585,644,705,767,915-921,1267
+packages/app/src/utils/time.ts
+  988004d92fa5999f 2-5,7-12,19-23,25-28,30-39,41-56,58-83,87-91
+packages/app/e2e/mobile/agent-device/native-terminal-scroll.ios.ad
+  988004d92fa5999f 1-19
+packages/app/src/terminal/native-renderer/colors.ts
+  988004d92fa5999f 1-244
+packages/server/src/server/session/provider/provider-catalog-session.ts
+  988004d92fa5999f 2,4-7,13-18,48,60-72,101-114,119,206,397-414,419
+packages/website/src/llms.ts
+  988004d92fa5999f 63
+packages/app/src/components/terminal-emulator-contract.ts
+  988004d92fa5999f 1-71
+packages/cli/src/commands/hub/help.ts
+  988004d92fa5999f 1-8
+packages/cli/src/commands/hub/client.test.ts
+  988004d92fa5999f 1-133
+packages/app/e2e/support/helpers/sheet-layout.ts
+  988004d92fa5999f 1
+packages/app/src/components/ui/highlighted-text-segments.ts
+  988004d92fa5999f 1-35
+packages/app/src/components/sidebar/project-leading-visual.tsx
+  988004d92fa5999f 6,15-21,25,29-33,35-36,47-49,61,71-72,99,114,122-123,130,153-157,167,171,173-187,192,196,204-211,213-216,233,249-252,262-263,290-292,304-312
+packages/app/src/hooks/use-agent-history.ts
+  988004d92fa5999f 6,12,30-37,44-53,55-61,66-75,84-85,87-89,92-94,101,104,115-125,128-130,158-206,223,237,248-259,267-280,283-287,289-290,297,312-316,321,326,328,331,334,337-353,355-359,385,415-416,422-432,435-447,455-457,459-462
+packages/server/src/server/agent/providers/codex-app-server-agent.real.e2e.test.ts
+  988004d92fa5999f 64
+public-docs/hub/configuration/index.md
+  988004d92fa5999f 1-101
+packages/app/src/new-workspace-launch/target.test.ts
+  988004d92fa5999f 1-82
+packages/app/src/screens/settings/providers-section.tsx
+  988004d92fa5999f 37,192
+packages/app/src/keyboard/keyboard-shortcuts.test.ts
+  988004d92fa5999f 2,7,9,11-12,17,177-178,184-185,647-653,667,669-672,674-675,684-700,702-779,813-814,820-821,827-1086
+packages/app/src/components/ui/isolated-bottom-sheet-modal/index.test.tsx
+  988004d92fa5999f 4,8-33,35-41,44-58,60-72,87,90-95,100-101,105,107-115,121-161,164-169,171-175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.17",
+  "base_commit_sha": "639990cbe11a88294bf9b2ea888f2990cee46102",
+  "prompts": {
+    "988004d92fa5999f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe99b-aec2-7962-b1c4-51dd855d18fe",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 138487,
+      "total_deletions": 25333,
+      "accepted_lines": 75610,
+      "overriden_lines": 5,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/4a4131e39efe5b7b33c4c4f81b1b38f065c657f85a60a7ee893fb821b099b1e0"
+    }
+  }
+}
