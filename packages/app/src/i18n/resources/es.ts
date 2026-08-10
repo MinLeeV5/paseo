@@ -81,9 +81,11 @@ export const es: TranslationResources = {
       desktop: "Envíe un mensaje al agente, etiquete@fileso use/commandsy/skills",
       mobile: "Mensaje,@files,/commands",
       fallback: "Mensaje...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "Agente de mensajes...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}}para enfocar",
       addAttachment: "Agregar archivo adjunto",
       interruptAgent: "agente de interrupción",
@@ -215,7 +217,7 @@ export const es: TranslationResources = {
     states: {
       notFound: "Agentno encontrado",
       failedToLoad: "No se pudo cargar el agente",
-      reconnecting: "Reconectando...",
+      reconnecting: "Reconectando",
       timelineSyncFailed: "No se pudo actualizar el historial del agente. Reintentando…",
       archivingTitle: "Agente de archivo...",
       archivingSubtitle: "Espere mientras archivamos este agente.",
@@ -272,8 +274,13 @@ export const es: TranslationResources = {
   sessions: {
     title: "Historial",
     empty: "Aún no hay sesiones",
+    noMatches: "No hay sesiones que coincidan",
+    tooManyMatches: "Demasiadas coincidencias: acota la búsqueda",
+    hostLoadFailed: "{{host}}: No se pudo cargar el historial",
+    searchPlaceholder: "Buscar en el historial",
     actions: {
       loadMore: "Cargar más",
+      clearSearch: "Borrar búsqueda",
     },
   },
   agentList: {
@@ -429,7 +436,7 @@ export const es: TranslationResources = {
       openFile: "Abrir archivo",
       copyPath: "Copiar ruta",
       download: "Descargar",
-      addToChat: "Añadir al chat…",
+      addToChat: "Añadir al chat",
       moreActions: "Más acciones",
     },
     fileExplorer: {
@@ -536,6 +543,7 @@ export const es: TranslationResources = {
     },
     terminal: {
       hostDisconnected: "Hostno está conectado",
+      updateHost: "Actualiza el host para usar el renderizador de terminal nativo.",
       unableToSubscribe: "No se puede suscribir al terminal",
     },
     tabs: {
@@ -958,6 +966,14 @@ export const es: TranslationResources = {
           viewPullRequest: "Ver",
           openOn: "Abrir en {{brand}}",
         },
+        checksSummary: {
+          passedLabel: "pasó",
+          failedLabel: "falló",
+          runningLabel: "en curso",
+          passedAccessible: "Comprobaciones superadas",
+          failedAccessible: "Comprobaciones fallidas",
+          runningAccessible: "Comprobaciones en curso",
+        },
         sections: {
           checks: "cheques",
           pipeline: "Pipeline",
@@ -1005,6 +1021,38 @@ export const es: TranslationResources = {
     },
   },
   sidebar: {
+    display: {
+      trigger: "Preferencias de visualización",
+      heading: "Visualización",
+      grouping: {
+        label: "Agrupación",
+        project: "Proyecto",
+        status: "Estado",
+      },
+      titleSource: {
+        label: "Título",
+        title: "Título",
+        branch: "Nombre de rama",
+      },
+      show: {
+        label: "Mostrar",
+        host: "Host",
+        changeRequest: "Pull request",
+        checks: "Comprobaciones",
+        services: "Servicios",
+        diff: "Estadísticas de cambios",
+        timestamp: "Última actividad",
+      },
+      checks: {
+        iconAndText: "Icono y texto",
+        icon: "Solo icono",
+        none: "Oculto",
+      },
+      hostFilter: {
+        label: "Host",
+        all: "Todos los hosts",
+      },
+    },
     pinned: {
       title: "Anclados",
     },
@@ -1030,7 +1078,7 @@ export const es: TranslationResources = {
       discord: "Discord",
       github: "Crear incidencia en GitHub",
       whatsNew: "Novedades",
-      version: "Paseo {{version}}",
+      appName: "Paseo",
     },
     sections: {
       sessions: "Historial",
@@ -1072,7 +1120,8 @@ export const es: TranslationResources = {
     },
     workspace: {
       status: {
-        scriptsAvailable: "Guiones disponibles",
+        serviceRunning: "Servicio {{name}} en ejecución",
+        serviceUnhealthy: "Servicio {{name}} con fallos",
         creating: "Creando...",
       },
       actions: {
@@ -1135,14 +1184,29 @@ export const es: TranslationResources = {
       composerStateRequired: "Se requiere el estado del compositor",
       selectModel: "Selecciona un modelo",
     },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "Elige por dónde empezar",
+      launch: "Choose what to launch",
+    },
     refPicker: {
       startingRef: "Árbitro inicial",
-      chooseStart: "Elige por dónde empezar",
       intoBase: "en {{baseRef}}",
       searching: "Búsqueda...",
       noMatchingRefs: "No hay árbitros coincidentes.",
       searchPlaceholder: "Buscar sucursales y relaciones públicas",
       title: "Empezar desde",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
   desktop: {
@@ -1313,7 +1377,6 @@ export const es: TranslationResources = {
     },
   },
   rootError: {
-    kicker: "Algo salió mal",
     title: "Paseo tuvo un problema.",
     body: "Vuelve a intentarlo para recargar la app. Si sigue ocurriendo, incluye los detalles de abajo al reportarlo.",
     details: "Detalles",
@@ -1807,6 +1870,7 @@ export const es: TranslationResources = {
       editor: "Editor",
       shortcuts: "Atajos",
       integrations: "Integraciones",
+      notifications: "Notificaciones",
       permissions: "Permisos",
       diagnostics: "Diagnóstico",
       about: "Acerca de",
@@ -1815,6 +1879,21 @@ export const es: TranslationResources = {
       title: "Editor",
       vimKeybindings: "Atajos de Vim",
       vimHint: "Se aplica a archivos fuente en web y escritorio.",
+    },
+    notifications: {
+      title: "Notificaciones",
+      permission: "Permiso de notificaciones",
+      refreshAccessibility: "Actualizar permiso de notificaciones",
+      playSound: "Reproducir sonido",
+      playSoundHint: "Reproduce un sonido cuando llega una notificación de escritorio",
+      test: "Probar notificación",
+      testHint: "Envía una notificación con esta configuración",
+      permissionRequired: "Permite el acceso a las notificaciones antes de probar",
+      send: "Enviar",
+      sending: "Enviando...",
+      sentTitle: "Notificación de prueba enviada",
+      sentDescription: "Paseo entregó la notificación al sistema operativo.",
+      sendFailedTitle: "No se pudo enviar la notificación de prueba",
     },
     hostSections: {
       projects: "Proyectos",
@@ -1892,6 +1971,7 @@ export const es: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "中文",
@@ -1900,6 +1980,11 @@ export const es: TranslationResources = {
     },
     diagnostics: {
       title: "Diagnóstico",
+      legacyTerminalRenderer: {
+        label: "Usar el renderizador de terminal anterior",
+        description: "Usa el terminal WebView anterior al volver a abrir un terminal",
+        accessibilityLabel: "Usar el renderizador de terminal anterior",
+      },
       testAudio: "audio de prueba",
       playTest: "Prueba de juego",
       playing: "Jugando...",
@@ -1960,6 +2045,7 @@ export const es: TranslationResources = {
           midnight: "Medianoche",
           claude: "claudio",
           ghostty: "fantasmal",
+          pureBlack: "Negro puro",
           auto: "Sistema",
         },
       },
@@ -2016,11 +2102,15 @@ export const es: TranslationResources = {
       searchPlaceholder: "Buscar atajos",
       unavailableOnMobile: "Los atajos de teclado solo están disponibles en el escritorio",
       capturePrompt: "Presione el acceso directo...",
+      unassigned: "Sin asignar",
       actions: {
+        menu: "Acciones para {{name}}",
         done: "Hecho",
         cancel: "Cancelar",
+        bind: "Asignar",
         rebind: "Reencuadernar",
-        reset: "Reiniciar",
+        clear: "Borrar",
+        reset: "Restablecer al valor predeterminado",
         resetAll: "Restablecer todo",
       },
       sections: {
@@ -2129,17 +2219,14 @@ export const es: TranslationResources = {
     },
     permissions: {
       title: "Permisos",
-      notifications: "Notificaciones",
       microphone: "Micrófono",
       refresh: "Refrescar",
       refreshing: "Refrescante...",
       refreshAccessibility: "Actualizar permisos de escritorio",
-      test: "Prueba",
       actions: {
         granted: "Otorgada",
         request: "Pedido",
         requesting: "Solicitando...",
-        busySuffix: "{{label}}...",
       },
     },
     host: {

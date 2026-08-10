@@ -12,15 +12,6 @@ initializing → idle → running → idle (or error → closed)
 
 Each live agent in `AgentManager` carries a `lastStatus` of `initializing`, `idle`, `running`, or `error`. `closed` is the persisted, resumable state for an agent record that has no live provider runtime. State transitions persist to disk and stream to subscribed clients via WebSocket.
 
-Every accepted foreground user Prompt is bracketed by diff lifecycle hooks. Immediately before `startTurn`, the daemon freezes a start snapshot and stores the Prompt record; after the provider returns a turn ID, that ID is attached to the record. A completed, failed, or canceled terminal event freezes the end snapshot before the foreground run lock is released. Running records therefore compare start-to-working-tree, while finished records compare immutable start-to-end snapshots and cannot be contaminated by later turns. Snapshot failures are logged but never prevent provider lifecycle handling.
-
-When a workspace is created before its first agent (for example, **Create and run setup**),
-the first successful agent creation supplies the missing naming context. If the workspace still has
-no user title, the daemon asynchronously generates one from that first prompt; Paseo-owned
-branch-off worktrees may also replace their generated placeholder branch. The title follows the
-prompt's primary language, including Chinese. Later agents and manual workspace titles never
-retrigger or get overwritten by this path, and generation failure never blocks the agent turn.
-
 ## Runtime residency
 
 An unarchived agent may be `closed` without being deleted or archived. Closing releases its provider
@@ -33,32 +24,14 @@ primed.
 Idle agents remain resident indefinitely. Runtime closure happens only through an explicit lifecycle
 action such as archive, replacement, reload, workspace teardown, or daemon shutdown.
 
-## Goal state is orthogonal to turn state
-
-A **turn** is one prompt execution. The agent `status`/`lifecycle` always describes that current turn, so a Goal-driven session can legitimately move `running → idle → running` while the Goal continues.
-
-A **Goal** is a provider-owned objective that can span multiple turns. Paseo projects the provider's current Goal as optional `goal: { objective, status }` data on the agent snapshot; it does not rewrite the turn lifecycle. Codex is the first provider with this integration. A missing `goal` field means the daemon does not advertise Goal state, while `goal: null` means the capable daemon has no current Goal.
-
-The shared **ongoing** predicate is:
-
-```text
-status !== closed AND (status === running OR goal.status === active)
-```
-
-Permission and lifecycle-error presentation still outrank an active Goal. Otherwise this predicate owns wait behavior, Stop availability, queued-message draining, status sorting, and workspace/sidebar activity. In particular, an idle turn with an active Goal remains ongoing: `wait` continues and queued messages stay queued until the Goal leaves `active`.
-
-| Goal status                      | Ongoing presentation | Attention behavior                      |
-| -------------------------------- | -------------------- | --------------------------------------- |
-| `active`                         | Running              | None                                    |
-| `paused`                         | Done/idle            | Silent                                  |
-| `complete`                       | Attention            | Finished notification                   |
-| `blocked`                        | Failed               | Goal error notification                 |
-| `usageLimited` / `budgetLimited` | Failed               | Goal error notification                 |
-| Unknown future status            | Failed               | Needs-attention Goal error notification |
-
-Stop is Goal-aware: it pauses an active Goal first, then interrupts a current turn if one exists. `cancelAgentRun` remains a lower-level, turn-only operation for internal flows that explicitly want that behavior. A pause failure does not prevent Paseo from attempting the turn interrupt, but the Stop request still reports the failure so callers do not mistake the Goal for stopped.
-
-The Goal status strip above the composer also exposes an explicit archive action. Goal archive is presentation-only: it persistently hides the current Goal strip without pausing the Goal, closing the runtime, setting the agent's `archivedAt`, or cascading to children. The daemon stores the archived Goal objective and timestamp so the hidden state survives reconnects and restarts. Status changes for that same objective remain hidden and do not set attention or produce system notifications. Agent lifecycle errors and permission requests remain visible. Clearing the Goal or receiving a different objective clears the marker so a later Goal appears normally.
+A provider runtime can still die on its own — crash, OOM kill, host suspend. Work the agent parked
+inside that process dies with it: Claude Code's background Bash shells, `Monitor` watches, and
+workflows all live in the CLI process, and the completion notification that would have woken the
+agent never arrives. A runtime that dies mid-turn is reported by whatever is draining its stream, but
+between turns nothing is watching, so the agent sits at `idle` looking healthy while its background
+work is gone. Report that exit as a turn failure so the agent lands in `error` with a timeline entry.
+Only the Claude provider does this today; the others still report a death only when a turn happens to
+be in flight.
 
 ### Cancellation
 
@@ -94,12 +67,11 @@ children.
 
 Archiving runs through `AgentManager.archiveAgent` (`packages/server/src/server/agent/agent-manager.ts`):
 
-1. Stop ongoing work (pause an active Goal, then interrupt a current turn)
-2. Snapshot the current session into the registry
-3. Set `archivedAt` and normalize `lastStatus` away from `running`/`initializing`
-4. Notify subscribers
-5. Close the runtime
-6. **Cascade-archive children** — any agent whose `paseo.parent-agent-id` label matches the archived agent gets archived too, recursively
+1. Snapshot the current session into the registry
+2. Set `archivedAt` and normalize `lastStatus` away from `running`/`initializing`
+3. Notify subscribers
+4. Close the runtime (kills the process if still running)
+5. **Cascade-archive children** — any agent whose `paseo.parent-agent-id` label matches the archived agent gets archived too, recursively
 
 Cascade is what keeps subagent fleets from outliving their orchestrator.
 
@@ -142,7 +114,7 @@ The asymmetry is intentional: a subagent's persistent relationship lives in the 
 
 Agent lifecycle status stays literal: a parent agent is `idle` when its own turn is idle, even if a child is running.
 
-Workspace status is an aggregate activity signal computed **per `workspaceId`**. Ownership is never derived from `cwd` — many workspaces may share one directory, and same-`cwd` siblings do not clump under one status. Root agents and cross-workspace subagents contribute their normal state bucket, including Goal state, to their own workspace. Ongoing same-workspace descendants — a running turn or an active Goal — contribute `running` to the nearest ancestor in that workspace; their non-ongoing attention, permission, and error states stay in the parent's subagents track. This makes a cross-workspace subagent behave like a detached agent for workspace visibility and status without removing its parent relationship.
+Workspace status is an aggregate activity signal computed **per `workspaceId`**. Ownership is never derived from `cwd` — many workspaces may share one directory, and same-`cwd` siblings do not clump under one status. Root agents and cross-workspace subagents contribute their normal state bucket to their own workspace. Same-workspace descendants contribute `running` to the nearest ancestor in that workspace; their non-running attention, permission, and error states stay in the parent's subagents track. This makes a cross-workspace subagent behave like a detached agent for workspace visibility and status without removing its parent relationship.
 
 Running provider-native subagents contribute `running` to the workspace owned by their parent agent. Their completed, failed, and canceled states stay in the parent's subagents track.
 
@@ -168,7 +140,7 @@ Provider descriptors may include one compact subtitle. The provider owns its con
 
 Claude Code announces subagent lifecycle on the SDK stream (`task_started` / `task_updated` / `task_notification` / `task_progress`), and Paseo reads those announcements rather than reconstructing them from sidechain frames. The live source (`subagents/live-source.ts`) and the replay source (`subagents/replay-source.ts`) both translate into one observation vocabulary (`subagents/observation.ts`), so a fact is derived once for both paths instead of once per path. Gotchas that are not obvious from the SDK types:
 
-- **Not every announced task is a subagent.** A backgrounded shell announces as `task_type: "local_bash"` with a `tool_use_id` and no `subagent_type`; workflows announce as `local_workflow`; ambient housekeeping sets `skip_transcript`. Filtering on the presence of a `tool_use_id` alone puts `sleep 20` in the subagents track.
+- **Not every announced task belongs in the track.** Task subagents announce as `local_agent` and workflows as `local_workflow`; a backgrounded shell announces as `local_bash` with the same `tool_use_id` shape, and ambient housekeeping sets `skip_transcript`. The Claude provider normalizes a workflow to a generic provider-subagent descriptor titled `Workflow`, using Claude's summary as its description and timeline opener. Shared storage, protocol, and UI do not distinguish it from another provider subagent.
 - **A task that was never declared gets no descriptor, by any route.** Filtered tasks still emit `task_notification`s carrying a `tool_use_id`, and still emit frames carrying `parent_tool_use_id`. Attributing either produces a descriptor with no identity and a defaulted `running` status — a nameless row that never finishes. Status, presentation updates, and sidechain frames all route through the declaration table.
 - **Task ids are session-scoped, not turn-scoped.** Cancelling a turn must not clear the routing table: a backgrounded child settles after the interrupt and needs its descriptor to still exist. Cancellation instead terminalizes the declared children that were running in the foreground, and a later `task_notification` is free to correct that guess. Backgrounded children are identified by `task_updated.patch.is_backgrounded`.
 - **Effort is only reachable through hooks.** It appears nowhere on the message stream at any depth, and the level Paseo requests is not necessarily the level that runs — a model that does not support it is silently downgraded. A hook firing inside a subagent reports the active post-downgrade level next to its `agent_id`, which is the same id `task_started` calls `task_id`.
@@ -214,12 +186,11 @@ $PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json
 
 Each agent is a single JSON file. Fields relevant to this doc:
 
-| Field                             | Type          | Meaning                                                                                    |
-| --------------------------------- | ------------- | ------------------------------------------------------------------------------------------ |
-| `id`                              | `string`      | Stable identifier                                                                          |
-| `archivedAt`                      | `string?`     | Soft-delete timestamp (ISO 8601)                                                           |
-| `labels["paseo.parent-agent-id"]` | `string?`     | Parent agent ID, set automatically for agent-scoped creation and removed by detach         |
-| `lastStatus`                      | `AgentStatus` | `initializing` / `idle` / `running` / `error` / `closed`                                   |
-| `goal`                            | `object?`     | Provider-owned `{ objective, status }`; optional and nullable, independent of `lastStatus` |
+| Field                             | Type          | Meaning                                                                            |
+| --------------------------------- | ------------- | ---------------------------------------------------------------------------------- |
+| `id`                              | `string`      | Stable identifier                                                                  |
+| `archivedAt`                      | `string?`     | Soft-delete timestamp (ISO 8601)                                                   |
+| `labels["paseo.parent-agent-id"]` | `string?`     | Parent agent ID, set automatically for agent-scoped creation and removed by detach |
+| `lastStatus`                      | `AgentStatus` | `initializing` / `idle` / `running` / `error` / `closed`                           |
 
 See [`docs/data-model.md`](./data-model.md) for the full agent record.

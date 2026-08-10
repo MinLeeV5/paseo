@@ -17,17 +17,17 @@ import {
   DEFAULT_CLIENT_SETTINGS,
   DEFAULT_BACKGROUND_IMAGE_OPACITY,
   DEFAULT_INTERFACE_OPACITY,
-  MAX_BACKGROUND_IMAGE_OPACITY,
-  MIN_BACKGROUND_IMAGE_OPACITY,
-  MAX_INTERFACE_OPACITY,
-  MIN_INTERFACE_OPACITY,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_TERMINAL_SCROLLBACK_LINES,
   DEFAULT_UI_FONT_SIZE,
   MAX_CODE_FONT_SIZE,
+  MAX_BACKGROUND_IMAGE_OPACITY,
+  MAX_INTERFACE_OPACITY,
   MAX_TERMINAL_SCROLLBACK_LINES,
   MAX_UI_FONT_SIZE,
   MIN_CODE_FONT_SIZE,
+  MIN_BACKGROUND_IMAGE_OPACITY,
+  MIN_INTERFACE_OPACITY,
   MIN_TERMINAL_SCROLLBACK_LINES,
   MIN_UI_FONT_SIZE,
   loadAppSettingsFromStorage as loadAppSettingsFromStoragePure,
@@ -47,6 +47,7 @@ import {
   type SendBehavior,
   type ServiceUrlBehavior,
   type Settings,
+  type SidebarWorkspaceTrailing,
   type SettingsDeps,
   type WorkspaceTitleSource,
 } from "./storage";
@@ -57,17 +58,17 @@ export {
   DEFAULT_CLIENT_SETTINGS,
   DEFAULT_BACKGROUND_IMAGE_OPACITY,
   DEFAULT_INTERFACE_OPACITY,
-  MAX_BACKGROUND_IMAGE_OPACITY,
-  MIN_BACKGROUND_IMAGE_OPACITY,
-  MAX_INTERFACE_OPACITY,
-  MIN_INTERFACE_OPACITY,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_TERMINAL_SCROLLBACK_LINES,
   DEFAULT_UI_FONT_SIZE,
   MAX_CODE_FONT_SIZE,
+  MAX_BACKGROUND_IMAGE_OPACITY,
+  MAX_INTERFACE_OPACITY,
   MAX_TERMINAL_SCROLLBACK_LINES,
   MAX_UI_FONT_SIZE,
   MIN_CODE_FONT_SIZE,
+  MIN_BACKGROUND_IMAGE_OPACITY,
+  MIN_INTERFACE_OPACITY,
   MIN_TERMINAL_SCROLLBACK_LINES,
   MIN_UI_FONT_SIZE,
   parseClampedFontSize,
@@ -87,8 +88,26 @@ export type {
   ServiceUrlBehavior,
   Settings,
   SettingsDeps,
+  SidebarWorkspaceTrailing,
   WorkspaceTitleSource,
 };
+
+/**
+ * Split a `Settings` patch into the part the app owns. The two halves persist to different
+ * places (AsyncStorage vs the Electron settings bridge), and the app's half is exactly the
+ * key set of `DEFAULT_CLIENT_SETTINGS` — reading the keys off it means a new app setting
+ * flows through here without anyone remembering to widen a hand-written list.
+ */
+function pickDefinedAppSettings(updates: Partial<Settings>): Partial<AppSettings> {
+  const appUpdates: Partial<AppSettings> = {};
+  for (const key of Object.keys(DEFAULT_CLIENT_SETTINGS) as (keyof AppSettings)[]) {
+    const value = updates[key];
+    if (value !== undefined) {
+      Object.assign(appUpdates, { [key]: value });
+    }
+  }
+  return appUpdates;
+}
 
 const productionDeps: SettingsDeps = {
   storage: AsyncStorage,
@@ -169,7 +188,7 @@ export function useSettings<TSelected>(
 
   const updateSettings = useCallback(
     async (updates: Partial<Settings>) => {
-      const { manageBuiltInDaemon, releaseChannel, ...appUpdates } = updates;
+      const appUpdates = pickDefinedAppSettings(updates);
       const promises: Promise<void>[] = [];
       if (Object.keys(appUpdates).length > 0) {
         promises.push(appSettings.updateSettings(appUpdates));
@@ -177,13 +196,13 @@ export function useSettings<TSelected>(
 
       if (isElectronRuntime()) {
         const desktopUpdates: Parameters<typeof desktopSettings.updateSettings>[0] = {};
-        if (manageBuiltInDaemon !== undefined) {
+        if (updates.manageBuiltInDaemon !== undefined) {
           desktopUpdates.daemon = {
-            manageBuiltInDaemon,
+            manageBuiltInDaemon: updates.manageBuiltInDaemon,
           };
         }
-        if (releaseChannel !== undefined) {
-          desktopUpdates.releaseChannel = releaseChannel;
+        if (updates.releaseChannel !== undefined) {
+          desktopUpdates.releaseChannel = updates.releaseChannel;
         }
         if (Object.keys(desktopUpdates).length > 0) {
           promises.push(desktopSettings.updateSettings(desktopUpdates));

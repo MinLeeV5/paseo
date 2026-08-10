@@ -100,6 +100,11 @@ import {
   THINKING_APPLIES_NEXT_TURN_NOTICE,
 } from "../provider-notices.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
+import {
+  applyCodexToolPolicy,
+  CodexProviderOptionsSchema,
+  type CodexProviderOptions,
+} from "./codex/options.js";
 
 function assertChildWithPipes(
   child: ChildProcess,
@@ -282,7 +287,6 @@ interface CodexAppServerAgentDeps {
 interface CodexModePreset {
   approvalPolicy: string;
   sandbox: string;
-  networkAccess?: boolean;
   approvalsReviewer?: "auto_review";
 }
 
@@ -303,7 +307,6 @@ const MODE_PRESETS: Record<string, CodexModePreset> = {
   "full-access": {
     approvalPolicy: "never",
     sandbox: "danger-full-access",
-    networkAccess: true,
   },
 };
 
@@ -664,227 +667,63 @@ function parseFrontMatter(markdown: string): {
   return { frontMatter, body };
 }
 
-function pushUniquePath(paths: string[], nextPath: string): void {
-  if (!paths.includes(nextPath)) {
-    paths.push(nextPath);
+async function listCodexCustomPrompts(): Promise<AgentSlashCommand[]> {
+  const codexHome = resolveCodexHomeDir();
+  const promptsDir = path.join(codexHome, "prompts");
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(promptsDir, { withFileTypes: true });
+  } catch {
+    return [];
   }
+
+  const mdEntries = entries.filter(
+    (entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name.slice(0, -".md".length),
+  );
+  const parsedCommands = await Promise.all(
+    mdEntries.map(async (entry): Promise<AgentSlashCommand | null> => {
+      const name = entry.name.slice(0, -".md".length);
+      const fullPath = path.join(promptsDir, entry.name);
+      let content: string;
+      try {
+        content = await fs.readFile(fullPath, "utf8");
+      } catch {
+        return null;
+      }
+      const parsed = parseFrontMatter(content);
+      const description = parsed.frontMatter["description"] ?? "Custom prompt";
+      const argumentHint =
+        parsed.frontMatter["argument-hint"] ?? parsed.frontMatter["argument_hint"] ?? "";
+      return {
+        name: `prompts:${name}`,
+        description,
+        argumentHint,
+        kind: "command",
+      };
+    }),
+  );
+  const commands: AgentSlashCommand[] = parsedCommands.filter(
+    (cmd): cmd is AgentSlashCommand => cmd !== null,
+  );
+  return commands.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function codexWorkspaceSearchBases(
+export async function listCodexSkills(
   cwd: string,
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<string[]> {
-  const bases: string[] = [];
-  pushUniquePath(bases, cwd);
+): Promise<AgentSlashCommand[]> {
+  const candidates: string[] = [];
+  candidates.push(path.join(cwd, ".codex", "skills"));
 
   const repoRoot = workspaceGitService
     ? await workspaceGitService.resolveRepoRoot(cwd).catch(() => null)
     : null;
   if (repoRoot) {
-    pushUniquePath(bases, path.dirname(cwd));
-    pushUniquePath(bases, repoRoot);
+    candidates.push(path.join(path.dirname(cwd), ".codex", "skills"));
+    candidates.push(path.join(repoRoot, ".codex", "skills"));
   }
 
-  return bases;
-}
-
-async function collectMarkdownFiles(dir: string): Promise<string[]> {
-  let entries: Dirent[];
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const files = await Promise.all(
-    entries.map(async (entry): Promise<string[]> => {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        return collectMarkdownFiles(fullPath);
-      }
-      if (entry.isFile() && entry.name.endsWith(".md")) {
-        return [fullPath];
-      }
-      return [];
-    }),
-  );
-  return files.flat();
-}
-
-function commandNameFromMarkdownPath(root: string, fullPath: string): string | null {
-  const relative = path.relative(root, fullPath);
-  if (relative.startsWith("..") || path.isAbsolute(relative) || !relative.endsWith(".md")) {
-    return null;
-  }
-  const withoutExt = relative.slice(0, -".md".length);
-  const parts = withoutExt.split(path.sep).filter(Boolean);
-  return parts.length > 0 ? parts.join(":") : null;
-}
-
-interface CodexMarkdownCommand {
-  name: string;
-  description: string;
-  argumentHint: string;
-  body: string;
-}
-
-async function readCodexMarkdownCommand(
-  fullPath: string,
-  name: string,
-): Promise<CodexMarkdownCommand | null> {
-  let content: string;
-  try {
-    content = await fs.readFile(fullPath, "utf8");
-  } catch {
-    return null;
-  }
-  const parsed = parseFrontMatter(content);
-  const description = parsed.frontMatter["description"] ?? "Custom command";
-  const argumentHint =
-    parsed.frontMatter["argument-hint"] ?? parsed.frontMatter["argument_hint"] ?? "";
-  return {
-    name,
-    description,
-    argumentHint,
-    body: parsed.body,
-  };
-}
-
-async function listMarkdownCommandsFromRoots(
-  roots: string[],
-  options?: { namePrefix?: string },
-): Promise<CodexMarkdownCommand[]> {
-  const commandsByName = new Map<string, CodexMarkdownCommand>();
-  for (const root of roots) {
-    const files = await collectMarkdownFiles(root);
-    const parsedCommands = await Promise.all(
-      files.map(async (fullPath) => {
-        const pathName = commandNameFromMarkdownPath(root, fullPath);
-        if (!pathName) {
-          return null;
-        }
-        return readCodexMarkdownCommand(fullPath, `${options?.namePrefix ?? ""}${pathName}`);
-      }),
-    );
-    for (const command of parsedCommands) {
-      if (command && !commandsByName.has(command.name)) {
-        commandsByName.set(command.name, command);
-      }
-    }
-  }
-  return Array.from(commandsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-async function codexPromptRoots(
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<string[]> {
-  const roots: string[] = [];
-  for (const base of await codexWorkspaceSearchBases(cwd, workspaceGitService)) {
-    pushUniquePath(roots, path.join(base, ".agents", "prompts"));
-    pushUniquePath(roots, path.join(base, ".codex", "prompts"));
-  }
-  pushUniquePath(roots, path.join(os.homedir(), ".agents", "prompts"));
-  pushUniquePath(roots, path.join(resolveCodexHomeDir(), "prompts"));
-  return roots;
-}
-
-async function codexCommandRoots(
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<string[]> {
-  const roots: string[] = [];
-  for (const base of await codexWorkspaceSearchBases(cwd, workspaceGitService)) {
-    pushUniquePath(roots, path.join(base, ".agents", "commands"));
-    pushUniquePath(roots, path.join(base, ".codex", "commands"));
-  }
-  pushUniquePath(roots, path.join(os.homedir(), ".agents", "commands"));
-  pushUniquePath(roots, path.join(resolveCodexHomeDir(), "commands"));
-  return roots;
-}
-
-async function listCodexCustomPrompts(
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<AgentSlashCommand[]> {
-  return (
-    await listMarkdownCommandsFromRoots(await codexPromptRoots(cwd, workspaceGitService), {
-      namePrefix: "prompts:",
-    })
-  )
-    .map((command): AgentSlashCommand => {
-      return {
-        name: command.name,
-        description: command.description,
-        argumentHint: command.argumentHint,
-        kind: "command",
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-async function listCodexMarkdownCommands(
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<AgentSlashCommand[]> {
-  return (await listMarkdownCommandsFromRoots(await codexCommandRoots(cwd, workspaceGitService)))
-    .map((command) => ({
-      name: command.name,
-      description: command.description,
-      argumentHint: command.argumentHint,
-      kind: "command" as const,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-async function findCodexMarkdownCommand(
-  commandName: string,
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<CodexMarkdownCommand | null> {
-  const roots = commandName.startsWith("prompts:")
-    ? await codexPromptRoots(cwd, workspaceGitService)
-    : await codexCommandRoots(cwd, workspaceGitService);
-  const normalizedName = commandName.startsWith("prompts:")
-    ? commandName.slice("prompts:".length)
-    : commandName;
-  const pathParts = normalizedName.split(":");
-  if (pathParts.some((part) => !part || part === "." || part === ".." || /[/\\]/u.test(part))) {
-    return null;
-  }
-  for (const root of roots) {
-    const fullPath = path.join(root, ...pathParts) + ".md";
-    const command = await readCodexMarkdownCommand(fullPath, commandName);
-    if (command) {
-      return command;
-    }
-  }
-  return null;
-}
-
-interface CodexSkillEntry {
-  name: string;
-  description: string;
-  path: string;
-}
-
-async function listCodexSkillEntries(
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<CodexSkillEntry[]> {
-  const candidates: string[] = [];
-  const pushSkillRoots = (baseDir: string) => {
-    pushUniquePath(candidates, path.join(baseDir, ".agents", "skills"));
-    pushUniquePath(candidates, path.join(baseDir, ".codex", "skills"));
-    pushUniquePath(candidates, path.join(baseDir, "skills"));
-  };
-
-  for (const base of await codexWorkspaceSearchBases(cwd, workspaceGitService)) {
-    pushSkillRoots(base);
-  }
-
-  pushUniquePath(candidates, path.join(os.homedir(), ".agents", "skills"));
-  pushUniquePath(candidates, path.join(resolveCodexHomeDir(), "skills"));
+  candidates.push(path.join(resolveCodexHomeDir(), "skills"));
 
   const candidateReads = await Promise.all(
     candidates.map(async (dir) => {
@@ -892,7 +731,7 @@ async function listCodexSkillEntries(
       try {
         entries = await fs.readdir(dir, { withFileTypes: true });
       } catch {
-        return [] as { path: string; content: string }[];
+        return [] as string[];
       }
       const dirEntries = entries.filter((entry) => entry.isDirectory() || entry.isSymbolicLink());
       const skillContents = await Promise.all(
@@ -900,65 +739,37 @@ async function listCodexSkillEntries(
           const skillDir = path.join(dir, entry.name);
           const skillPath = path.join(skillDir, "SKILL.md");
           try {
-            return {
-              path: skillPath,
-              content: await fs.readFile(skillPath, "utf8"),
-            };
+            return await fs.readFile(skillPath, "utf8");
           } catch {
             return null;
           }
         }),
       );
-      return skillContents.filter(
-        (content): content is { path: string; content: string } => content !== null,
-      );
+      return skillContents.filter((content): content is string => content !== null);
     }),
   );
 
-  const skillsByName = new Map<string, CodexSkillEntry>();
-  for (const skillEntries of candidateReads) {
-    for (const { path: skillPath, content } of skillEntries) {
+  const commandsByName = new Map<string, AgentSlashCommand>();
+  for (const skillContents of candidateReads) {
+    for (const content of skillContents) {
       const { frontMatter } = parseFrontMatter(content);
       const name = frontMatter["name"];
       const description = frontMatter["description"];
       if (!name || !description) {
         continue;
       }
-      if (!skillsByName.has(name)) {
-        skillsByName.set(name, {
+      if (!commandsByName.has(name)) {
+        commandsByName.set(name, {
           name,
           description,
-          path: skillPath,
+          argumentHint: "",
+          kind: "skill",
         });
       }
     }
   }
 
-  return Array.from(skillsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-export async function listCodexSkills(
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<AgentSlashCommand[]> {
-  return (await listCodexSkillEntries(cwd, workspaceGitService)).map((skill) => ({
-    name: skill.name,
-    description: skill.description,
-    argumentHint: "",
-    kind: "skill",
-  }));
-}
-
-async function findCodexSkill(
-  skillName: string,
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<CodexSkillEntry | null> {
-  return (
-    (await listCodexSkillEntries(cwd, workspaceGitService)).find(
-      (skill) => skill.name === skillName,
-    ) ?? null
-  );
+  return Array.from(commandsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function escapeRegExp(value: string): string {
@@ -2173,16 +1984,59 @@ export async function rollbackCodexThread(
   return parseCodexThreadRollbackResponse(await client.request("thread/rollback", params));
 }
 
-function toSandboxPolicy(type: string, networkAccess?: boolean): Record<string, unknown> {
+function toSandboxPolicy(
+  type: string,
+  workspaceWrite?: CodexProviderOptions["sandbox_workspace_write"],
+): Record<string, unknown> {
   switch (type) {
     case "read-only":
       return { type: "readOnly" };
     case "workspace-write":
-      return { type: "workspaceWrite", networkAccess: networkAccess ?? false };
+      return {
+        type: "workspaceWrite",
+        networkAccess: workspaceWrite?.network_access ?? false,
+        writableRoots: workspaceWrite?.writable_roots ?? [],
+        excludeSlashTmp: workspaceWrite?.exclude_slash_tmp ?? false,
+        excludeTmpdirEnvVar: workspaceWrite?.exclude_tmpdir_env_var ?? false,
+      };
     case "danger-full-access":
       return { type: "dangerFullAccess" };
     default:
-      return { type: "workspaceWrite", networkAccess: networkAccess ?? false };
+      return { type: "workspaceWrite", networkAccess: false, writableRoots: [] };
+  }
+}
+
+function readSandboxWorkspaceWrite(
+  value: unknown,
+): NonNullable<CodexProviderOptions["sandbox_workspace_write"]> | null {
+  const record = toObjectRecord(value);
+  if (!record) return null;
+  const workspaceWrite: NonNullable<CodexProviderOptions["sandbox_workspace_write"]> = {};
+  const writableRoots = record.writable_roots ?? record.writableRoots;
+  if (Array.isArray(writableRoots)) {
+    workspaceWrite.writable_roots = writableRoots.filter(
+      (root): root is string => typeof root === "string",
+    );
+  }
+  const networkAccess = record.network_access ?? record.networkAccess;
+  if (typeof networkAccess === "boolean") workspaceWrite.network_access = networkAccess;
+  const excludeSlashTmp = record.exclude_slash_tmp ?? record.excludeSlashTmp;
+  if (typeof excludeSlashTmp === "boolean") workspaceWrite.exclude_slash_tmp = excludeSlashTmp;
+  const excludeTmpdirEnvVar = record.exclude_tmpdir_env_var ?? record.excludeTmpdirEnvVar;
+  if (typeof excludeTmpdirEnvVar === "boolean") {
+    workspaceWrite.exclude_tmpdir_env_var = excludeTmpdirEnvVar;
+  }
+  return workspaceWrite;
+}
+
+function toCodexSandboxPolicyType(type: string): string {
+  switch (type) {
+    case "workspace-write":
+      return "workspaceWrite";
+    case "read-only":
+      return "readOnly";
+    default:
+      return "dangerFullAccess";
   }
 }
 
@@ -3323,6 +3177,12 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly logger: Logger;
   private readonly config: AgentSessionConfig;
   private currentMode: string;
+  private hasWorkflowModeOverride: boolean;
+  private readonly providerOptions: CodexProviderOptions;
+  private resolvedWorkspaceWrite: NonNullable<
+    CodexProviderOptions["sandbox_workspace_write"]
+  > | null = null;
+  private resolvedSandboxPolicy: Record<string, unknown> | null = null;
   private currentThreadId: string | null = null;
   private currentTurnId: string | null = null;
   private pendingForegroundTurnIdentification: {
@@ -3394,7 +3254,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     settings: Record<string, unknown>;
     name: string;
   } | null = null;
-  private cachedSkills: Array<{ name: string; description: string; path: string }> = [];
+  private cachedSkills: Array<{ name: string; description: string; path: string }> | null = null;
   private cachedGoal: AgentGoal | null = null;
   private hasCachedGoal = false;
 
@@ -3415,11 +3275,12 @@ export class CodexAppServerAgentSession implements AgentSession {
       provider: CODEX_PROVIDER,
       agentId: this.agentId,
     });
-    if (config.modeId === undefined) {
-      throw new Error("Codex agent requires modeId to be specified");
+    if (config.modeId !== undefined) {
+      validateCodexMode(config.modeId);
     }
-    validateCodexMode(config.modeId);
-    this.currentMode = config.modeId;
+    this.hasWorkflowModeOverride = config.modeId !== undefined;
+    this.currentMode = config.modeId ?? DEFAULT_CODEX_MODE_ID;
+    this.providerOptions = CodexProviderOptionsSchema.parse(config.providerOptions ?? {});
     this.config = config;
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
     if (this.config.featureValues?.fast_mode && codexModelSupportsFastMode(this.config.model)) {
@@ -3493,6 +3354,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       await client.request("initialize", buildCodexAppServerInitializeParams());
       client.notify("initialized", {});
 
+      await this.loadResolvedWorkspaceWrite();
       await this.loadCollaborationModes();
       await this.loadSkills();
 
@@ -3522,6 +3384,26 @@ export class CodexAppServerAgentSession implements AgentSession {
       }
       throw error;
     }
+  }
+
+  private async loadResolvedWorkspaceWrite(): Promise<void> {
+    if (!this.client) return;
+    try {
+      const response = toObjectRecord(
+        await this.client.request("config/read", { cwd: this.config.cwd ?? null }),
+      );
+      const config = toObjectRecord(response?.config);
+      this.resolvedWorkspaceWrite = readSandboxWorkspaceWrite(config?.sandbox_workspace_write);
+    } catch (error) {
+      this.logger.debug({ error }, "Failed to read resolved Codex workspace-write config");
+    }
+  }
+
+  private rememberResolvedSandboxPolicy(response: unknown): void {
+    const sandbox = toObjectRecord(toObjectRecord(response)?.sandbox);
+    this.resolvedSandboxPolicy = sandbox ?? null;
+    if (sandbox?.type !== "workspaceWrite") return;
+    this.resolvedWorkspaceWrite = readSandboxWorkspaceWrite(sandbox);
   }
 
   private createClosedError(): Error {
@@ -3606,6 +3488,10 @@ export class CodexAppServerAgentSession implements AgentSession {
           const skillRecord = toObjectRecord(skill);
           if (typeof skillRecord?.name !== "string" || typeof skillRecord?.path !== "string")
             continue;
+          // Codex skills/list returns disabled skills with enabled:false; omit them from
+          // slash-command surfaces so Paseo matches Codex CLI/TUI behavior.
+          // Missing enabled (older binaries) is treated as enabled.
+          if (skillRecord.enabled === false) continue;
           if (!skillsByName.has(skillRecord.name)) {
             skillsByName.set(skillRecord.name, {
               name: skillRecord.name,
@@ -3627,7 +3513,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         },
         "provider.codex.metadata.skills_failed",
       );
-      this.cachedSkills = [];
+      this.cachedSkills = null;
     }
   }
 
@@ -3873,7 +3759,8 @@ export class CodexAppServerAgentSession implements AgentSession {
       if (codexConfig) {
         params.config = codexConfig;
       }
-      await this.client.request("thread/resume", params);
+      const response = await this.client.request("thread/resume", params);
+      this.rememberResolvedSandboxPolicy(response);
     } catch (error) {
       const threadId = this.currentThreadId;
       const message = error instanceof Error ? error.message : String(error);
@@ -3936,14 +3823,12 @@ export class CodexAppServerAgentSession implements AgentSession {
     args?: string,
   ): Promise<CodexPromptInput> {
     if (commandName.startsWith("prompts:")) {
-      const command = await findCodexMarkdownCommand(
-        commandName,
-        this.config.cwd,
-        this.deps.workspaceGitService,
-      );
-      if (command) {
-        return expandCodexCustomPrompt(command.body, args);
-      }
+      const promptName = commandName.slice("prompts:".length);
+      const codexHome = resolveCodexHomeDir();
+      const promptPath = path.join(codexHome, "prompts", `${promptName}.md`);
+      const raw = await fs.readFile(promptPath, "utf8");
+      const parsed = parseFrontMatter(raw);
+      return expandCodexCustomPrompt(parsed.body, args);
     }
 
     if (!this.connected) {
@@ -3951,7 +3836,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     } else {
       await this.loadSkills();
     }
-    const skill = this.cachedSkills.find((entry) => entry.name === commandName);
+    const skill = this.cachedSkills?.find((entry) => entry.name === commandName);
     if (skill) {
       const trimmedArgs = args?.trim() ?? "";
       const text = trimmedArgs ? `$${skill.name} ${trimmedArgs}` : `$${skill.name}`;
@@ -3960,30 +3845,6 @@ export class CodexAppServerAgentSession implements AgentSession {
         { type: "text", text },
       ];
       return input;
-    }
-
-    const fallbackSkill = await findCodexSkill(
-      commandName,
-      this.config.cwd,
-      this.deps.workspaceGitService,
-    );
-    if (fallbackSkill) {
-      const trimmedArgs = args?.trim() ?? "";
-      const text = trimmedArgs ? `$${fallbackSkill.name} ${trimmedArgs}` : `$${fallbackSkill.name}`;
-      const input: CodexPromptContentBlock[] = [
-        { type: "skill", name: fallbackSkill.name, path: fallbackSkill.path },
-        { type: "text", text },
-      ];
-      return input;
-    }
-
-    const command = await findCodexMarkdownCommand(
-      commandName,
-      this.config.cwd,
-      this.deps.workspaceGitService,
-    );
-    if (command) {
-      return expandCodexCustomPrompt(command.body, args);
     }
 
     return args ? `$${commandName} ${args}` : `$${commandName}`;
@@ -3995,29 +3856,19 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): Promise<{
     params: Record<string, unknown>;
     thinkingOptionId?: string;
-    approvalPolicy: string;
-    sandboxPolicyType: string;
+    approvalPolicy?: string;
+    sandboxPolicyType?: string;
     hasOutputSchema: boolean;
     hasDeveloperInstructions: boolean;
     hasCodexConfig: boolean;
   }> {
     const input = await this.buildUserInput(prompt);
     const preset = MODE_PRESETS[this.currentMode] ?? MODE_PRESETS[DEFAULT_CODEX_MODE_ID];
-    const approvalPolicy = this.config.approvalPolicy ?? preset.approvalPolicy;
-    const sandboxPolicyType = this.config.sandboxMode ?? preset.sandbox;
-
     const params: Record<string, unknown> = {
       threadId: this.currentThreadId,
       input,
-      approvalPolicy,
-      sandboxPolicy: toSandboxPolicy(
-        sandboxPolicyType,
-        typeof this.config.networkAccess === "boolean"
-          ? this.config.networkAccess
-          : preset.networkAccess,
-      ),
     };
-    applyApprovalsReviewerParam(params, preset);
+    const { approvalPolicy, sandboxPolicyType } = this.applyTurnWorkflowPolicy(params, preset);
 
     if (this.config.model) {
       params.model = this.config.model;
@@ -4064,6 +3915,34 @@ export class CodexAppServerAgentSession implements AgentSession {
     };
   }
 
+  private applyTurnWorkflowPolicy(
+    params: Record<string, unknown>,
+    preset: CodexModePreset,
+  ): { approvalPolicy?: string; sandboxPolicyType?: string } {
+    const approvalPolicy = this.hasWorkflowModeOverride ? preset.approvalPolicy : undefined;
+    const sandboxPolicyType =
+      this.providerOptions.sandbox_mode ??
+      (this.hasWorkflowModeOverride ? preset.sandbox : undefined);
+    if (approvalPolicy && this.providerOptions.approval_policy === undefined) {
+      params.approvalPolicy = approvalPolicy;
+    }
+    if (sandboxPolicyType) {
+      const nativeType = toCodexSandboxPolicyType(sandboxPolicyType);
+      const workspaceWrite = {
+        ...this.resolvedWorkspaceWrite,
+        ...this.providerOptions.sandbox_workspace_write,
+      };
+      params.sandboxPolicy =
+        this.resolvedSandboxPolicy?.type === nativeType
+          ? this.resolvedSandboxPolicy
+          : toSandboxPolicy(sandboxPolicyType, workspaceWrite);
+    }
+    if (this.hasWorkflowModeOverride) {
+      applyApprovalsReviewerParam(params, preset);
+    }
+    return { approvalPolicy, sandboxPolicyType };
+  }
+
   private logTurnStartSummary({
     turnId,
     thinkingOptionId,
@@ -4075,8 +3954,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   }: {
     turnId: string;
     thinkingOptionId?: string;
-    approvalPolicy: string;
-    sandboxPolicyType: string;
+    approvalPolicy?: string;
+    sandboxPolicyType?: string;
     hasOutputSchema: boolean;
     hasDeveloperInstructions: boolean;
     hasCodexConfig: boolean;
@@ -4090,8 +3969,8 @@ export class CodexAppServerAgentSession implements AgentSession {
         effort: thinkingOptionId ?? null,
         serviceTier: this.serviceTier,
         cwd: this.config.cwd ?? null,
-        approvalPolicy,
-        sandboxPolicyType,
+        approvalPolicy: approvalPolicy ?? null,
+        sandboxPolicyType: sandboxPolicyType ?? null,
         hasCollaborationMode: Boolean(this.resolvedCollaborationMode),
         hasOutputSchema,
         hasDeveloperInstructions,
@@ -4203,8 +4082,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.pendingForegroundTurnIdentification?.resolve(null);
       this.pendingForegroundTurnIdentification = null;
       this.activeForegroundTurnId = null;
-      // A timed-out request may still have started remotely. Keep the correlation
-      // until a user item arrives or the next turn replaces it.
+      this.activeClientMessageId = null;
       throw error;
     }
   }
@@ -4312,6 +4190,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   async setMode(modeId: string): Promise<void | AgentProviderNotice> {
     validateCodexMode(modeId);
     this.currentMode = modeId;
+    this.hasWorkflowModeOverride = true;
+    this.config.modeId = modeId;
     this.cachedRuntimeInfo = null;
     if (this.activeForegroundTurnId) {
       return MODE_APPLIES_NEXT_TURN_NOTICE;
@@ -4549,10 +4429,11 @@ export class CodexAppServerAgentSession implements AgentSession {
         cwd: this.config.cwd,
         title: this.config.title ?? null,
         threadId: this.currentThreadId,
-        modeId: this.currentMode,
+        modeId: this.config.modeId,
         model: this.config.model ?? null,
         thinkingOptionId,
-        extra: this.config.extra,
+        providerOptions: this.config.providerOptions,
+        toolPolicy: this.config.toolPolicy,
         systemPrompt: this.config.systemPrompt,
         mcpServers: this.config.mcpServers,
       },
@@ -4654,23 +4535,22 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
-    const prompts = await listCodexCustomPrompts(this.config.cwd, this.deps.workspaceGitService);
-    const markdownCommands = await listCodexMarkdownCommands(
-      this.config.cwd,
-      this.deps.workspaceGitService,
-    );
+    const prompts = await listCodexCustomPrompts();
     if (!this.connected) {
       await this.connect();
     } else {
       await this.loadSkills();
     }
-    const appServerSkills = this.cachedSkills.map((skill) => ({
+    const appServerSkills = (this.cachedSkills ?? []).map((skill) => ({
       name: skill.name,
       description: skill.description,
       argumentHint: "",
       kind: "skill" as const,
     }));
-    const fallbackSkills = await listCodexSkills(this.config.cwd, this.deps.workspaceGitService);
+    const fallbackSkills =
+      this.cachedSkills === null
+        ? await listCodexSkills(this.config.cwd, this.deps.workspaceGitService)
+        : [];
     const builtin: AgentSlashCommand[] = [
       {
         name: "compact",
@@ -4687,40 +4567,22 @@ export class CodexAppServerAgentSession implements AgentSession {
         kind: "command",
       });
     }
-    const commandsByName = new Map<string, AgentSlashCommand>();
-    for (const command of [
-      ...builtin,
-      ...appServerSkills,
-      ...fallbackSkills,
-      ...prompts,
-      ...markdownCommands,
-    ]) {
-      if (!commandsByName.has(command.name)) {
-        commandsByName.set(command.name, command);
-      }
-    }
-    return Array.from(commandsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return [...builtin, ...appServerSkills, ...fallbackSkills, ...prompts].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
   }
 
   async getGoal(): Promise<AgentGoal | null> {
-    if (!this.goalsEnabled) {
-      return null;
-    }
+    if (!this.goalsEnabled) return null;
     return await this.refreshGoal(false);
   }
 
   async pauseGoal(): Promise<AgentGoal | null> {
-    if (!this.goalsEnabled) {
-      return null;
-    }
+    if (!this.goalsEnabled) return null;
     await this.connect();
-    if (!this.currentThreadId) {
-      return null;
-    }
+    if (!this.currentThreadId) return null;
     await this.ensureThreadLoaded();
-    if (!this.client) {
-      throw new Error("Codex client is not initialized");
-    }
+    if (!this.client) throw new Error("Codex client is not initialized");
     await this.client.request("thread/goal/set", {
       threadId: this.currentThreadId,
       status: "paused",
@@ -4735,9 +4597,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       return null;
     }
     await this.ensureThreadLoaded();
-    if (!this.client) {
-      throw new Error("Codex client is not initialized");
-    }
+    if (!this.client) throw new Error("Codex client is not initialized");
     const response = toObjectRecord(
       await this.client.request("thread/goal/get", { threadId: this.currentThreadId }),
     );
@@ -4756,9 +4616,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     this.cachedGoal = goal;
     this.hasCachedGoal = true;
-    if (emit) {
-      this.emitEvent({ type: "goal_changed", provider: CODEX_PROVIDER, goal });
-    }
+    if (emit) this.emitEvent({ type: "goal_changed", provider: CODEX_PROVIDER, goal });
   }
 
   tryHandleOutOfBand(
@@ -4943,25 +4801,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.config.model = model;
     this.config.thinkingOptionId = thinkingOptionId;
 
-    const preset = MODE_PRESETS[this.currentMode] ?? MODE_PRESETS[DEFAULT_CODEX_MODE_ID];
-    const approvalPolicy = this.config.approvalPolicy ?? preset.approvalPolicy;
-    const sandbox = this.config.sandboxMode ?? preset.sandbox;
-    const innerConfig = this.buildCodexInnerConfig();
-    const developerInstructions = composeSystemPromptParts(
-      this.config.systemPrompt,
-      this.config.daemonAppendSystemPrompt,
-    );
-    const params: Record<string, unknown> = {
-      model,
-      cwd: this.config.cwd ?? null,
-      approvalPolicy,
-      sandbox,
-      ...(developerInstructions ? { developerInstructions } : {}),
-      ...(innerConfig ? { config: innerConfig } : {}),
-      ...(this.ephemeral ? { ephemeral: true } : {}),
-    };
-    applyApprovalsReviewerParam(params, preset);
+    const { params, approvalPolicy, sandbox } = this.buildThreadStartRequest(model);
     const rawResponse = await this.client.request("thread/start", params);
+    this.rememberResolvedSandboxPolicy(rawResponse);
     const response = toObjectRecord(rawResponse);
     const threadRecord = toObjectRecord(response?.thread);
     const threadId = typeof threadRecord?.id === "string" ? threadRecord.id : undefined;
@@ -4973,8 +4815,8 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (
       shouldPromoteThreadResponseToAutoReview({
         approvalsReviewer: responseApprovalsReviewer,
-        approvalPolicy,
-        sandbox,
+        approvalPolicy: approvalPolicy ?? String(this.providerOptions.approval_policy ?? ""),
+        sandbox: sandbox ?? this.providerOptions.sandbox_mode ?? "",
       })
     ) {
       this.currentMode = "auto-review";
@@ -4983,8 +4825,42 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.currentThreadId = threadId;
   }
 
+  private buildThreadStartRequest(model: string): {
+    params: Record<string, unknown>;
+    approvalPolicy?: string;
+    sandbox?: string;
+  } {
+    const preset = MODE_PRESETS[this.currentMode] ?? MODE_PRESETS[DEFAULT_CODEX_MODE_ID];
+    const approvalPolicy = this.hasWorkflowModeOverride ? preset.approvalPolicy : undefined;
+    const sandbox = this.hasWorkflowModeOverride ? preset.sandbox : undefined;
+    const innerConfig = this.buildCodexInnerConfig();
+    const developerInstructions = composeSystemPromptParts(
+      this.config.systemPrompt,
+      this.config.daemonAppendSystemPrompt,
+    );
+    const params: Record<string, unknown> = {
+      model,
+      cwd: this.config.cwd ?? null,
+      ...(approvalPolicy && this.providerOptions.approval_policy === undefined
+        ? { approvalPolicy }
+        : {}),
+      ...(sandbox && this.providerOptions.sandbox_mode === undefined ? { sandbox } : {}),
+      ...(developerInstructions ? { developerInstructions } : {}),
+      ...(innerConfig ? { config: innerConfig } : {}),
+      ...(this.ephemeral ? { ephemeral: true } : {}),
+    };
+    if (this.hasWorkflowModeOverride) {
+      applyApprovalsReviewerParam(params, preset);
+    }
+    return { params, approvalPolicy, sandbox };
+  }
+
   private buildCodexInnerConfig(): Record<string, unknown> | null {
     const innerConfig: Record<string, unknown> = {};
+    Object.assign(innerConfig, this.providerOptions);
+    if (this.deps.customCodexConfig) {
+      Object.assign(innerConfig, this.deps.customCodexConfig);
+    }
     if (this.config.mcpServers) {
       const mcpServers: Record<string, CodexMcpServerConfig> = {};
       for (const [name, serverConfig] of Object.entries(this.config.mcpServers)) {
@@ -4992,13 +4868,8 @@ export class CodexAppServerAgentSession implements AgentSession {
       }
       innerConfig.mcp_servers = mcpServers;
     }
-    if (this.config.extra?.codex) {
-      Object.assign(innerConfig, this.config.extra.codex);
-    }
-    if (this.deps.customCodexConfig) {
-      Object.assign(innerConfig, this.deps.customCodexConfig);
-    }
-    return Object.keys(innerConfig).length > 0 ? innerConfig : null;
+    const configured = applyCodexToolPolicy(innerConfig, this.config.toolPolicy);
+    return Object.keys(configured).length > 0 ? configured : null;
   }
 
   private async buildUserInput(prompt: CodexPromptInput): Promise<CodexAppServerUserInput[]> {
@@ -5082,13 +4953,9 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private handleGoalNotification(method: string, params: Record<string, unknown> | null): boolean {
-    if (method !== "thread/goal/updated" && method !== "thread/goal/cleared") {
-      return false;
-    }
+    if (method !== "thread/goal/updated" && method !== "thread/goal/cleared") return false;
     const threadId = typeof params?.threadId === "string" ? params.threadId : null;
-    if (!threadId || threadId !== this.currentThreadId) {
-      return true;
-    }
+    if (!threadId || threadId !== this.currentThreadId) return true;
     if (method === "thread/goal/cleared") {
       this.applyGoal(null, true);
       return true;
@@ -6338,12 +6205,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emitSubAgentActivityUpdate(childSubAgentCallId, "running");
       return;
     }
-    const messageId = timelineItem.messageId;
-    if (!this.rememberCodexUserMessageTurn(messageId)) {
+    if (!this.rememberCodexUserMessageTurn(timelineItem.messageId)) {
       return;
     }
     const item = this.activeClientMessageId
-      ? { ...timelineItem, messageId, clientMessageId: this.activeClientMessageId }
+      ? { ...timelineItem, clientMessageId: this.activeClientMessageId }
       : timelineItem;
     this.activeClientMessageId = null;
     this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item });

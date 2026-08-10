@@ -64,7 +64,7 @@ import {
   WORKSPACE_FILE_ROW_VERTICAL_PADDING,
 } from "@/components/tree-primitives";
 import { SvgXml } from "react-native-svg";
-import { getFileIconSvg } from "@/components/material-file-icons";
+import { getRawFileIconSvg as getFileIconSvg } from "@/components/material-file-icons";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { CommitsSection } from "@/git/commits-section/commits-section";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";

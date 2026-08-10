@@ -81,9 +81,11 @@ export const ja: TranslationResources = {
       desktop: "エージェントにメッセージ、@ファイル、/コマンドや/スキルを入力",
       mobile: "メッセージ、@ファイル、/コマンド",
       fallback: "メッセージ...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "エージェントにメッセージ...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}}でフォーカス",
       addAttachment: "添付ファイルを追加",
       interruptAgent: "エージェントを中断",
@@ -215,7 +217,7 @@ export const ja: TranslationResources = {
     states: {
       notFound: "エージェントが見つかりません",
       failedToLoad: "エージェントの読み込みに失敗しました",
-      reconnecting: "再接続中...",
+      reconnecting: "再接続中",
       timelineSyncFailed: "エージェントの履歴を更新できませんでした。再試行しています…",
       archivingTitle: "エージェントをアーカイブ中...",
       archivingSubtitle: "このエージェントをアーカイブするまでお待ちください。",
@@ -271,8 +273,13 @@ export const ja: TranslationResources = {
   sessions: {
     title: "履歴",
     empty: "セッションがまだありません",
+    noMatches: "一致するセッションはありません",
+    tooManyMatches: "一致が多すぎます — 検索条件を絞ってください",
+    hostLoadFailed: "{{host}}: 履歴を読み込めませんでした",
+    searchPlaceholder: "履歴を検索",
     actions: {
       loadMore: "さらに読み込む",
+      clearSearch: "検索をクリア",
     },
   },
   agentList: {
@@ -428,7 +435,7 @@ export const ja: TranslationResources = {
       openFile: "ファイルを開く",
       copyPath: "パスをコピー",
       download: "ダウンロード",
-      addToChat: "チャットに追加…",
+      addToChat: "チャットに追加",
       moreActions: "その他のアクション",
     },
     fileExplorer: {
@@ -535,6 +542,7 @@ export const ja: TranslationResources = {
     },
     terminal: {
       hostDisconnected: "ホストが接続されていません",
+      updateHost: "ネイティブターミナルを使用するにはホストを更新してください。",
       unableToSubscribe: "ターミナルに接続できません",
     },
     tabs: {
@@ -936,6 +944,14 @@ export const ja: TranslationResources = {
           viewPullRequest: "表示",
           openOn: "{{brand}}で開く",
         },
+        checksSummary: {
+          passedLabel: "成功",
+          failedLabel: "失敗",
+          runningLabel: "実行中",
+          passedAccessible: "チェック成功",
+          failedAccessible: "チェック失敗",
+          runningAccessible: "チェック実行中",
+        },
         sections: {
           checks: "チェック",
           pipeline: "パイプライン",
@@ -983,6 +999,38 @@ export const ja: TranslationResources = {
     },
   },
   sidebar: {
+    display: {
+      trigger: "表示設定",
+      heading: "表示",
+      grouping: {
+        label: "グループ化",
+        project: "プロジェクト",
+        status: "ステータス",
+      },
+      titleSource: {
+        label: "タイトル",
+        title: "タイトル",
+        branch: "ブランチ名",
+      },
+      show: {
+        label: "表示項目",
+        host: "ホスト",
+        changeRequest: "プルリクエスト",
+        checks: "チェック",
+        services: "サービス",
+        diff: "差分統計",
+        timestamp: "最終アクティビティ",
+      },
+      checks: {
+        iconAndText: "アイコンとテキスト",
+        icon: "アイコンのみ",
+        none: "非表示",
+      },
+      hostFilter: {
+        label: "ホスト",
+        all: "すべてのホスト",
+      },
+    },
     pinned: {
       title: "固定済み",
     },
@@ -1008,7 +1056,7 @@ export const ja: TranslationResources = {
       discord: "Discord",
       github: "GitHub Issueを作成",
       whatsNew: "新着情報",
-      version: "Paseo {{version}}",
+      appName: "Paseo",
     },
     sections: {
       sessions: "履歴",
@@ -1050,7 +1098,8 @@ export const ja: TranslationResources = {
     },
     workspace: {
       status: {
-        scriptsAvailable: "スクリプトが利用可能",
+        serviceRunning: "サービス {{name}} 実行中",
+        serviceUnhealthy: "サービス {{name}} 異常",
         creating: "作成中...",
       },
       actions: {
@@ -1113,14 +1162,29 @@ export const ja: TranslationResources = {
       composerStateRequired: "コンポーザーの状態が必要です",
       selectModel: "モデルを選択してください",
     },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "開始点を選択",
+      launch: "Choose what to launch",
+    },
     refPicker: {
       startingRef: "開始Ref",
-      chooseStart: "開始点を選択",
       intoBase: "{{baseRef}}に",
       searching: "検索中...",
       noMatchingRefs: "一致するRefがありません。",
       searchPlaceholder: "ブランチとPRを検索",
       title: "開始点",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
   desktop: {
@@ -1284,7 +1348,6 @@ export const ja: TranslationResources = {
     },
   },
   rootError: {
-    kicker: "問題が発生しました",
     title: "Paseo で問題が発生しました。",
     body: "アプリを再読み込みするにはもう一度お試しください。繰り返し発生する場合は、以下の詳細を添えて報告してください。",
     details: "詳細",
@@ -1781,6 +1844,7 @@ export const ja: TranslationResources = {
       editor: "エディター",
       shortcuts: "ショートカット",
       integrations: "連携",
+      notifications: "通知",
       permissions: "権限",
       diagnostics: "診断",
       about: "アプリ情報",
@@ -1789,6 +1853,21 @@ export const ja: TranslationResources = {
       title: "エディター",
       vimKeybindings: "Vim キーバインド",
       vimHint: "Web とデスクトップのソースファイルに適用されます。",
+    },
+    notifications: {
+      title: "通知",
+      permission: "通知の権限",
+      refreshAccessibility: "通知の権限を更新",
+      playSound: "サウンドを再生",
+      playSoundHint: "デスクトップ通知が届いたときにサウンドを再生します",
+      test: "通知をテスト",
+      testHint: "現在の設定でテスト通知を送信します",
+      permissionRequired: "テストする前に通知へのアクセスを許可してください",
+      send: "送信",
+      sending: "送信中...",
+      sentTitle: "テスト通知を送信しました",
+      sentDescription: "Paseo が通知をオペレーティングシステムに渡しました。",
+      sendFailedTitle: "テスト通知を送信できません",
     },
     hostSections: {
       projects: "プロジェクト",
@@ -1861,6 +1940,7 @@ export const ja: TranslationResources = {
           es: "スペイン語",
           fr: "フランス語",
           ja: "日本語",
+          ko: "韓国語",
           ptBR: "ブラジルポルトガル語",
           ru: "ロシア語",
           zhCN: "簡体字中国語",
@@ -1869,6 +1949,11 @@ export const ja: TranslationResources = {
     },
     diagnostics: {
       title: "診断",
+      legacyTerminalRenderer: {
+        label: "以前のターミナルレンダラーを使用",
+        description: "ターミナルを開き直した後、以前の WebView ターミナルを使用します",
+        accessibilityLabel: "以前のターミナルレンダラーを使用",
+      },
       testAudio: "音声をテスト",
       playTest: "テスト再生",
       playing: "再生中...",
@@ -1929,6 +2014,7 @@ export const ja: TranslationResources = {
           midnight: "Midnight",
           claude: "Claude",
           ghostty: "Ghostty",
+          pureBlack: "ピュアブラック",
           auto: "システム",
         },
       },
@@ -1985,11 +2071,15 @@ export const ja: TranslationResources = {
       searchPlaceholder: "ショートカットを検索",
       unavailableOnMobile: "キーボードショートカットはデスクトップでのみ利用できます",
       capturePrompt: "ショートカットを押してください...",
+      unassigned: "未設定",
       actions: {
+        menu: "{{name}} のアクション",
         done: "完了",
         cancel: "キャンセル",
+        bind: "割り当て",
         rebind: "再割り当て",
-        reset: "リセット",
+        clear: "クリア",
+        reset: "デフォルトに戻す",
         resetAll: "すべてリセット",
       },
       sections: {
@@ -2099,17 +2189,14 @@ export const ja: TranslationResources = {
     },
     permissions: {
       title: "権限",
-      notifications: "通知",
       microphone: "マイク",
       refresh: "更新",
       refreshing: "更新中...",
       refreshAccessibility: "デスクトップの権限を更新",
-      test: "テスト",
       actions: {
         granted: "許可済み",
         request: "許可を求める",
         requesting: "許可を求めています...",
-        busySuffix: "{{label}}...",
       },
     },
     host: {

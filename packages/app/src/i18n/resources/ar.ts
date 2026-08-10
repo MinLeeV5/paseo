@@ -81,9 +81,11 @@ export const ar: TranslationResources = {
       desktop: "أرسل رسالة إلى الوكيل أو ضع علامة على @files أو استخدم /commands و /skills",
       mobile: "الرسالة، @files ، /commands",
       fallback: "رسالة...",
+      terminal: "Prompt",
     },
     input: {
       accessibilityLabel: "وكيل الرسائل...",
+      terminalAccessibilityLabel: "Terminal prompt",
       focusHint: "{{shortcut}}للتركيز",
       addAttachment: "إضافة مرفق",
       interruptAgent: "عامل المقاطعة",
@@ -215,7 +217,7 @@ export const ar: TranslationResources = {
     states: {
       notFound: "لم يتم العثور على Agent",
       failedToLoad: "فشل تحميل الوكيل",
-      reconnecting: "جارٍ إعادة الاتصال...",
+      reconnecting: "جارٍ إعادة الاتصال",
       timelineSyncFailed: "تعذر تحديث سجل الوكيل. جارٍ إعادة المحاولة…",
       archivingTitle: "وكيل الارشيف...",
       archivingSubtitle: "الرجاء الانتظار بينما نقوم بأرشفة هذا الوكيل.",
@@ -267,8 +269,13 @@ export const ar: TranslationResources = {
   sessions: {
     title: "السجل",
     empty: "لا توجد جلسات بعد",
+    noMatches: "لا توجد جلسات مطابقة",
+    tooManyMatches: "نتائج كثيرة جدًا — ضيّق نطاق البحث",
+    hostLoadFailed: "{{host}}: تعذر تحميل السجل",
+    searchPlaceholder: "البحث في السجل",
     actions: {
       loadMore: "تحميل المزيد",
+      clearSearch: "مسح البحث",
     },
   },
   agentList: {
@@ -423,7 +430,7 @@ export const ar: TranslationResources = {
       openFile: "افتح الملف",
       copyPath: "نسخ المسار",
       download: "تحميل",
-      addToChat: "إضافة إلى الدردشة…",
+      addToChat: "إضافة إلى الدردشة",
       moreActions: "المزيد من الإجراءات",
     },
     fileExplorer: {
@@ -530,6 +537,7 @@ export const ar: TranslationResources = {
     },
     terminal: {
       hostDisconnected: "Host غير متصل",
+      updateHost: "حدّث المضيف لاستخدام عارض الطرفية الأصلي.",
       unableToSubscribe: "غير قادر على الاشتراك في المحطة",
     },
     tabs: {
@@ -924,6 +932,14 @@ export const ar: TranslationResources = {
           viewPullRequest: "عرض",
           openOn: "فتح على {{brand}}",
         },
+        checksSummary: {
+          passedLabel: "نجح",
+          failedLabel: "فشل",
+          runningLabel: "قيد التشغيل",
+          passedAccessible: "نجحت الفحوصات",
+          failedAccessible: "فشلت الفحوصات",
+          runningAccessible: "الفحوصات قيد التشغيل",
+        },
         sections: {
           checks: "الشيكات",
           pipeline: "خط المعالجة",
@@ -971,6 +987,38 @@ export const ar: TranslationResources = {
     },
   },
   sidebar: {
+    display: {
+      trigger: "تفضيلات العرض",
+      heading: "العرض",
+      grouping: {
+        label: "التجميع",
+        project: "المشروع",
+        status: "الحالة",
+      },
+      titleSource: {
+        label: "العنوان",
+        title: "العنوان",
+        branch: "اسم الفرع",
+      },
+      show: {
+        label: "إظهار",
+        host: "المضيف",
+        changeRequest: "طلب السحب",
+        checks: "الفحوصات",
+        services: "الخدمات",
+        diff: "إحصائيات الفروق",
+        timestamp: "آخر نشاط",
+      },
+      checks: {
+        iconAndText: "أيقونة ونص",
+        icon: "أيقونة فقط",
+        none: "مخفي",
+      },
+      hostFilter: {
+        label: "المضيف",
+        all: "كل المضيفين",
+      },
+    },
     pinned: {
       title: "المثبتة",
     },
@@ -996,7 +1044,7 @@ export const ar: TranslationResources = {
       discord: "Discord",
       github: "إنشاء مشكلة على GitHub",
       whatsNew: "ما الجديد",
-      version: "Paseo {{version}}",
+      appName: "Paseo",
     },
     sections: {
       sessions: "السجل",
@@ -1038,7 +1086,8 @@ export const ar: TranslationResources = {
     },
     workspace: {
       status: {
-        scriptsAvailable: "البرامج النصية المتاحة",
+        serviceRunning: "الخدمة {{name}} قيد التشغيل",
+        serviceUnhealthy: "الخدمة {{name}} غير سليمة",
         creating: "جارٍ الإنشاء...",
       },
       actions: {
@@ -1101,14 +1150,29 @@ export const ar: TranslationResources = {
       composerStateRequired: "حالة الملحن مطلوبة",
       selectModel: "اختر نموذجا",
     },
+    tooltips: {
+      project: "Choose the project",
+      host: "Choose the host",
+      isolation: "Choose the isolation level",
+      startingRef: "اختر من أين تبدأ",
+      launch: "Choose what to launch",
+    },
     refPicker: {
       startingRef: "بدء المرجع",
-      chooseStart: "اختر من أين تبدأ",
       intoBase: "إلى {{baseRef}}",
       searching: "جارٍ البحث...",
       noMatchingRefs: "لا توجد مراجع مطابقة.",
       searchPlaceholder: "بحث الفروع والعلاقات العامة",
       title: "ابدأ من",
+    },
+    launch: {
+      title: "What to launch",
+      chat: "Chat",
+      terminal: "Terminal",
+      manageProfiles: "Manage profiles",
+      submit: "Launch",
+      promptPlaceholder: "Prompt {{name}}",
+      commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
   desktop: {
@@ -1270,7 +1334,6 @@ export const ar: TranslationResources = {
     },
   },
   rootError: {
-    kicker: "حدث خطأ",
     title: "واجه Paseo مشكلة.",
     body: "جرّب مرة أخرى لإعادة تحميل التطبيق. إذا استمر حدوث ذلك، فأرفق التفاصيل أدناه عند الإبلاغ عنه.",
     details: "التفاصيل",
@@ -1759,6 +1822,7 @@ export const ar: TranslationResources = {
       editor: "المحرر",
       shortcuts: "الاختصارات",
       integrations: "التكامل",
+      notifications: "الإشعارات",
       permissions: "الأذونات",
       diagnostics: "التشخيص",
       about: "عن",
@@ -1767,6 +1831,21 @@ export const ar: TranslationResources = {
       title: "المحرر",
       vimKeybindings: "اختصارات Vim",
       vimHint: "تنطبق على ملفات المصدر في الويب وسطح المكتب.",
+    },
+    notifications: {
+      title: "الإشعارات",
+      permission: "إذن الإشعارات",
+      refreshAccessibility: "تحديث إذن الإشعارات",
+      playSound: "تشغيل صوت",
+      playSoundHint: "تشغيل صوت عند وصول إشعار سطح مكتب",
+      test: "اختبار الإشعار",
+      testHint: "إرسال إشعار باستخدام هذه الإعدادات",
+      permissionRequired: "اسمح بالوصول إلى الإشعارات قبل الاختبار",
+      send: "إرسال",
+      sending: "جارٍ الإرسال...",
+      sentTitle: "تم إرسال إشعار الاختبار",
+      sentDescription: "سلّم Paseo الإشعار إلى نظام التشغيل.",
+      sendFailedTitle: "تعذر إرسال إشعار الاختبار",
     },
     hostSections: {
       projects: "المشاريع",
@@ -1840,6 +1919,7 @@ export const ar: TranslationResources = {
           es: "Español",
           fr: "Français",
           ja: "日本語",
+          ko: "한국어",
           ptBR: "Português brasileiro",
           ru: "Русский",
           zhCN: "中文",
@@ -1848,6 +1928,11 @@ export const ar: TranslationResources = {
     },
     diagnostics: {
       title: "التشخيص",
+      legacyTerminalRenderer: {
+        label: "استخدام عارض الطرفية السابق",
+        description: "استخدام طرفية WebView السابقة بعد إعادة فتح الطرفية",
+        accessibilityLabel: "استخدام عارض الطرفية السابق",
+      },
       testAudio: "اختبار الصوت",
       playTest: "لعب الاختبار",
       playing: "جارٍ اللعب...",
@@ -1908,6 +1993,7 @@ export const ar: TranslationResources = {
           midnight: "منتصف الليل",
           claude: "كلود",
           ghostty: "شبحي",
+          pureBlack: "أسود خالص",
           auto: "نظام",
         },
       },
@@ -1963,11 +2049,15 @@ export const ar: TranslationResources = {
       searchPlaceholder: "البحث في الاختصارات",
       unavailableOnMobile: "اختصارات لوحة المفاتيح متاحة فقط على سطح المكتب",
       capturePrompt: "اضغط على الاختصار...",
+      unassigned: "غير معين",
       actions: {
+        menu: "إجراءات {{name}}",
         done: "منتهي",
         cancel: "يلغي",
+        bind: "ربط",
         rebind: "إعادة ربط",
-        reset: "إعادة ضبط",
+        clear: "مسح",
+        reset: "إعادة الضبط إلى الافتراضي",
         resetAll: "إعادة ضبط الكل",
       },
       sections: {
@@ -2074,17 +2164,14 @@ export const ar: TranslationResources = {
     },
     permissions: {
       title: "الأذونات",
-      notifications: "إشعارات",
       microphone: "ميكروفون",
       refresh: "ينعش",
       refreshing: "منعش...",
       refreshAccessibility: "تحديث أذونات سطح المكتب",
-      test: "امتحان",
       actions: {
         granted: "ممنوح",
         request: "طلب",
         requesting: "جارٍ الطلب...",
-        busySuffix: "{{label}}...",
       },
     },
     host: {

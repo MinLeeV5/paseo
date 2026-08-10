@@ -12,6 +12,11 @@ import {
 import { useTranslation } from "react-i18next";
 import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import {
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -22,9 +27,8 @@ import {
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 
-/** Width occupied by a file action trigger, including its visual padding. */
+// COMPAT(fileActionsDropdown): used by legacy diff rows while they migrate to context triggers.
 export const FILE_ACTIONS_MENU_WIDTH = ICON_SIZE.sm + 2 * SPACING[1];
-
 interface FileAction {
   key: string;
   label: string;
@@ -33,7 +37,7 @@ interface FileAction {
   testID?: string;
 }
 
-interface FileActionsMenuProps {
+interface FileActionsContextMenuContentProps {
   fileKind: "file" | "directory";
   fileExists?: boolean;
   onOpenFile?: () => void;
@@ -42,31 +46,32 @@ interface FileActionsMenuProps {
   onAddToChat?: () => void;
   /** Optional metadata block rendered above the actions (e.g. size/modified). */
   header?: ReactNode;
+  testIDPrefix?: string;
+}
+
+interface FileActionsMenuProps extends FileActionsContextMenuContentProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   hitSlop?: number;
   accessibilityLabel: string;
-  testIDPrefix?: string;
 }
 
-// The menu lives inside pressable rows (diff header, explorer entry); stop the
-// press so opening it doesn't also trigger the row.
-function stopTriggerPropagation(event: { stopPropagation?: () => void }) {
-  event.stopPropagation?.();
-}
-
-function triggerStyle({
+function dropdownTriggerStyle({
   hovered,
   pressed,
   open,
 }: PressableStateCallbackType & { hovered?: boolean; open?: boolean }) {
-  return [styles.trigger, (Boolean(hovered) || pressed || Boolean(open)) && styles.triggerActive];
+  return [
+    styles.dropdownTrigger,
+    (Boolean(hovered) || pressed || Boolean(open)) && styles.dropdownTriggerActive,
+  ];
 }
 
-/**
- * Shared kebab (⋮) menu for per-file actions. Used by the file explorer tree and
- * git diff pane so both surfaces share action availability, ordering, and chrome.
- */
+function stopDropdownTriggerPropagation(event: { stopPropagation?: () => void }) {
+  event.stopPropagation?.();
+}
+
+/** @deprecated Use a row-owned context trigger with FileActionsContextMenuContent. */
 export function FileActionsMenu({
   fileKind,
   fileExists = true,
@@ -121,16 +126,13 @@ export function FileActionsMenu({
     }
     return next;
   }, [fileExists, fileKind, onAddToChat, onCopyPath, onDownload, onOpenFile, t, testIDPrefix]);
-
-  if (actions.length === 0) {
-    return null;
-  }
+  if (actions.length === 0) return null;
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
         hitSlop={hitSlop}
-        onPressIn={stopTriggerPropagation}
-        style={triggerStyle}
+        onPressIn={stopDropdownTriggerPropagation}
+        style={dropdownTriggerStyle}
         accessibilityLabel={accessibilityLabel}
         testID={testIDPrefix ? `${testIDPrefix}-actions` : undefined}
       >
@@ -144,14 +146,105 @@ export function FileActionsMenu({
           </>
         ) : null}
         {actions.map((action) => (
-          <FileActionMenuItem key={action.key} action={action} />
+          <FileActionDropdownItem key={action.key} action={action} />
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
+/**
+ * Shared context-menu content for per-file actions. The file explorer tree and git diff pane
+ * own their row triggers while sharing action availability, ordering, and chrome here.
+ */
+export function FileActionsContextMenuContent({
+  fileKind,
+  fileExists = true,
+  onOpenFile,
+  onCopyPath,
+  onDownload,
+  onAddToChat,
+  header,
+  testIDPrefix,
+}: FileActionsContextMenuContentProps): ReactElement | null {
+  const { t } = useTranslation();
+  const actions = useMemo<FileAction[]>(() => {
+    const availableFile = fileKind === "file" && fileExists;
+    const next: FileAction[] = [];
+    if (availableFile && onOpenFile) {
+      next.push({
+        key: "open-file",
+        label: t("workspace.fileActions.openFile"),
+        icon: FileText,
+        onSelect: onOpenFile,
+        testID: testIDPrefix ? `${testIDPrefix}-menu-open-file` : undefined,
+      });
+    }
+    if (onCopyPath) {
+      next.push({
+        key: "copy-path",
+        label: t("workspace.fileActions.copyPath"),
+        icon: Copy,
+        onSelect: onCopyPath,
+      });
+    }
+    if (availableFile && onDownload) {
+      next.push({
+        key: "download",
+        label: t("workspace.fileActions.download"),
+        icon: Download,
+        onSelect: onDownload,
+      });
+    }
+    if (availableFile && onAddToChat) {
+      next.push({
+        key: "add-to-chat",
+        label: t("workspace.fileActions.addToChat"),
+        icon: MessageSquarePlus,
+        onSelect: onAddToChat,
+        testID: testIDPrefix ? `${testIDPrefix}-add-to-chat` : undefined,
+      });
+    }
+    return next;
+  }, [fileExists, fileKind, onAddToChat, onCopyPath, onDownload, onOpenFile, t, testIDPrefix]);
+
+  if (actions.length === 0) {
+    return null;
+  }
+  return (
+    <ContextMenuContent
+      align="start"
+      width={220}
+      testID={testIDPrefix ? `${testIDPrefix}-context-menu` : undefined}
+    >
+      {header ? (
+        <>
+          {header}
+          <ContextMenuSeparator />
+        </>
+      ) : null}
+      {actions.map((action) => (
+        <FileActionMenuItem key={action.key} action={action} />
+      ))}
+    </ContextMenuContent>
+  );
+}
+
 function FileActionMenuItem({ action }: { action: FileAction }): ReactElement {
+  const Icon = action.icon;
+  const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
+  const leading = useMemo(
+    () => <ThemedIcon size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [ThemedIcon],
+  );
+  return (
+    <ContextMenuItem leading={leading} onSelect={action.onSelect} testID={action.testID}>
+      {action.label}
+    </ContextMenuItem>
+  );
+}
+
+function FileActionDropdownItem({ action }: { action: FileAction }): ReactElement {
   const Icon = action.icon;
   const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
   const leading = useMemo(
@@ -166,11 +259,7 @@ function FileActionMenuItem({ action }: { action: FileAction }): ReactElement {
 }
 
 const styles = StyleSheet.create((theme) => ({
-  trigger: {
-    // The hover box comes from padding, but an equal negative vertical margin
-    // cancels its height contribution so the trigger overlaps the row's natural
-    // line height instead of growing it. The comfortable tap target is `hitSlop`,
-    // never padding.
+  dropdownTrigger: {
     padding: theme.spacing[1],
     width: FILE_ACTIONS_MENU_WIDTH,
     marginVertical: -theme.spacing[1],
@@ -179,7 +268,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     flexShrink: 0,
   },
-  triggerActive: {
+  dropdownTriggerActive: {
     backgroundColor: theme.colors.surface2,
   },
 }));

@@ -4,10 +4,10 @@ import { z } from "zod";
 import type { Logger } from "pino";
 
 import { writeJsonFileAtomic } from "../atomic-file.js";
+import type { JsonValue } from "../json-utils.js";
 import { AgentFeatureSchema, AgentGoalPayloadSchema, AgentStatusSchema } from "../messages.js";
 import { toStoredAgentRecord } from "./agent-projections.js";
 import type { ManagedAgent } from "./agent-manager.js";
-import type { AgentSessionConfig } from "./agent-sdk-types.js";
 import { AgentOwnerSchema, daemonExecutionKey, type DaemonAgentOwner } from "./agent-owner.js";
 
 const SERIALIZABLE_CONFIG_SCHEMA = z
@@ -17,6 +17,16 @@ const SERIALIZABLE_CONFIG_SCHEMA = z
     thinkingOptionId: z.string().nullable().optional(),
     featureValues: z.record(z.string(), z.unknown()).nullable().optional(),
     extra: z.record(z.string(), z.any()).nullable().optional(),
+    providerOptions: z.record(z.string(), z.json()).nullable().optional(),
+    toolPolicy: z
+      .object({
+        preapproved: z.array(
+          z.object({ kind: z.literal("mcp"), server: z.string(), tool: z.string() }).strict(),
+        ),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     systemPrompt: z.string().nullable().optional(),
     mcpServers: z.record(z.string(), z.any()).nullable().optional(),
   })
@@ -106,16 +116,20 @@ const STORED_AGENT_SCHEMA = z.object({
   turnDiffRecords: z.array(STORED_AGENT_TURN_DIFF_RECORD_SCHEMA).optional(),
 });
 
-export type SerializableAgentConfig = Pick<
-  AgentSessionConfig,
-  | "modeId"
-  | "model"
-  | "thinkingOptionId"
-  | "featureValues"
-  | "extra"
-  | "systemPrompt"
-  | "mcpServers"
->;
+export interface SerializableAgentConfig {
+  modeId?: string | null;
+  model?: string | null;
+  thinkingOptionId?: string | null;
+  featureValues?: Record<string, unknown> | null;
+  // Retain this legacy field so persisted records from this branch continue to load.
+  extra?: Record<string, unknown> | null;
+  providerOptions?: Record<string, JsonValue> | null;
+  toolPolicy?: {
+    preapproved: Array<{ kind: "mcp"; server: string; tool: string }>;
+  } | null;
+  systemPrompt?: string | null;
+  mcpServers?: Record<string, unknown> | null;
+}
 
 export type StoredAgentRecord = z.infer<typeof STORED_AGENT_SCHEMA>;
 export type StoredAgentSessionDiffBaseline = NonNullable<StoredAgentRecord["sessionDiffBaseline"]>;
@@ -169,13 +183,20 @@ export class AgentStorage {
   }
 
   private queueRecordWrite(record: StoredAgentRecord): Promise<void> {
-    const agentId = record.id;
+    return this.queueRecordMutation(record.id, () => record);
+  }
+
+  private queueRecordMutation(
+    agentId: string,
+    mutate: (existing: StoredAgentRecord | null) => StoredAgentRecord,
+  ): Promise<void> {
     const prev = this.pendingWrites.get(agentId) ?? Promise.resolve();
     const next = prev.then(async () => {
       if (this.deleting.has(agentId)) {
         return undefined;
       }
 
+      const record = mutate(this.cache.get(agentId) ?? null);
       await this.writeRecord(record);
       return undefined;
     });
@@ -248,31 +269,25 @@ export class AgentStorage {
     options?: { title?: string | null; internal?: boolean },
   ): Promise<void> {
     await this.load();
-    await this.waitForPendingWrite(agent.id);
-    const existing = (await this.get(agent.id)) ?? null;
     const hasTitleOverride =
       options !== undefined && Object.prototype.hasOwnProperty.call(options, "title");
     const hasInternalOverride =
       options !== undefined && Object.prototype.hasOwnProperty.call(options, "internal");
-    const record = toStoredAgentRecord(agent, {
-      title: hasTitleOverride ? (options?.title ?? null) : (existing?.title ?? null),
-      createdAt: existing?.createdAt,
-      internal: hasInternalOverride ? options?.internal : (agent.internal ?? existing?.internal),
+    await this.queueRecordMutation(agent.id, (existing) => {
+      const record = toStoredAgentRecord(agent, {
+        title: hasTitleOverride ? (options?.title ?? null) : (existing?.title ?? null),
+        createdAt: existing?.createdAt,
+        internal: hasInternalOverride ? options?.internal : (agent.internal ?? existing?.internal),
+      });
+      if (existing?.archivedAt !== undefined) record.archivedAt = existing.archivedAt;
+      if (existing?.sessionDiffBaseline !== undefined) {
+        record.sessionDiffBaseline = existing.sessionDiffBaseline;
+      }
+      if (existing?.turnDiffRecords !== undefined) {
+        record.turnDiffRecords = existing.turnDiffRecords;
+      }
+      return record;
     });
-
-    // Preserve soft-delete/archive status across snapshot flushes.
-    // `archivedAt` is not part of the ManagedAgent snapshot, so a naive projection
-    // would wipe it during normal persistence (including on daemon restart).
-    if (existing && existing.archivedAt !== undefined) {
-      record.archivedAt = existing.archivedAt;
-    }
-    if (existing?.sessionDiffBaseline !== undefined) {
-      record.sessionDiffBaseline = existing.sessionDiffBaseline;
-    }
-    if (existing?.turnDiffRecords !== undefined) {
-      record.turnDiffRecords = existing.turnDiffRecords;
-    }
-    await this.upsert(record);
   }
 
   async setTitle(agentId: string, title: string): Promise<void> {

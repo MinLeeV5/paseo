@@ -40,8 +40,6 @@ The rule, condensed: text that _names_ a surface or a group is `medium`. Text th
 
 Foreground is for the thing being acted on: row titles, section headings, the selected sidebar item. `foregroundMuted` is for context: hints, descriptions, secondary metadata, idle sidebar items, placeholders, status text.
 
-`surface0` is a background token, never a foreground/contrast token. In Electron with a custom background image, the app deliberately overrides `--colors-surface0` to `transparent`; text or icons on a `foreground`-filled control therefore use `primaryForeground`, while text or icons on an `accent`-filled control use `accentForeground`.
-
 `foregroundExtraMuted` is reserved for passive chrome that must sit behind muted text, such as an always-visible window control. Use the solid token instead of lowering SVG opacity; per-path opacity makes overlapping icon strokes render unevenly. Interactive hover and pressed states return to `foreground`.
 
 Accent is the one CTA per surface. A `<Button variant="default">` filled with `accent` appears at most once on a page. Most pages have zero — settings is mostly toggles and text, the workspace pane is mostly content, the chat composer is the input itself.
@@ -121,12 +119,6 @@ Cards inside a section sit closer than sections. Rows inside a card touch — on
 Rows have generous vertical padding: roughly 16px of content plus 16px of vertical padding for settings rows, 8–12px for sidebar list items where many rows must fit. Compressing rows below the established density to fit more on the screen is wrong. Too many rows means more cards or more sections, not smaller rows.
 
 The whitespace is the design.
-
-Motion follows the same restraint. Durations come from `theme.motion.duration`: `fast` (150ms) for
-press and icon feedback, `normal` (200ms) for local state changes, and `slow` (280ms) for larger
-surface transitions. Animate opacity and transforms only, keep list rows and code/diff lines static,
-and use `ReduceMotion.System` for Reanimated transitions. Hidden retained panels must not keep an
-animation clock alive.
 
 ---
 
@@ -229,13 +221,15 @@ Selected state on rows in a desktop list+detail uses `surfaceSidebarHover` as th
 
 ## 13. Status pills and badges
 
-Status pills are `palette.<color>[300]` foreground on a 10%-alpha background of the same color. Success uses green, warning uses amber, danger uses red, muted uses zinc. The `<StatusBadge>` primitive (`packages/app/src/components/ui/status-badge.tsx`) is canonical.
+There is exactly one token per status signal — `statusSuccess`, `statusDanger`, `statusWarning`, `statusMerged` — and every status surface uses it: PR state icons, CI check icons and pies, diff stats, file-change icons, status pills, usage bars. A surface does not get a quieter or louder variant because of where it sits. If a dense list feels loud, that is a density or weight problem; fix the density, not the color. The tokens are generated, not hand-picked — see the rule in `packages/app/src/styles/theme.ts` and regenerate rather than nudging one value. The level is set by the densest consumer, the sidebar workspace list.
 
-Status dots — the small filled circles next to a host or agent name — are `borderRadius.full` filled with the status color (`statusSuccess`, `statusWarning`, `statusDanger`, or `foregroundMuted`). They sit in the trailing slot of a sidebar row or as a leading marker on a status pill.
+Status **dots** are the one exception, and they are a family of their own — `statusDotSuccess`, `statusDotDanger`, `statusDotWarning`, `statusDotRunning`, read only by `getStatusDotColor` (`packages/app/src/utils/status-dot-color.ts`). Same hues and the same generation rule, but their own band: 90% of gamut chroma against the status family's 55–60%. A dot is a few points of solid color with no shape to read and no label attached, and the running one pulses, so at the status band's chroma the dots read dimmer than the metadata beside them — backwards, since the dot is the row's state. Lightness is set by hue separation rather than by distance from the surface: at 6pt four dark hues on a light surface all read as one dark blob no matter how much contrast they have. So the light band runs as bright as the contrast floor allows at L=0.62, the last step where all four clear 3:1 against the sidebar's `surface2`; the dark band sits at L=0.72, where danger turns pink above. All four move together; regenerate the set, never one hue.
 
-Agent workflow and Goal state use full-width status strips above the composer, not pills in the message list. Workflow priority is permission, lifecycle error, active work, then finished attention; permission and error stay visible even when a Goal strip is present. Generic running state is suppressed beside an active Goal unless the live head can identify thinking or a running tool. Retained panels do not animate their activity indicator.
+Status pills are the status token as foreground on a 10%-alpha tint of the same token (`${token}1a`), with a 20% border (`${token}33`). The `<StatusBadge>` primitive (`packages/app/src/components/ui/status-badge.tsx`) is canonical; a pill never reaches into `palette`.
 
-Identity badges — the project icon and the sidebar host badge — do not use the theme palette. They draw from the fixed ten-color identity table in `packages/app/src/styles/identity-colors.ts`, whose hexes are held to one contrast band so a color identifies rather than ranks. Identity color is a fill-only contract: project icons use it as a fill with a white letter, while host badges use it on their icon and retain the normal muted text color. The table is theme-independent by design; do not fork it per theme, and do not add hexes to it without recomputing the band.
+Status dots — the small filled circles next to a host or agent name — are `borderRadius.full` filled with the status token. Which token a given agent state maps to is owned by `getStatusDotColor` (`packages/app/src/utils/status-dot-color.ts`); a row, a group header, and a project icon all call it rather than restating the mapping. They sit in the trailing slot of a sidebar row or as a leading marker on a status pill.
+
+Identity badges — the project icon, the sidebar host badge, and the PR-panel participant avatar — do not use the theme palette. They draw from the fixed ten-color identity table in `packages/app/src/styles/identity-colors.ts`, whose hexes are held to one contrast band so a color identifies rather than ranks. Project icons and PR avatars use it as a fill with a white letter — that is `identityColor`, one theme-independent hex per identity. Host badges use it as a _foreground_ on both the glyph and the label, which is a different contrast problem that the fill table cannot solve: no single hex clears 4.5:1 against both a near-white and a dark sidebar. Foregrounds therefore come from `identityForeground(name, colorScheme)`, one set per scheme, hue unchanged. That set is generated on the **status family's** lightness and chroma fraction, because a meta row puts a host badge beside a CI check and a diff stat, and two families at different lightness make the brighter one shout. Change the status band and this one changes with it. A host with no color assigned falls back to `foregroundMuted`. The table is theme-independent by design; do not fork it per theme, and do not add hexes to it without recomputing the band.
 
 The bespoke pills in `packages/app/src/screens/settings/host-page.tsx:97-116`, `packages/app/src/components/agent-list.tsx:607-632`, and `packages/app/src/components/sidebar-workspace-list.tsx:2889-2894` are drift to be removed. New code uses `<StatusBadge>`.
 
@@ -254,7 +248,7 @@ The bespoke pills in `packages/app/src/screens/settings/host-page.tsx:97-116`, `
 - Raw DOM APIs without an `isWeb` guard.
 - Spacing values outside the scale. `padding: 20` and `gap: 10` are wrong.
 - Color changes for disabled state. Opacity only.
-- Destructive actions without `confirmDialog`. Restart, remove, and future destructive actions are confirmed. Archive workspace is always confirmed; worktree risks such as uncommitted changes and unpushed commits are included in that confirmation.
+- Destructive actions without `confirmDialog`. Restart, remove, and future destructive actions are confirmed. Archive workspace is confirmed only when its worktree backing reports uncommitted changes or unpushed commits; otherwise it archives immediately.
 - Bespoke status pills. `<StatusBadge>` is the pill primitive.
 - Raw `Modal` for a focused task. `<AdaptiveModalSheet>` is the modal primitive.
 - Importing `ActivityIndicator` directly. `<LoadingSpinner>` is the loading primitive.

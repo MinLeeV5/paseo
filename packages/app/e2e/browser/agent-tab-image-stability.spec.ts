@@ -45,42 +45,129 @@ test("switching between settled agent tabs keeps a real assistant PNG rendered",
   await switchAwayAndBackWithoutImageInstability(page, { image, imageAgent, otherAgent });
 });
 
-test("clicking a settled assistant image opens a full-screen lightbox", async ({
+test("reloading a timeline anchors near-tail assistant image growth", async ({
   imageWorkspace: workspace,
   page,
 }) => {
   test.setTimeout(120_000);
   const image = await createSmallAssistantPng(workspace, {
-    alt: "Full-screen Agent output",
-    fileName: "full-screen-assistant-preview.png",
+    alt: "Reload geometry image",
+    fileName: "reload-geometry-image.png",
   });
-  const imageAgent = await createSettledMockAgent(workspace, "Full-screen image timeline");
+  const imageAgent = await createSettledMockAgent(workspace, "Reload image geometry");
   await emitSettledAssistantImage(workspace.client, imageAgent, image);
+  await appendSettledTimelineTurns(workspace.client, imageAgent, 3);
+
+  await page.addInitScript(
+    ({ accessibleName }) => {
+      interface ImageGeometryEvent {
+        atMs: number;
+        complete: boolean;
+        height: number;
+        naturalHeight: number;
+        naturalWidth: number;
+        scrollTop: number;
+        width: number;
+      }
+      const state = {
+        accessibleName,
+        events: [] as ImageGeometryEvent[],
+        mutationObserver: null as MutationObserver | null,
+        resizeObserver: null as ResizeObserver | null,
+        target: null as Element | null,
+      };
+      const record = () => {
+        const target = state.target;
+        if (!target) return;
+        const imageElement =
+          target instanceof HTMLImageElement ? target : target.querySelector("img");
+        const scroll = target.closest('[data-testid="agent-chat-scroll"]');
+        const rect = target.getBoundingClientRect();
+        const event: ImageGeometryEvent = {
+          atMs: performance.now(),
+          complete: imageElement?.complete ?? false,
+          height: rect.height,
+          naturalHeight: imageElement?.naturalHeight ?? 0,
+          naturalWidth: imageElement?.naturalWidth ?? 0,
+          scrollTop: scroll instanceof HTMLElement ? scroll.scrollTop : -1,
+          width: rect.width,
+        };
+        const previous = state.events.at(-1);
+        if (
+          !previous ||
+          previous.complete !== event.complete ||
+          previous.height !== event.height ||
+          previous.naturalHeight !== event.naturalHeight ||
+          previous.naturalWidth !== event.naturalWidth ||
+          previous.scrollTop !== event.scrollTop ||
+          previous.width !== event.width
+        ) {
+          state.events.push(event);
+        }
+      };
+      const inspect = () => {
+        const target = Array.from(document.querySelectorAll('[role="img"]')).find(
+          (element) => element.getAttribute("aria-label") === accessibleName,
+        );
+        if (!target || target === state.target) {
+          record();
+          return;
+        }
+        state.target = target;
+        state.resizeObserver?.disconnect();
+        state.resizeObserver = new ResizeObserver(record);
+        state.resizeObserver.observe(target);
+        record();
+      };
+      const start = () => {
+        state.mutationObserver = new MutationObserver(inspect);
+        state.mutationObserver.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["src", "style"],
+          childList: true,
+          subtree: true,
+        });
+        inspect();
+      };
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", start, { once: true });
+      } else {
+        start();
+      }
+      (
+        window as unknown as {
+          __paseoReloadImageGeometry?: typeof state;
+        }
+      ).__paseoReloadImageGeometry = state;
+    },
+    { accessibleName: image.alt },
+  );
 
   await openAssistantImageTimeline(page, imageAgent);
   await expectAssistantImageRendered(page, image);
+  await page.reload();
+  await expectAssistantImageRendered(page, image);
+  await page.waitForTimeout(500);
 
-  const preview = page.getByTestId("assistant-markdown-image").first();
-  await preview.click();
-
-  const lightboxImage = page.getByTestId("assistant-image-lightbox-image");
-  const backdrop = page.getByTestId("assistant-image-lightbox-backdrop");
-  await expect(lightboxImage).toBeVisible();
-  await expect(backdrop).toBeVisible();
-  const viewport = await page.evaluate(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  }));
-  const backdropBounds = await backdrop.boundingBox();
-  expect(backdropBounds).toEqual({ x: 0, y: 0, ...viewport });
-
-  await page.keyboard.press("Escape");
-  await expect(lightboxImage).toHaveCount(0);
-
-  await preview.click();
-  await expect(lightboxImage).toBeVisible();
-  await page.getByTestId("assistant-image-lightbox-close").click();
-  await expect(lightboxImage).toHaveCount(0);
+  const events = await page.evaluate(() => {
+    const state = (
+      window as unknown as {
+        __paseoReloadImageGeometry?: { events: Array<unknown> };
+      }
+    ).__paseoReloadImageGeometry;
+    if (!state) throw new Error("Reload image geometry observer was not installed");
+    return state.events;
+  });
+  const geometryEvents = events as Array<{ height: number; scrollTop: number }>;
+  const initialGeometry = geometryEvents.find((event) => event.height > 0);
+  if (!initialGeometry)
+    throw new Error(`Image geometry was never measurable: ${JSON.stringify(events)}`);
+  const expandedGeometry = geometryEvents.find((event) => event.height > initialGeometry.height);
+  if (!expandedGeometry)
+    throw new Error(`Image geometry never expanded: ${JSON.stringify(events)}`);
+  expect(expandedGeometry.scrollTop, JSON.stringify(events)).toBeGreaterThan(
+    initialGeometry.scrollTop,
+  );
 });
 
 test("a real assistant PNG remains reachable through pagination and remount", async ({

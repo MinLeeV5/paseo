@@ -1,7 +1,6 @@
 import { resolve, dirname, basename } from "path";
 import { existsSync, realpathSync } from "fs";
-import { mkdtemp, open as openFile, readFile, rm, stat as statFile } from "fs/promises";
-import { tmpdir } from "os";
+import { open as openFile, readFile, stat as statFile } from "fs/promises";
 import { TTLCache } from "@isaacs/ttlcache";
 import type { CheckoutCommit, CheckoutCommitFile } from "@getpaseo/protocol/messages";
 import { parseGitHubRemoteIdentity, parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
@@ -31,6 +30,7 @@ import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-pa
 import { runGitCommand } from "./run-git-command.js";
 import { isPaseoOwnedWorktreeCwd, resolvePaseoWorktreesBaseRoot } from "./worktree.js";
 import {
+  branchNameFromRef,
   getPaseoWorktreeChangeRequestHintForBranch,
   type PaseoWorktreeMetadata,
   readPaseoWorktreeMetadata,
@@ -188,7 +188,6 @@ export function __setCheckoutShortstatCacheTtlForTests(ttlMs: number): void {
 
 interface CheckoutFileChange {
   path: string;
-  submodulePath?: string;
   oldPath?: string;
   status: string;
   isNew: boolean;
@@ -200,104 +199,10 @@ interface CheckoutDiffRefs {
   baseRef: string;
   targetRef?: string;
   includeUntracked: boolean;
-  indexFile?: string;
 }
 
-interface SubmoduleTrackedFileChange {
-  cwd: string;
-  displayPrefix: string;
-  refsForDiff: CheckoutDiffRefs;
-  change: CheckoutFileChange;
-  fallback?: SubmoduleTrackedFileChange;
-  isGitlinkFallback?: boolean;
-}
-
-interface SubmoduleFileChanges {
-  tracked: SubmoduleTrackedFileChange[];
-  untracked: CheckoutFileChange[];
-  expandedSubmodulePaths: Set<string>;
-}
-
-interface InitializedSubmodule {
-  path: string;
-  branch: string | null;
-}
-
-type RecursiveDiffEndpoint =
-  | { kind: "absent" }
-  | { kind: "commit"; ref: string }
-  | {
-      kind: "checkedCommit";
-      recordedCommit: string;
-      headCommit: string;
-    }
-  | {
-      kind: "worktree";
-      recordedCommit: string | null;
-      headCommit: string | null;
-    };
-
-interface SubmoduleDiffComparison {
-  mode: "uncommitted" | "committed";
-  oldEndpoint: RecursiveDiffEndpoint;
-  newEndpoint: RecursiveDiffEndpoint;
-  includeUntracked: boolean;
-}
-
-type GitlinkLookup =
-  | { kind: "present"; objectId: string }
-  | { kind: "absent" }
-  | { kind: "unavailable" };
-
-interface SubmoduleScanCache {
-  initializedSubmodules: Map<string, Promise<InitializedSubmodule[]>>;
-  gitlinks: Map<string, Promise<GitlinkLookup>>;
-  headObjectIds: Map<string, Promise<string | null>>;
-  currentBranchNames: Map<string, Promise<string | null>>;
-}
-
-function createSubmoduleScanCache(): SubmoduleScanCache {
-  return {
-    initializedSubmodules: new Map(),
-    gitlinks: new Map(),
-    headObjectIds: new Map(),
-    currentBranchNames: new Map(),
-  };
-}
-
-function getCheckoutDiffDiscoveryArgs(refs: CheckoutDiffRefs): string[] {
-  return ["--ignore-submodules=dirty", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
-}
-
-function getCheckoutDiffRenderingArgs(refs: CheckoutDiffRefs): string[] {
-  return ["--ignore-submodules=none", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
-}
-
-function getCheckoutDiffGitEnv(refs: CheckoutDiffRefs) {
-  return refs.indexFile
-    ? { ...READ_ONLY_GIT_ENV, GIT_INDEX_FILE: refs.indexFile }
-    : READ_ONLY_GIT_ENV;
-}
-
-async function createSnapshotDiffIndex(
-  cwd: string,
-  baseRef: string,
-): Promise<{ directory: string; indexFile: string }> {
-  // A snapshot can contain files that are still untracked in the user's real index.
-  // Seed an alternate index from the snapshot so Git compares those paths to the
-  // working tree instead of treating them as deleted and re-added.
-  const directory = await mkdtemp(resolve(tmpdir(), "paseo-snapshot-diff-"));
-  const indexFile = resolve(directory, "index");
-  try {
-    await runGitCommand(["read-tree", baseRef], {
-      cwd,
-      envOverlay: { LC_ALL: "C", GIT_INDEX_FILE: indexFile },
-    });
-    return { directory, indexFile };
-  } catch (error) {
-    await rm(directory, { recursive: true, force: true });
-    throw error;
-  }
+function getCheckoutDiffRefArgs(refs: CheckoutDiffRefs): string[] {
+  return [refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
 }
 
 function normalizeBranchSuggestionName(raw: string): string | null {
@@ -604,9 +509,9 @@ async function listCheckoutFileChanges(
   const { stdout: nameStatusOut } = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace,
-      extra: ["--name-status", ...getCheckoutDiffDiscoveryArgs(refs)],
+      extra: ["--name-status", ...getCheckoutDiffRefArgs(refs)],
     }),
-    { cwd, envOverlay: getCheckoutDiffGitEnv(refs) },
+    { cwd, envOverlay: READ_ONLY_GIT_ENV },
   );
   for (const line of nameStatusOut
     .split("\n")
@@ -648,7 +553,7 @@ async function listCheckoutFileChanges(
       ["ls-files", "--others", "--exclude-standard"],
       {
         cwd,
-        envOverlay: getCheckoutDiffGitEnv(refs),
+        envOverlay: READ_ONLY_GIT_ENV,
       },
     );
     for (const file of untrackedOut
@@ -730,21 +635,6 @@ function buildGitDiffArgs(args: { ignoreWhitespace?: boolean; extra: string[] })
   return ["diff", ...(args.ignoreWhitespace ? ["-w"] : []), ...args.extra];
 }
 
-function getNestedParsedFilesForPath(
-  parsedTrackedFiles: ParsedDiffFile[],
-  path: string,
-): ParsedDiffFile[] {
-  const nestedPathPrefix = `${path}/`;
-  return parsedTrackedFiles.filter((file) => file.path.startsWith(nestedPathPrefix));
-}
-
-function joinGitPath(...parts: string[]): string {
-  return parts
-    .map((part) => part.replace(/^\/+|\/+$/g, ""))
-    .filter(Boolean)
-    .join("/");
-}
-
 const TRACKED_DIFF_NUMSTAT_MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const TRACKED_DIFF_BATCH_SIZE = 8;
 const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -752,7 +642,7 @@ const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 function isUnbornHeadDiffError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    error.message.includes("--name-status --ignore-submodules=dirty HEAD") &&
+    error.message.includes("--name-status HEAD") &&
     error.message.includes("ambiguous argument 'HEAD'")
   );
 }
@@ -765,11 +655,11 @@ async function getTrackedNumstatByPath(
   const result = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace,
-      extra: ["--numstat", ...getCheckoutDiffDiscoveryArgs(refs)],
+      extra: ["--numstat", ...getCheckoutDiffRefArgs(refs)],
     }),
     {
       cwd,
-      envOverlay: getCheckoutDiffGitEnv(refs),
+      envOverlay: READ_ONLY_GIT_ENV,
       maxOutputBytes: TRACKED_DIFF_NUMSTAT_MAX_BYTES,
       acceptExitCodes: [0],
     },
@@ -823,16 +713,11 @@ async function getTrackedDiffTextForPath(input: {
   const result = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace: input.ignoreWhitespace,
-      extra: [
-        "--submodule=diff",
-        ...getCheckoutDiffRenderingArgs(input.refsForDiff),
-        "--",
-        input.path,
-      ],
+      extra: [...getCheckoutDiffRefArgs(input.refsForDiff), "--", input.path],
     }),
     {
       cwd: input.cwd,
-      envOverlay: getCheckoutDiffGitEnv(input.refsForDiff),
+      envOverlay: READ_ONLY_GIT_ENV,
       maxOutputBytes: PER_FILE_DIFF_MAX_BYTES,
     },
   );
@@ -842,986 +727,6 @@ async function getTrackedDiffTextForPath(input: {
     text: result.stdout,
     truncated: result.truncated,
   };
-}
-
-async function listInitializedSubmodules(cwd: string): Promise<InitializedSubmodule[]> {
-  let result;
-  try {
-    result = await runGitCommand(
-      ["config", "--file", ".gitmodules", "--get-regexp", "^submodule\\..*\\.(path|branch)$"],
-      {
-        cwd,
-        envOverlay: READ_ONLY_GIT_ENV,
-        acceptExitCodes: [0, 1],
-      },
-    );
-  } catch {
-    return [];
-  }
-
-  if (result.exitCode !== 0) {
-    return [];
-  }
-
-  const entriesByName = new Map<string, Partial<InitializedSubmodule>>();
-  for (const line of result.stdout
-    .split("\n")
-    .map((candidate) => candidate.trim())
-    .filter(Boolean)) {
-    const separatorIndex = line.indexOf(" ");
-    if (separatorIndex < 0) {
-      continue;
-    }
-
-    const key = line.slice(0, separatorIndex);
-    const value = line.slice(separatorIndex + 1).trim();
-    const match = key.match(/^submodule\.(.*)\.(path|branch)$/);
-    if (!match || !value) {
-      continue;
-    }
-    const [, name, field] = match;
-    if (!name || !field) continue;
-    const entry = entriesByName.get(name) ?? {};
-    if (field === "path") {
-      entry.path = value;
-    } else {
-      entry.branch = value;
-    }
-    entriesByName.set(name, entry);
-  }
-
-  const initialized: InitializedSubmodule[] = [];
-  for (const entry of entriesByName.values()) {
-    const submodulePath = entry.path;
-    if (!submodulePath || submodulePath.startsWith("/")) continue;
-
-    try {
-      await runGitCommand(["rev-parse", "--is-inside-work-tree"], {
-        cwd: resolve(cwd, submodulePath),
-        envOverlay: READ_ONLY_GIT_ENV,
-      });
-    } catch {
-      continue;
-    }
-
-    initialized.push({ path: submodulePath, branch: entry.branch ?? null });
-  }
-
-  return [...new Map(initialized.map((entry) => [entry.path, entry])).values()].sort((a, b) =>
-    a.path.localeCompare(b.path),
-  );
-}
-
-async function readGitlinkObjectIdAtRef(
-  cwd: string,
-  ref: string,
-  path: string,
-): Promise<GitlinkLookup> {
-  try {
-    const result = await runGitCommand(["ls-tree", ref, "--", path], {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-    });
-    const metadata = result.stdout.split("\t", 1)[0]?.trim().split(/\s+/) ?? [];
-    const [mode, type, objectId] = metadata;
-    if (mode === "160000" && type === "commit" && objectId) {
-      return { kind: "present", objectId };
-    }
-    return { kind: "absent" };
-  } catch {
-    return { kind: "unavailable" };
-  }
-}
-
-function getCanonicalPathOrResolved(path: string): string {
-  try {
-    return realpathSync.native(path);
-  } catch {
-    return resolve(path);
-  }
-}
-
-function listInitializedSubmodulesCached(
-  cwd: string,
-  cache: SubmoduleScanCache,
-): Promise<InitializedSubmodule[]> {
-  const key = getCanonicalPathOrResolved(cwd);
-  const cached = cache.initializedSubmodules.get(key);
-  if (cached) return cached;
-  const load = listInitializedSubmodules(cwd);
-  cache.initializedSubmodules.set(key, load);
-  return load;
-}
-
-async function readCurrentBranchName(cwd: string): Promise<string | null> {
-  try {
-    const result = await runGitCommand(["symbolic-ref", "--quiet", "--short", "HEAD"], {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-    });
-    return result.stdout.trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-function readCurrentBranchNameCached(
-  cwd: string,
-  cache: SubmoduleScanCache,
-): Promise<string | null> {
-  const key = getCanonicalPathOrResolved(cwd);
-  const cached = cache.currentBranchNames.get(key);
-  if (cached) return cached;
-  const load = readCurrentBranchName(cwd);
-  cache.currentBranchNames.set(key, load);
-  return load;
-}
-
-function getSubmoduleBranchRefCandidates(branch: string): string[] {
-  if (branch.startsWith("refs/")) return [branch];
-  const normalized = branch.startsWith("origin/") ? branch.slice("origin/".length) : branch;
-  return [`refs/remotes/origin/${normalized}`, `refs/heads/${normalized}`];
-}
-
-async function resolveSubmoduleCommittedBaseRef(input: {
-  parentCwd: string;
-  childCwd: string;
-  configuredBranch: string | null;
-  cache: SubmoduleScanCache;
-}): Promise<string | null> {
-  const headCommit = await readHeadObjectIdCached(input.childCwd, input.cache);
-  const configuredBranch = input.configuredBranch?.trim();
-  if (!headCommit || !configuredBranch) return headCommit;
-
-  const branch =
-    configuredBranch === "."
-      ? await readCurrentBranchNameCached(input.parentCwd, input.cache)
-      : configuredBranch;
-  if (!branch) return headCommit;
-
-  for (const ref of getSubmoduleBranchRefCandidates(branch)) {
-    try {
-      const result = await runGitCommand(["rev-parse", "--verify", ref], {
-        cwd: input.childCwd,
-        envOverlay: READ_ONLY_GIT_ENV,
-      });
-      const objectId = result.stdout.trim();
-      if (objectId) return objectId;
-    } catch {
-      // Try the next local ref before falling back to the checked-out HEAD.
-    }
-  }
-  return headCommit;
-}
-
-function readGitlinkObjectIdAtRefCached(
-  cwd: string,
-  ref: string,
-  path: string,
-  cache: SubmoduleScanCache,
-): Promise<GitlinkLookup> {
-  const key = `${getCanonicalPathOrResolved(cwd)}\0${ref}\0${path}`;
-  const cached = cache.gitlinks.get(key);
-  if (cached) return cached;
-  const load = readGitlinkObjectIdAtRef(cwd, ref, path);
-  cache.gitlinks.set(key, load);
-  return load;
-}
-
-async function readHeadObjectId(cwd: string): Promise<string | null> {
-  try {
-    const result = await runGitCommand(["rev-parse", "HEAD"], {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-    });
-    return result.stdout.trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-function readHeadObjectIdCached(cwd: string, cache: SubmoduleScanCache): Promise<string | null> {
-  const key = getCanonicalPathOrResolved(cwd);
-  const cached = cache.headObjectIds.get(key);
-  if (cached) return cached;
-  const load = readHeadObjectId(cwd);
-  cache.headObjectIds.set(key, load);
-  return load;
-}
-
-function getCommitRefForEndpoint(endpoint: RecursiveDiffEndpoint): string | null {
-  switch (endpoint.kind) {
-    case "absent":
-      return EMPTY_TREE_OBJECT_ID;
-    case "commit":
-      return endpoint.ref;
-    case "checkedCommit":
-      return endpoint.headCommit;
-    case "worktree":
-      return null;
-  }
-}
-
-function getSubmoduleComparisonDiffRefs(
-  comparison: SubmoduleDiffComparison,
-): CheckoutDiffRefs | null {
-  if (comparison.oldEndpoint.kind === "worktree") return null;
-  const baseRef = getCommitRefForEndpoint(comparison.oldEndpoint);
-  const targetRef = getCommitRefForEndpoint(comparison.newEndpoint);
-  if (!baseRef) return null;
-  return {
-    baseRef,
-    ...(targetRef ? { targetRef } : null),
-    includeUntracked: comparison.includeUntracked && comparison.newEndpoint.kind === "worktree",
-  };
-}
-
-function canonicalizeRootCommitRef(ref: string, rootHead: string | null): string {
-  return ref === "HEAD" && rootHead ? rootHead : ref;
-}
-
-function createSubmoduleFallbackChange(
-  path: string,
-  comparison: SubmoduleDiffComparison | null,
-): CheckoutFileChange {
-  const isNew =
-    (comparison?.oldEndpoint.kind === "absent" && comparison.newEndpoint.kind !== "absent") ||
-    (comparison?.mode === "uncommitted" &&
-      comparison.newEndpoint.kind === "worktree" &&
-      comparison.newEndpoint.recordedCommit === null);
-  const isDeleted =
-    comparison?.oldEndpoint.kind !== "absent" && comparison?.newEndpoint.kind === "absent";
-  let status = "M";
-  if (isNew) {
-    status = "A";
-  } else if (isDeleted) {
-    status = "D";
-  }
-  return {
-    path,
-    status,
-    isNew,
-    isDeleted,
-  };
-}
-
-async function resolveChildEndpoint(input: {
-  parentCwd: string;
-  childCwd: string;
-  submodulePath: string;
-  endpoint: RecursiveDiffEndpoint;
-  cache: SubmoduleScanCache;
-}): Promise<RecursiveDiffEndpoint | null> {
-  if (input.endpoint.kind === "absent") return { kind: "absent" };
-  if (input.endpoint.kind === "commit") {
-    const lookup = await readGitlinkObjectIdAtRefCached(
-      input.parentCwd,
-      input.endpoint.ref,
-      input.submodulePath,
-      input.cache,
-    );
-    if (lookup.kind === "unavailable") return null;
-    return lookup.kind === "present"
-      ? { kind: "commit", ref: lookup.objectId }
-      : { kind: "absent" };
-  }
-
-  if (input.endpoint.kind === "checkedCommit") {
-    const lookup = await readGitlinkObjectIdAtRefCached(
-      input.parentCwd,
-      input.endpoint.headCommit,
-      input.submodulePath,
-      input.cache,
-    );
-    if (lookup.kind === "unavailable") return null;
-    return lookup.kind === "present"
-      ? { kind: "commit", ref: lookup.objectId }
-      : { kind: "absent" };
-  }
-
-  const [recordedLookup, headCommit] = await Promise.all([
-    input.endpoint.headCommit
-      ? readGitlinkObjectIdAtRefCached(
-          input.parentCwd,
-          input.endpoint.headCommit,
-          input.submodulePath,
-          input.cache,
-        )
-      : Promise.resolve<GitlinkLookup>({ kind: "absent" }),
-    readHeadObjectIdCached(input.childCwd, input.cache),
-  ]);
-  if (recordedLookup.kind === "unavailable" || !headCommit) return null;
-  return {
-    kind: "worktree",
-    recordedCommit: recordedLookup.kind === "present" ? recordedLookup.objectId : null,
-    headCommit,
-  };
-}
-
-async function resolveSubmoduleDiffComparison(input: {
-  parentCwd: string;
-  submoduleCwd: string;
-  submodulePath: string;
-  configuredBranch: string | null;
-  parentComparison: SubmoduleDiffComparison;
-  cache: SubmoduleScanCache;
-}): Promise<SubmoduleDiffComparison | null> {
-  if (input.parentComparison.mode === "uncommitted") {
-    // File classification is repository-local: once a child commit exists, only
-    // that child's HEAD-to-worktree patch remains Uncommitted. The parent-recorded
-    // gitlink is retained on the worktree endpoint solely for compact pointer output.
-    const newEndpoint = await resolveChildEndpoint({
-      parentCwd: input.parentCwd,
-      childCwd: input.submoduleCwd,
-      submodulePath: input.submodulePath,
-      endpoint: input.parentComparison.newEndpoint,
-      cache: input.cache,
-    });
-    if (newEndpoint?.kind !== "worktree" || !newEndpoint.headCommit) return null;
-    return {
-      mode: "uncommitted",
-      oldEndpoint: { kind: "commit", ref: newEndpoint.headCommit },
-      newEndpoint,
-      includeUntracked: input.parentComparison.includeUntracked,
-    };
-  }
-
-  // A configured `.gitmodules` branch is the child's committed baseline. Prefer
-  // its fetched origin ref, then its local branch; without a resolvable branch,
-  // compare HEAD to itself so a stale parent gitlink cannot expand old history.
-  const [committedBaseRef, recordedNewEndpoint, checkedHeadCommit] = await Promise.all([
-    resolveSubmoduleCommittedBaseRef({
-      parentCwd: input.parentCwd,
-      childCwd: input.submoduleCwd,
-      configuredBranch: input.configuredBranch,
-      cache: input.cache,
-    }),
-    resolveChildEndpoint({
-      parentCwd: input.parentCwd,
-      childCwd: input.submoduleCwd,
-      submodulePath: input.submodulePath,
-      endpoint: input.parentComparison.newEndpoint,
-      cache: input.cache,
-    }),
-    readHeadObjectIdCached(input.submoduleCwd, input.cache),
-  ]);
-  let newEndpoint: RecursiveDiffEndpoint | null = recordedNewEndpoint;
-  if (recordedNewEndpoint?.kind === "commit" && checkedHeadCommit) {
-    newEndpoint = {
-      kind: "checkedCommit",
-      recordedCommit: recordedNewEndpoint.ref,
-      headCommit: checkedHeadCommit,
-    };
-  } else if (checkedHeadCommit) {
-    newEndpoint = { kind: "commit", ref: checkedHeadCommit };
-  }
-  if (!committedBaseRef || !newEndpoint) return null;
-
-  return {
-    mode: "committed",
-    oldEndpoint: { kind: "commit", ref: committedBaseRef },
-    newEndpoint,
-    includeUntracked: input.parentComparison.includeUntracked,
-  };
-}
-
-async function resolveParentRecordedSubmoduleComparison(input: {
-  parentCwd: string;
-  submoduleCwd: string;
-  submodulePath: string;
-  parentComparison: SubmoduleDiffComparison;
-  cache: SubmoduleScanCache;
-}): Promise<SubmoduleDiffComparison | null> {
-  const [oldEndpoint, newEndpoint] = await Promise.all([
-    resolveChildEndpoint({
-      parentCwd: input.parentCwd,
-      childCwd: input.submoduleCwd,
-      submodulePath: input.submodulePath,
-      endpoint: input.parentComparison.oldEndpoint,
-      cache: input.cache,
-    }),
-    resolveChildEndpoint({
-      parentCwd: input.parentCwd,
-      childCwd: input.submoduleCwd,
-      submodulePath: input.submodulePath,
-      endpoint: input.parentComparison.newEndpoint,
-      cache: input.cache,
-    }),
-  ]);
-  if (!oldEndpoint || !newEndpoint) return null;
-  return {
-    mode: "committed",
-    oldEndpoint,
-    newEndpoint,
-    includeUntracked: false,
-  };
-}
-
-function hasEndpointChange(comparison: SubmoduleDiffComparison | null): boolean {
-  if (!comparison) return false;
-  return (
-    getCommitRefForEndpoint(comparison.oldEndpoint) !==
-    getCommitRefForEndpoint(comparison.newEndpoint)
-  );
-}
-
-function hasUncommittedGitlinkChange(comparison: SubmoduleDiffComparison): boolean {
-  return (
-    comparison.mode === "uncommitted" &&
-    comparison.newEndpoint.kind === "worktree" &&
-    comparison.newEndpoint.recordedCommit !== comparison.newEndpoint.headCommit
-  );
-}
-
-function getSubmoduleFallbackDiffRefs(input: {
-  parentComparison: SubmoduleDiffComparison;
-  childComparison: SubmoduleDiffComparison;
-  defaultRefs: CheckoutDiffRefs;
-}): CheckoutDiffRefs {
-  const { newEndpoint } = input.childComparison;
-  if (
-    input.childComparison.mode !== "committed" ||
-    newEndpoint.kind !== "checkedCommit" ||
-    newEndpoint.recordedCommit === newEndpoint.headCommit
-  ) {
-    return input.defaultRefs;
-  }
-  const parentTargetRef = getCommitRefForEndpoint(input.parentComparison.newEndpoint);
-  return parentTargetRef
-    ? { baseRef: parentTargetRef, includeUntracked: false }
-    : input.defaultRefs;
-}
-
-function appendDirectSubmoduleChanges(input: {
-  childChanges: CheckoutFileChange[];
-  nestedSubmodulePaths: Set<string>;
-  displaySubmodulePath: string;
-  submoduleCwd: string;
-  refsForDiff: CheckoutDiffRefs;
-  childFallback: SubmoduleTrackedFileChange;
-  tracked: SubmoduleTrackedFileChange[];
-  untracked: CheckoutFileChange[];
-}): Map<string, SubmoduleTrackedFileChange> {
-  const nestedFallbacks = new Map<string, SubmoduleTrackedFileChange>();
-  for (const change of input.childChanges) {
-    if (change.isUntracked) {
-      input.untracked.push({
-        path: joinGitPath(input.displaySubmodulePath, change.path),
-        submodulePath: input.displaySubmodulePath,
-        status: "U",
-        isNew: true,
-        isDeleted: false,
-        isUntracked: true,
-      });
-    } else if (input.nestedSubmodulePaths.has(change.path)) {
-      nestedFallbacks.set(joinGitPath(input.displaySubmodulePath, change.path), {
-        cwd: input.submoduleCwd,
-        displayPrefix: input.displaySubmodulePath,
-        refsForDiff: input.refsForDiff,
-        change,
-        fallback: input.childFallback,
-        isGitlinkFallback: true,
-      });
-    } else {
-      input.tracked.push({
-        cwd: input.submoduleCwd,
-        displayPrefix: input.displaySubmodulePath,
-        refsForDiff: input.refsForDiff,
-        change,
-        fallback: input.childFallback,
-      });
-    }
-  }
-  return nestedFallbacks;
-}
-
-// Parent `git diff` may not enumerate submodule worktree changes, especially
-// when `.gitmodules` configures `ignore = all`. Scan initialized submodules so
-// the checkout diff pane can show those files with parent-repo-relative paths.
-async function listSubmoduleFileChanges(input: {
-  cwd: string;
-  displayPrefix?: string;
-  ignoreWhitespace: boolean;
-  comparison: SubmoduleDiffComparison;
-  cache: SubmoduleScanCache;
-  parentFallback?: SubmoduleTrackedFileChange;
-  visited?: Set<string>;
-}): Promise<SubmoduleFileChanges> {
-  const {
-    cwd,
-    displayPrefix = "",
-    ignoreWhitespace,
-    comparison,
-    cache,
-    parentFallback,
-    visited = new Set<string>(),
-  } = input;
-  let canonicalCwd: string;
-  try {
-    canonicalCwd = realpathSync.native(cwd);
-  } catch {
-    return {
-      tracked: [],
-      untracked: [],
-      expandedSubmodulePaths: new Set(),
-    };
-  }
-  if (visited.has(canonicalCwd)) {
-    return {
-      tracked: [],
-      untracked: [],
-      expandedSubmodulePaths: new Set(),
-    };
-  }
-  visited.add(canonicalCwd);
-
-  const tracked: SubmoduleTrackedFileChange[] = [];
-  const untracked: CheckoutFileChange[] = [];
-  const expandedSubmodulePaths = new Set<string>();
-  const parentRefsForDiff = getSubmoduleComparisonDiffRefs(comparison);
-  if (!parentRefsForDiff) {
-    return { tracked, untracked, expandedSubmodulePaths };
-  }
-  const submodules = await listInitializedSubmodulesCached(cwd, cache);
-  for (const { path: submodulePath, branch: configuredBranch } of submodules) {
-    const submoduleCwd = resolve(cwd, submodulePath);
-    const displaySubmodulePath = joinGitPath(displayPrefix, submodulePath);
-    const [submoduleComparison, parentRecordedComparison] = await Promise.all([
-      resolveSubmoduleDiffComparison({
-        parentCwd: cwd,
-        submoduleCwd,
-        submodulePath,
-        configuredBranch,
-        parentComparison: comparison,
-        cache,
-      }),
-      comparison.mode === "committed"
-        ? resolveParentRecordedSubmoduleComparison({
-            parentCwd: cwd,
-            submoduleCwd,
-            submodulePath,
-            parentComparison: comparison,
-            cache,
-          })
-        : Promise.resolve(null),
-    ]);
-    const childFallback: SubmoduleTrackedFileChange = {
-      cwd,
-      displayPrefix,
-      refsForDiff: submoduleComparison
-        ? getSubmoduleFallbackDiffRefs({
-            parentComparison: comparison,
-            childComparison: submoduleComparison,
-            defaultRefs: parentRefsForDiff,
-          })
-        : parentRefsForDiff,
-      change: createSubmoduleFallbackChange(submodulePath, submoduleComparison),
-      ...(parentFallback ? { fallback: parentFallback } : null),
-      isGitlinkFallback: true,
-    };
-    const parentPointerFallback: SubmoduleTrackedFileChange = {
-      cwd,
-      displayPrefix,
-      refsForDiff: parentRefsForDiff,
-      change: createSubmoduleFallbackChange(submodulePath, parentRecordedComparison),
-      ...(parentFallback ? { fallback: parentFallback } : null),
-      isGitlinkFallback: true,
-    };
-    if (!submoduleComparison) continue;
-    const refsForDiff = getSubmoduleComparisonDiffRefs(submoduleComparison);
-    if (!refsForDiff) continue;
-
-    const trackedBeforeChild = tracked.length;
-    const nestedSubmodulePaths = new Set(
-      (await listInitializedSubmodulesCached(submoduleCwd, cache)).map((entry) => entry.path),
-    );
-    let nestedFallbacks: Map<string, SubmoduleTrackedFileChange>;
-
-    try {
-      const childChanges = await listCheckoutFileChanges(
-        submoduleCwd,
-        refsForDiff,
-        ignoreWhitespace,
-      );
-      nestedFallbacks = appendDirectSubmoduleChanges({
-        childChanges,
-        nestedSubmodulePaths,
-        displaySubmodulePath,
-        submoduleCwd,
-        refsForDiff,
-        childFallback,
-        tracked,
-        untracked,
-      });
-    } catch {
-      tracked.push(childFallback);
-      expandedSubmodulePaths.add(displaySubmodulePath);
-      continue;
-    }
-
-    const nestedChanges = await listSubmoduleFileChanges({
-      cwd: submoduleCwd,
-      displayPrefix: displaySubmodulePath,
-      ignoreWhitespace,
-      comparison: submoduleComparison,
-      cache,
-      parentFallback: childFallback,
-      visited,
-    });
-    for (const [fallbackPath, fallback] of nestedFallbacks) {
-      if (!nestedChanges.expandedSubmodulePaths.has(fallbackPath)) {
-        tracked.push(fallback);
-      }
-    }
-    tracked.push(...nestedChanges.tracked);
-    untracked.push(...nestedChanges.untracked);
-    if (tracked.length > trackedBeforeChild) {
-      expandedSubmodulePaths.add(displaySubmodulePath);
-    } else if (hasEndpointChange(parentRecordedComparison)) {
-      tracked.push(parentPointerFallback);
-      expandedSubmodulePaths.add(displaySubmodulePath);
-    } else if (hasUncommittedGitlinkChange(submoduleComparison)) {
-      // Do not let the root renderer expand recorded-to-checked child history back
-      // into Uncommitted. With no tracked child owner, retain one compact pointer.
-      tracked.push(childFallback);
-      expandedSubmodulePaths.add(displaySubmodulePath);
-    }
-  }
-
-  const trackedByPath = new Map(
-    tracked.map((change) => [joinGitPath(change.displayPrefix, change.change.path), change]),
-  );
-  const untrackedByPath = new Map(untracked.map((change) => [change.path, change]));
-  return {
-    tracked: [...trackedByPath.values()].sort((a, b) =>
-      joinGitPath(a.displayPrefix, a.change.path).localeCompare(
-        joinGitPath(b.displayPrefix, b.change.path),
-      ),
-    ),
-    untracked: [...untrackedByPath.values()].sort((a, b) => a.path.localeCompare(b.path)),
-    expandedSubmodulePaths,
-  };
-}
-
-interface RenderedSubmoduleTrackedDiff {
-  path: string;
-  submodulePath?: string;
-  text: string;
-  truncated: boolean;
-  trackedChange: SubmoduleTrackedFileChange;
-}
-
-async function getSubmoduleTrackedDiffTextForPath(input: {
-  trackedChange: SubmoduleTrackedFileChange;
-  ignoreWhitespace: boolean;
-}): Promise<RenderedSubmoduleTrackedDiff> {
-  const { trackedChange } = input;
-  const path = joinGitPath(trackedChange.displayPrefix, trackedChange.change.path);
-  const submoduleFormat = trackedChange.isGitlinkFallback ? "short" : "diff";
-  const srcPrefix = trackedChange.displayPrefix ? `a/${trackedChange.displayPrefix}/` : "a/";
-  const dstPrefix = trackedChange.displayPrefix ? `b/${trackedChange.displayPrefix}/` : "b/";
-  const result = await runGitCommand(
-    buildGitDiffArgs({
-      ignoreWhitespace: input.ignoreWhitespace,
-      extra: [
-        `--submodule=${submoduleFormat}`,
-        `--src-prefix=${srcPrefix}`,
-        `--dst-prefix=${dstPrefix}`,
-        ...getCheckoutDiffRenderingArgs(trackedChange.refsForDiff),
-        "--",
-        trackedChange.change.path,
-      ],
-    }),
-    {
-      cwd: trackedChange.cwd,
-      envOverlay: getCheckoutDiffGitEnv(trackedChange.refsForDiff),
-      maxOutputBytes: PER_FILE_DIFF_MAX_BYTES,
-    },
-  );
-
-  return {
-    path,
-    ...(trackedChange.displayPrefix ? { submodulePath: trackedChange.displayPrefix } : null),
-    text: result.stdout,
-    truncated: result.truncated,
-    trackedChange,
-  };
-}
-
-async function renderSubmoduleTrackedChangeWithFallback(input: {
-  trackedChange: SubmoduleTrackedFileChange;
-  ignoreWhitespace: boolean;
-  cache: Map<SubmoduleTrackedFileChange, Promise<RenderedSubmoduleTrackedDiff | null>>;
-}): Promise<RenderedSubmoduleTrackedDiff | null> {
-  let candidate: SubmoduleTrackedFileChange | undefined = input.trackedChange;
-  while (candidate) {
-    const current: SubmoduleTrackedFileChange = candidate;
-    let load = input.cache.get(current);
-    if (!load) {
-      load = getSubmoduleTrackedDiffTextForPath({
-        trackedChange: current,
-        ignoreWhitespace: input.ignoreWhitespace,
-      })
-        .then((rendered) => {
-          const isEmpty = !rendered.text && !rendered.truncated;
-          return isEmpty && current.isGitlinkFallback ? null : rendered;
-        })
-        .catch((error: unknown) => {
-          if (!current.fallback) throw error;
-          return null;
-        });
-      input.cache.set(current, load);
-    }
-    const rendered = await load;
-    if (rendered) {
-      return rendered;
-    }
-    candidate = current.fallback;
-  }
-  return null;
-}
-
-function isCoveredByRenderedFallback(
-  path: string,
-  renderedFallbackPaths: ReadonlySet<string>,
-): boolean {
-  for (const fallbackPath of renderedFallbackPaths) {
-    if (isNestedGitPath(path, fallbackPath)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function isNestedGitPath(path: string, parentPath: string): boolean {
-  return path !== parentPath && path.startsWith(`${parentPath}/`);
-}
-
-interface DisplayedSubmoduleTrackedChange {
-  path: string;
-  submodulePath?: string;
-  trackedChange: SubmoduleTrackedFileChange;
-}
-
-function getDisplayedSubmoduleTrackedChange(
-  trackedChange: SubmoduleTrackedFileChange,
-): DisplayedSubmoduleTrackedChange {
-  return {
-    path: joinGitPath(trackedChange.displayPrefix, trackedChange.change.path),
-    ...(trackedChange.displayPrefix ? { submodulePath: trackedChange.displayPrefix } : null),
-    trackedChange,
-  };
-}
-
-function groupSubmoduleTrackedChanges(
-  trackedChanges: SubmoduleTrackedFileChange[],
-): SubmoduleTrackedFileChange[][] {
-  const groups = new Map<SubmoduleTrackedFileChange, SubmoduleTrackedFileChange[]>();
-  for (const trackedChange of trackedChanges) {
-    let outermostFallback = trackedChange;
-    while (outermostFallback.fallback) {
-      outermostFallback = outermostFallback.fallback;
-    }
-    const group = groups.get(outermostFallback);
-    if (group) {
-      group.push(trackedChange);
-    } else {
-      groups.set(outermostFallback, [trackedChange]);
-    }
-  }
-  return [...groups.values()];
-}
-
-interface RecordRenderedSubmoduleDiffInput {
-  fileDiff: RenderedSubmoduleTrackedDiff;
-  renderedByPath: Map<string, RenderedSubmoduleTrackedDiff>;
-  renderedFallbackPaths: Set<string>;
-}
-
-function recordRenderedSubmoduleDiff(input: RecordRenderedSubmoduleDiffInput): void {
-  const { fileDiff, renderedByPath, renderedFallbackPaths } = input;
-  if (fileDiff.trackedChange.isGitlinkFallback) {
-    for (const renderedPath of renderedByPath.keys()) {
-      if (isNestedGitPath(renderedPath, fileDiff.path)) {
-        renderedByPath.delete(renderedPath);
-      }
-    }
-    for (const fallbackPath of renderedFallbackPaths) {
-      if (isNestedGitPath(fallbackPath, fileDiff.path)) {
-        renderedFallbackPaths.delete(fallbackPath);
-      }
-    }
-    renderedFallbackPaths.add(fileDiff.path);
-  }
-  renderedByPath.set(fileDiff.path, fileDiff);
-}
-
-interface ResolveSubmoduleTrackedDiffGroupInput {
-  trackedChanges: SubmoduleTrackedFileChange[];
-  ignoreWhitespace: boolean;
-}
-
-async function resolveSubmoduleTrackedDiffGroup(
-  input: ResolveSubmoduleTrackedDiffGroupInput,
-): Promise<RenderedSubmoduleTrackedDiff[]> {
-  const renderCache = new Map<
-    SubmoduleTrackedFileChange,
-    Promise<RenderedSubmoduleTrackedDiff | null>
-  >();
-  const renderedByPath = new Map<string, RenderedSubmoduleTrackedDiff>();
-  const renderedFallbackPaths = new Set<string>();
-  for (const trackedChange of input.trackedChanges) {
-    const trackedPath = getDisplayedSubmoduleTrackedChange(trackedChange).path;
-    if (isCoveredByRenderedFallback(trackedPath, renderedFallbackPaths)) {
-      continue;
-    }
-
-    const fileDiff = await renderSubmoduleTrackedChangeWithFallback({
-      trackedChange,
-      ignoreWhitespace: input.ignoreWhitespace,
-      cache: renderCache,
-    });
-    if (!fileDiff || (!fileDiff.text && !fileDiff.truncated)) {
-      continue;
-    }
-    if (isCoveredByRenderedFallback(fileDiff.path, renderedFallbackPaths)) {
-      continue;
-    }
-    recordRenderedSubmoduleDiff({ fileDiff, renderedByPath, renderedFallbackPaths });
-  }
-
-  return [...renderedByPath.values()].sort((a, b) => a.path.localeCompare(b.path));
-}
-
-interface AppendSubmoduleTooLargeInput {
-  displayedChange: DisplayedSubmoduleTrackedChange;
-  includeStructured: boolean;
-  structured: StructuredDiffAccumulator;
-  output: DiffOutputAccumulator;
-}
-
-function appendSubmoduleTooLarge(input: AppendSubmoduleTooLargeInput): boolean {
-  const { displayedChange, includeStructured, structured, output } = input;
-  const { change } = displayedChange.trackedChange;
-  if (includeStructured) {
-    const placeholder = buildPlaceholderParsedDiffFile(
-      {
-        path: displayedChange.path,
-        ...(displayedChange.submodulePath !== undefined
-          ? { submodulePath: displayedChange.submodulePath }
-          : null),
-        status: change.status,
-        isNew: change.isNew,
-        isDeleted: change.isDeleted,
-      },
-      { status: "too_large", stat: null },
-    );
-    if (!appendStructuredFile(structured, placeholder)) {
-      return false;
-    }
-  }
-  output.tryAppend(`# ${displayedChange.path}: diff too large omitted\n`);
-  return true;
-}
-
-interface AppendRenderedSubmoduleTrackedDiffInput {
-  cwd: string;
-  fileDiff: RenderedSubmoduleTrackedDiff;
-  includeStructured: boolean;
-  structured: StructuredDiffAccumulator;
-  output: DiffOutputAccumulator;
-}
-
-async function appendRenderedSubmoduleTrackedDiff(
-  input: AppendRenderedSubmoduleTrackedDiffInput,
-): Promise<boolean> {
-  const { cwd, fileDiff, includeStructured, structured, output } = input;
-  if (output.remainingBytes() === 0 || fileDiff.truncated || !output.tryAppend(fileDiff.text)) {
-    return appendSubmoduleTooLarge({
-      displayedChange: fileDiff,
-      includeStructured,
-      structured,
-      output,
-    });
-  }
-  if (!includeStructured) {
-    return true;
-  }
-
-  const { change } = fileDiff.trackedChange;
-  const parsed = await parseAndHighlightDiff(fileDiff.text, cwd);
-  const nestedParsedFiles = getNestedParsedFilesForPath(parsed, fileDiff.path);
-  if (nestedParsedFiles.length > 0) {
-    for (const nestedFile of nestedParsedFiles) {
-      if (
-        !appendStructuredFile(structured, {
-          ...nestedFile,
-          submodulePath: fileDiff.path,
-          status: "ok",
-        })
-      ) {
-        return false;
-      }
-    }
-    return true;
-  }
-  const parsedFile =
-    parsed[0] ??
-    ({
-      path: fileDiff.path,
-      isNew: change.isNew,
-      isDeleted: change.isDeleted,
-      additions: 0,
-      deletions: 0,
-      hunks: [],
-    } satisfies ParsedDiffFile);
-  return appendStructuredFile(structured, {
-    ...parsedFile,
-    path: fileDiff.path,
-    ...(fileDiff.submodulePath !== undefined ? { submodulePath: fileDiff.submodulePath } : null),
-    isNew: change.isNew,
-    isDeleted: change.isDeleted,
-    status: "ok",
-  });
-}
-
-interface ProcessSubmoduleTrackedChangesInput {
-  cwd: string;
-  trackedChanges: SubmoduleTrackedFileChange[];
-  ignoreWhitespace: boolean;
-  includeStructured: boolean;
-  structured: StructuredDiffAccumulator;
-  output: DiffOutputAccumulator;
-}
-
-async function processSubmoduleTrackedChanges(
-  input: ProcessSubmoduleTrackedChangesInput,
-): Promise<boolean> {
-  const { cwd, trackedChanges, ignoreWhitespace, includeStructured, structured, output } = input;
-  if (trackedChanges.length === 0) {
-    return true;
-  }
-
-  const trackedChangeGroups = groupSubmoduleTrackedChanges(trackedChanges);
-  for (const group of trackedChangeGroups) {
-    const trackedDiffs = await resolveSubmoduleTrackedDiffGroup({
-      trackedChanges: group,
-      ignoreWhitespace,
-    });
-    for (const fileDiff of trackedDiffs) {
-      const didAppend = await appendRenderedSubmoduleTrackedDiff({
-        cwd,
-        fileDiff,
-        includeStructured,
-        structured,
-        output,
-      });
-      if (!didAppend) {
-        return false;
-      }
-    }
-  }
-  return true;
 }
 
 export class NotGitRepoError extends Error {
@@ -1882,6 +787,10 @@ export interface CheckoutStatusGitNonPaseo {
   isDirty: boolean;
   baseRef: string | null;
   aheadBehind: AheadBehind | null;
+  // Remote-tracking ref for currentBranch, e.g. "refs/remotes/origin/main". Null when the
+  // branch has no upstream or git could not resolve it. aheadOfOrigin/behindOfOrigin are
+  // measured against exactly this ref.
+  upstreamRef: string | null;
   aheadOfOrigin: number | null;
   behindOfOrigin: number | null;
   hasRemote: boolean;
@@ -1897,6 +806,7 @@ export interface CheckoutStatusGitPaseo {
   isDirty: boolean;
   baseRef: string;
   aheadBehind: AheadBehind | null;
+  upstreamRef: string | null;
   aheadOfOrigin: number | null;
   behindOfOrigin: number | null;
   hasRemote: boolean;
@@ -1956,6 +866,7 @@ export type CheckoutSnapshotFacts =
       comparisonBaseRef: string | null;
       branchRemoteName: string | null;
       branchMergeRef: string | null;
+      upstreamStatus: UpstreamStatus | null;
       pullRequestLookupTarget: PullRequestStatusLookupTarget | null;
     };
 
@@ -2250,8 +1161,14 @@ async function getPaseoWorktreeForCwd(
   };
 }
 
+// Worktrees created before baseRef existed only stored the stripped name; it resolves
+// local-first, which is the base they were actually cut from.
+function storedBaseRefFromMetadata(metadata: PaseoWorktreeMetadata | null): string | null {
+  return metadata?.baseRef ?? metadata?.baseRefName ?? null;
+}
+
 function readPaseoWorktreeBaseRef(worktreeRoot: string): string | null {
-  return readPaseoWorktreeMetadata(worktreeRoot)?.baseRefName ?? null;
+  return storedBaseRefFromMetadata(readPaseoWorktreeMetadata(worktreeRoot));
 }
 
 async function getStoredBaseRefForCwd(
@@ -2302,10 +1219,35 @@ async function resolveBaseRefForCwd(
   };
 }
 
+// The worktree stores the exact ref it was cut from ("refs/remotes/upstream/main") while
+// callers still send its display name ("main"). A different qualified ref retains its own
+// identity even when it has the same branch name.
+function isSameBaseRef(stored: string, requested: string): boolean {
+  return stored === requested || branchNameFromRef(stored) === requested;
+}
+
 // Names both refs rather than labelling either one correct: a caller's ref can be stale, but the
 // stored ref can equally be wrong, so the message states the two facts and leaves the diagnosis open.
 function baseRefMismatchError(refs: { stored: string; requested: string }): Error {
   return new Error(`Base ref mismatch: stored ${refs.stored}, requested ${refs.requested}`);
+}
+
+function resolveOperationBaseRef(input: {
+  storedBaseRef: string | null;
+  resolvedBaseRef: string | null;
+  requestedBaseRef?: string;
+}): string | null {
+  if (
+    input.storedBaseRef &&
+    input.requestedBaseRef &&
+    !isSameBaseRef(input.storedBaseRef, input.requestedBaseRef)
+  ) {
+    throw baseRefMismatchError({
+      stored: input.storedBaseRef,
+      requested: input.requestedBaseRef,
+    });
+  }
+  return input.storedBaseRef ?? input.requestedBaseRef ?? input.resolvedBaseRef;
 }
 
 async function isWorkingTreeDirty(cwd: string, context?: CheckoutContext): Promise<boolean> {
@@ -2547,27 +1489,23 @@ async function resolveBaseRef(repoRoot: string): Promise<string | null> {
   return resolveRepositoryDefaultBranch(repoRoot);
 }
 
-function normalizeLocalBranchRefName(input: string): string {
-  if (input.startsWith("refs/remotes/origin/")) {
-    return input.slice("refs/remotes/origin/".length);
-  }
-  if (input.startsWith("refs/heads/")) {
-    return input.slice("refs/heads/".length);
-  }
-  if (input.startsWith("origin/")) {
-    return input.slice("origin/".length);
-  }
-  return input;
-}
-
 interface ComparisonBaseRefName {
   localName: string;
   originRef: string;
 }
 
 function normalizeComparisonBaseRefName(input: string): ComparisonBaseRefName {
-  const localName = normalizeLocalBranchRefName(input);
+  const localName = branchNameFromRef(input);
   return { localName, originRef: `origin/${localName}` };
+}
+
+function resolveMergeTargetBranch(baseRef: string): string {
+  const remotePrefix = "refs/remotes/";
+  const originPrefix = `${remotePrefix}origin/`;
+  if (baseRef.startsWith(remotePrefix) && !baseRef.startsWith(originPrefix)) {
+    throw new Error(`No local merge target is recorded for base ref ${baseRef}`);
+  }
+  return branchNameFromRef(baseRef);
 }
 
 async function doesGitRefExist(
@@ -2584,11 +1522,23 @@ async function doesGitRefExist(
   return result.exitCode === 0;
 }
 
+function isQualifiedBranchRef(ref: string): boolean {
+  return ref.startsWith("refs/heads/") || ref.startsWith("refs/remotes/");
+}
+
 async function resolveBestComparisonBaseRef(
   cwd: string,
   baseRef: string,
   context?: CheckoutContext,
 ): Promise<string> {
+  // A fully qualified branch ref names the exact commit stream to compare against. Bare names
+  // keep going through the local-vs-origin heuristic below for legacy worktree metadata.
+  if (isQualifiedBranchRef(baseRef)) {
+    if (await doesGitRefExist(cwd, baseRef, context)) {
+      return baseRef;
+    }
+    throw new Error(`Base ref not found: ${baseRef}`);
+  }
   const normalized = normalizeComparisonBaseRefName(baseRef);
   const [hasLocal, hasOrigin] = await Promise.all([
     doesGitRefExist(cwd, `refs/heads/${normalized.localName}`, context),
@@ -2609,7 +1559,14 @@ async function resolveBestComparisonBaseRef(
   throw new Error(`Base branch not found locally or on origin: ${refName}`);
 }
 
-async function resolveMostAheadBaseRef(cwd: string, normalizedBaseRef: string): Promise<string> {
+async function resolveMostAheadBaseRef(cwd: string, baseRef: string): Promise<string> {
+  if (isQualifiedBranchRef(baseRef)) {
+    if (await doesGitRefExist(cwd, baseRef)) {
+      return baseRef;
+    }
+    throw new Error(`Base ref not found: ${baseRef}`);
+  }
+  const normalizedBaseRef = branchNameFromRef(baseRef);
   const [hasLocal, hasOrigin] = await Promise.all([
     doesGitRefExist(cwd, `refs/heads/${normalizedBaseRef}`),
     doesGitRefExist(cwd, `refs/remotes/origin/${normalizedBaseRef}`),
@@ -2648,7 +1605,7 @@ async function getAheadBehind(
   currentBranch: string,
   context?: CheckoutContext,
 ): Promise<AheadBehind | null> {
-  const normalizedBaseRef = normalizeLocalBranchRefName(baseRef);
+  const normalizedBaseRef = branchNameFromRef(baseRef);
   if (!normalizedBaseRef || !currentBranch || normalizedBaseRef === currentBranch) {
     return null;
   }
@@ -2659,8 +1616,22 @@ async function getAheadBehind(
   if (!comparisonBaseRef) {
     return null;
   }
+  return getAheadBehindForComparisonRef(cwd, comparisonBaseRef, currentBranch, context);
+}
+
+export interface UpstreamStatus {
+  ref: string;
+  aheadBehind: AheadBehind;
+}
+
+async function getAheadBehindForComparisonRef(
+  cwd: string,
+  comparisonRef: string,
+  currentBranch: string,
+  context?: CheckoutContext,
+): Promise<AheadBehind | null> {
   const { stdout } = await runGitCommand(
-    ["rev-list", "--left-right", "--count", `${comparisonBaseRef}...${currentBranch}`],
+    ["rev-list", "--left-right", "--count", `${comparisonRef}...${currentBranch}`],
     { cwd, envOverlay: READ_ONLY_GIT_ENV, logger: context?.logger },
   );
   const [behindRaw, aheadRaw] = stdout.trim().split(/\s+/);
@@ -2672,48 +1643,27 @@ async function getAheadBehind(
   return { ahead, behind };
 }
 
-async function getConfiguredUpstreamRef(
+async function getUpstreamStatus(
   cwd: string,
   currentBranch: string,
   context?: CheckoutContext,
-): Promise<string | null> {
-  const remoteName =
-    context?.facts?.isGit && context.facts.currentBranch === currentBranch
-      ? context.facts.branchRemoteName
-      : await getGitConfigValue(cwd, `branch.${currentBranch}.remote`, context);
-  if (!remoteName) {
-    return null;
-  }
-
-  const mergeRef =
-    context?.facts?.isGit && context.facts.currentBranch === currentBranch
-      ? context.facts.branchMergeRef
-      : await getGitConfigValue(cwd, `branch.${currentBranch}.merge`, context);
-  const upstreamBranch = parseBranchMergeHeadRef(mergeRef);
-  return upstreamBranch ? `${remoteName}/${upstreamBranch}` : null;
-}
-
-async function getOriginAheadBehind(
-  cwd: string,
-  currentBranch: string,
-  context?: CheckoutContext,
-): Promise<AheadBehind | null> {
-  if (!currentBranch) {
-    return null;
-  }
-  const upstreamRef = await getConfiguredUpstreamRef(cwd, currentBranch, context);
-  if (!upstreamRef) {
-    return null;
-  }
+): Promise<UpstreamStatus | null> {
   try {
     const { stdout } = await runGitCommand(
-      ["rev-list", "--left-right", "--count", `${currentBranch}...${upstreamRef}`],
+      [
+        "for-each-ref",
+        "--format=%(upstream)%00%(upstream:track,nobracket)",
+        `refs/heads/${currentBranch}`,
+      ],
       { cwd, envOverlay: READ_ONLY_GIT_ENV, logger: context?.logger },
     );
-    const [aheadRaw, behindRaw] = stdout.trim().split(/\s+/);
-    const ahead = Number.parseInt(aheadRaw ?? "", 10);
-    const behind = Number.parseInt(behindRaw ?? "", 10);
-    return Number.isNaN(ahead) || Number.isNaN(behind) ? null : { ahead, behind };
+    const [ref = "", track = ""] = stdout.trim().split("\0", 2);
+    if (!ref || track === "gone") {
+      return null;
+    }
+    const ahead = Number.parseInt(track.match(/ahead (\d+)/)?.[1] ?? "0", 10);
+    const behind = Number.parseInt(track.match(/behind (\d+)/)?.[1] ?? "0", 10);
+    return { ref, aheadBehind: { ahead, behind } };
   } catch {
     return null;
   }
@@ -2771,9 +1721,7 @@ function buildPullRequestLookupTargetFromBranchConfig(
   const originRepo = parseRepositoryIdentityFromRemote(input.originRemoteUrl);
   const isSameRepo = areSameGitHubRepository(remoteRepo, originRepo);
   const headRepositoryOwner = remoteRepo && !isSameRepo ? remoteRepo.split("/")[0] : null;
-  const normalizedBaseRef = input.resolvedBaseRef
-    ? normalizeLocalBranchRefName(input.resolvedBaseRef)
-    : null;
+  const normalizedBaseRef = input.resolvedBaseRef ? branchNameFromRef(input.resolvedBaseRef) : null;
   if (
     trackedHeadRef === normalizedBaseRef &&
     !doesLocalBranchNameIdentifyTrackedHead(
@@ -2837,9 +1785,7 @@ function buildPullRequestLookupTargetFromPushConfig(
     : null;
   const isSameRepo = areSameGitHubRepository(remoteRepo, originRepo);
   const headRepositoryOwner = remoteRepo && !isSameRepo ? remoteRepo.split("/")[0] : null;
-  const normalizedBaseRef = input.resolvedBaseRef
-    ? normalizeLocalBranchRefName(input.resolvedBaseRef)
-    : null;
+  const normalizedBaseRef = input.resolvedBaseRef ? branchNameFromRef(input.resolvedBaseRef) : null;
   if (pushedHeadRef === normalizedBaseRef && !headRepositoryOwner) {
     return null;
   }
@@ -2952,7 +1898,7 @@ export async function getCheckoutSnapshotFacts(
   const paseoWorktreeMetadata = inspected.paseoWorktree.isPaseoOwnedWorktree
     ? readPaseoWorktreeMetadata(inspected.paseoWorktree.worktreeRoot)
     : null;
-  const storedBaseRef = paseoWorktreeMetadata?.baseRefName ?? null;
+  const storedBaseRef = storedBaseRefFromMetadata(paseoWorktreeMetadata);
   const resolvedBaseRef = storedBaseRef ?? (await resolveBaseRef(cwd));
   const mainRepoRoot = await getMainRepoRootFromCommonDir(
     cwd,
@@ -2963,7 +1909,7 @@ export async function getCheckoutSnapshotFacts(
   if (
     resolvedBaseRef &&
     inspected.currentBranch &&
-    normalizeLocalBranchRefName(resolvedBaseRef) !== inspected.currentBranch
+    branchNameFromRef(resolvedBaseRef) !== inspected.currentBranch
   ) {
     comparisonBaseRef = await resolveBestComparisonBaseRef(cwd, resolvedBaseRef, context).catch(
       () => null,
@@ -2973,6 +1919,9 @@ export async function getCheckoutSnapshotFacts(
   let branchRemoteName: string | null = null;
   let branchMergeRef: string | null = null;
   let branchRemoteUrl: string | null = null;
+  const upstreamStatusPromise = inspected.currentBranch
+    ? getUpstreamStatus(cwd, inspected.currentBranch, context)
+    : Promise.resolve(null);
   if (inspected.currentBranch) {
     branchRemoteName = await getGitConfigValue(
       cwd,
@@ -3016,6 +1965,7 @@ export async function getCheckoutSnapshotFacts(
     pullRequestLookupTarget,
     context,
   );
+  const upstreamStatus = await upstreamStatusPromise;
 
   return {
     isGit: true,
@@ -3031,13 +1981,13 @@ export async function getCheckoutSnapshotFacts(
     comparisonBaseRef,
     branchRemoteName,
     branchMergeRef,
+    upstreamStatus,
     pullRequestLookupTarget,
   };
 }
 
 const PER_FILE_DIFF_MAX_BYTES = 1024 * 1024; // 1MB
-const LIVE_TOTAL_DIFF_MAX_BYTES = 2 * 1024 * 1024; // 2MB
-const COMMITTED_TOTAL_DIFF_MAX_BYTES = 20 * 1024 * 1024; // 20MB
+const TOTAL_DIFF_MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const RELAY_MAX_FRAME_BYTES = 32 * 1024 * 1024;
 const CHECKOUT_DIFF_FRAME_HEADROOM_BYTES = 1024 * 1024;
 // Temporary until diffs load lazily per file. The Paseo relay's 32 MiB frame limit is
@@ -3070,35 +2020,6 @@ function appendStructuredFile(
   return true;
 }
 const UNTRACKED_BINARY_SNIFF_BYTES = 16 * 1024;
-
-let committedTotalDiffMaxBytesForTests: number | null = null;
-
-export function __setCommittedTotalDiffMaxBytesForTests(maxBytes: number | null): void {
-  committedTotalDiffMaxBytesForTests = maxBytes;
-}
-
-interface DiffOutputAccumulator {
-  tryAppend: (text: string) => boolean;
-  remainingBytes: () => number;
-  getText: () => string;
-}
-
-function createDiffOutputAccumulator(maxBytes: number): DiffOutputAccumulator {
-  let text = "";
-  let bytes = 0;
-  return {
-    tryAppend(candidate) {
-      if (!candidate) return true;
-      const candidateBytes = Buffer.byteLength(candidate, "utf8");
-      if (bytes + candidateBytes > maxBytes) return false;
-      text += candidate;
-      bytes += candidateBytes;
-      return true;
-    },
-    remainingBytes: () => maxBytes - bytes,
-    getText: () => text,
-  };
-}
 
 async function isLikelyBinaryFile(absolutePath: string): Promise<boolean> {
   const handle = await openFile(absolutePath, "r");
@@ -3164,7 +2085,6 @@ function buildPlaceholderParsedDiffFile(
 ): ParsedDiffFile {
   return {
     path: change.path,
-    ...(change.submodulePath !== undefined ? { submodulePath: change.submodulePath } : null),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     additions: options.stat?.additions ?? 0,
@@ -3225,16 +2145,18 @@ export async function getCheckoutStatus(
   const baseRef = facts.resolvedBaseRef;
   const mainRepoRoot = facts.mainRepoRoot;
   const factsContext = { ...context, facts };
-  const [aheadBehind, originAheadBehind] = await Promise.all([
+  const aheadBehind =
     baseRef && currentBranch
-      ? getAheadBehind(cwd, baseRef, currentBranch, factsContext)
-      : Promise.resolve(null),
-    hasRemote && currentBranch
-      ? getOriginAheadBehind(cwd, currentBranch, factsContext)
-      : Promise.resolve(null),
-  ]);
-  const aheadOfOrigin = originAheadBehind?.ahead ?? null;
-  const behindOfOrigin = originAheadBehind?.behind ?? null;
+      ? await getAheadBehind(cwd, baseRef, currentBranch, factsContext)
+      : null;
+  const upstreamStatus = facts.upstreamStatus;
+  // The wire carries the display name: clients label the base with it and send it back to
+  // request diffs and merges. The exact ref stays in worktree.json and in facts, where the
+  // comparisons and actions read it.
+  const displayBaseRef = baseRef ? branchNameFromRef(baseRef) : null;
+  const upstreamRef = upstreamStatus?.ref ?? null;
+  const aheadOfOrigin = upstreamStatus?.aheadBehind.ahead ?? null;
+  const behindOfOrigin = upstreamStatus?.aheadBehind.behind ?? null;
 
   if (paseoWorktree.isPaseoOwnedWorktree && baseRef) {
     return {
@@ -3243,8 +2165,9 @@ export async function getCheckoutStatus(
       mainRepoRoot: mainRepoRoot ?? worktreeRoot,
       currentBranch,
       isDirty,
-      baseRef,
+      baseRef: displayBaseRef ?? baseRef,
       aheadBehind,
+      upstreamRef,
       aheadOfOrigin,
       behindOfOrigin,
       hasRemote,
@@ -3260,8 +2183,9 @@ export async function getCheckoutStatus(
       mainRepoRoot && resolve(mainRepoRoot) !== resolve(worktreeRoot) ? mainRepoRoot : null,
     currentBranch,
     isDirty,
-    baseRef,
+    baseRef: displayBaseRef,
     aheadBehind,
+    upstreamRef,
     aheadOfOrigin,
     behindOfOrigin,
     hasRemote,
@@ -3473,11 +2397,18 @@ async function tryResolveCheckoutCommitsBaseRef(
   if (!baseRef) {
     return null;
   }
-  const normalizedBaseRef = normalizeLocalBranchRefName(baseRef);
+  const normalizedBaseRef = branchNameFromRef(baseRef);
   if (!normalizedBaseRef || normalizedBaseRef === currentBranch) {
     return null;
   }
-  return resolveMostAheadBaseRef(cwd, normalizedBaseRef).catch(() => null);
+  try {
+    return await resolveMostAheadBaseRef(cwd, baseRef);
+  } catch (error) {
+    if (isQualifiedBranchRef(baseRef)) {
+      throw error;
+    }
+    return null;
+  }
 }
 
 export async function listCheckoutCommits({
@@ -3493,7 +2424,7 @@ export async function listCheckoutCommits({
   }
 
   const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const normalizedBaseRef = resolvedBaseRef ? normalizeLocalBranchRefName(resolvedBaseRef) : null;
+  const normalizedBaseRef = resolvedBaseRef ? branchNameFromRef(resolvedBaseRef) : null;
   let comparisonBaseRef = await tryResolveCheckoutCommitsBaseRef(
     cwd,
     resolvedBaseRef,
@@ -3633,7 +2564,7 @@ function parseCheckoutShortstat(text: string): CheckoutShortstat | null {
 
 const UNTRACKED_SHORTSTAT_MAX_FILES = 500;
 
-async function countUntrackedAdditions(cwd: string): Promise<number> {
+async function countUntrackedAdditions(cwd: string, throwOnGitError = false): Promise<number> {
   try {
     const { stdout } = await runGitCommand(["ls-files", "--others", "--exclude-standard"], {
       cwd,
@@ -3661,14 +2592,25 @@ async function countUntrackedAdditions(cwd: string): Promise<number> {
       }
     }
     return additions;
-  } catch {
+  } catch (error) {
+    if (throwOnGitError) {
+      throw error;
+    }
     return 0;
   }
+}
+
+function handleShortstatGitError(error: unknown, throwOnGitError = false): null {
+  if (throwOnGitError) {
+    throw error;
+  }
+  return null;
 }
 
 async function getCheckoutShortstatUncached(
   cwd: string,
   context?: CheckoutContext,
+  options?: { throwOnGitError?: boolean },
 ): Promise<CheckoutShortstat | null> {
   if (context?.facts?.isGit === false) {
     return null;
@@ -3711,7 +2653,7 @@ async function getCheckoutShortstatUncached(
         cwd,
         envOverlay: READ_ONLY_GIT_ENV,
       }),
-      countUntrackedAdditions(cwd),
+      countUntrackedAdditions(cwd, options?.throwOnGitError),
     ]);
 
     const tracked = parseCheckoutShortstat(stdout);
@@ -3723,8 +2665,8 @@ async function getCheckoutShortstatUncached(
       return { additions: untrackedAdditions, deletions: 0 };
     }
     return null;
-  } catch {
-    return null;
+  } catch (error) {
+    return handleShortstatGitError(error, options?.throwOnGitError);
   }
 }
 
@@ -3790,6 +2732,117 @@ export async function getCheckoutShortstat(
   options?: CheckoutReadCacheOptions,
 ): Promise<CheckoutShortstat | null> {
   return getOrLoadCheckoutShortstat(cwd, context, options);
+}
+
+export interface CheckoutRefDerivedState {
+  aheadBehind: AheadBehind | null;
+  diffStat: CheckoutShortstat | null;
+  upstreamStatus: UpstreamStatus | null;
+}
+
+function normalizeRemoteTrackingRef(ref: string): string {
+  return ref.startsWith("refs/remotes/") ? ref.slice("refs/remotes/".length) : ref;
+}
+
+function checkoutFactsConfiguredRemoteRef(
+  facts: Extract<CheckoutSnapshotFacts, { isGit: true }>,
+): string | null {
+  const trackedBranch = facts.branchMergeRef?.startsWith("refs/heads/")
+    ? facts.branchMergeRef.slice("refs/heads/".length)
+    : null;
+  return facts.branchRemoteName && facts.branchRemoteName !== "." && trackedBranch
+    ? `${facts.branchRemoteName}/${trackedBranch}`
+    : null;
+}
+
+function getCheckoutRefMovement(
+  facts: Extract<CheckoutSnapshotFacts, { isGit: true }>,
+  movedRemoteRefs: ReadonlySet<string>,
+): {
+  baseMoved: boolean;
+  comparisonRef: string | null;
+  currentBranch: string | null;
+  normalizedResolvedBase: string | null;
+  upstreamMoved: boolean;
+  upstreamRef: string | null;
+} {
+  const currentBranch = facts.currentBranch;
+  const comparisonRef = facts.comparisonBaseRef;
+  const normalizedMoves = new Set([...movedRemoteRefs].map(normalizeRemoteTrackingRef));
+  const normalizedResolvedBase = facts.resolvedBaseRef
+    ? branchNameFromRef(facts.resolvedBaseRef)
+    : null;
+  const shortstatRemoteRef =
+    currentBranch && (!normalizedResolvedBase || normalizedResolvedBase === currentBranch)
+      ? `origin/${currentBranch}`
+      : null;
+  const baseMoved = [facts.storedBaseRef, facts.resolvedBaseRef, comparisonRef, shortstatRemoteRef]
+    .filter((ref): ref is string => Boolean(ref))
+    .map(normalizeRemoteTrackingRef)
+    .some((ref) => normalizedMoves.has(ref));
+  const upstreamRef = facts.upstreamStatus?.ref ?? checkoutFactsConfiguredRemoteRef(facts);
+  const upstreamMoved = upstreamRef
+    ? normalizedMoves.has(normalizeRemoteTrackingRef(upstreamRef))
+    : false;
+  return {
+    baseMoved,
+    comparisonRef,
+    currentBranch,
+    normalizedResolvedBase,
+    upstreamMoved,
+    upstreamRef,
+  };
+}
+
+export async function getCheckoutRefDerivedState(
+  cwd: string,
+  facts: Extract<CheckoutSnapshotFacts, { isGit: true }>,
+  current: Pick<CheckoutRefDerivedState, "aheadBehind" | "diffStat">,
+  movedRemoteRefs: ReadonlySet<string>,
+  context?: CheckoutContext,
+): Promise<CheckoutRefDerivedState> {
+  const {
+    baseMoved,
+    comparisonRef,
+    currentBranch,
+    normalizedResolvedBase,
+    upstreamMoved,
+    upstreamRef,
+  } = getCheckoutRefMovement(facts, movedRemoteRefs);
+
+  let aheadBehind = current.aheadBehind;
+  let diffStat = current.diffStat;
+  if (baseMoved && currentBranch && facts.resolvedBaseRef) {
+    aheadBehind = await getAheadBehind(cwd, facts.resolvedBaseRef, currentBranch, {
+      ...context,
+      facts,
+    });
+  }
+  if (baseMoved || (upstreamMoved && currentBranch === normalizedResolvedBase)) {
+    diffStat = await getCheckoutShortstatUncached(
+      cwd,
+      { ...context, facts },
+      { throwOnGitError: true },
+    );
+  }
+
+  let upstreamStatus = facts.upstreamStatus;
+  if (upstreamMoved && currentBranch && upstreamRef) {
+    const normalizedUpstream = normalizeRemoteTrackingRef(upstreamRef);
+    const normalizedComparison = comparisonRef ? normalizeRemoteTrackingRef(comparisonRef) : null;
+    const upstreamAheadBehind =
+      baseMoved && normalizedComparison === normalizedUpstream
+        ? aheadBehind
+        : await getAheadBehindForComparisonRef(cwd, upstreamRef, currentBranch, context);
+    upstreamStatus = upstreamAheadBehind
+      ? {
+          ref: facts.upstreamStatus?.ref ?? `refs/remotes/${normalizedUpstream}`,
+          aheadBehind: upstreamAheadBehind,
+        }
+      : null;
+  }
+
+  return { aheadBehind, diffStat, upstreamStatus };
 }
 
 export interface CheckoutWorktreeState {
@@ -3932,22 +2985,6 @@ async function appendStructuredTrackedDiffs(
       continue;
     }
 
-    const nestedParsedFiles = getNestedParsedFilesForPath(parsedTrackedFiles, change.path);
-    if (nestedParsedFiles.length > 0) {
-      for (const nestedFile of nestedParsedFiles) {
-        if (
-          !appendStructuredFile(structured, {
-            ...nestedFile,
-            submodulePath: change.path,
-            status: "ok",
-          })
-        ) {
-          return false;
-        }
-      }
-      continue;
-    }
-
     // `git diff -w --name-status` can still report a modified path even when the
     // whitespace-filtered patch and numstat are both empty. Skip emitting a
     // structured placeholder in that case so whitespace-only edits truly disappear.
@@ -3978,28 +3015,26 @@ interface ProcessUntrackedChangeInput {
   ignoreWhitespace: boolean;
   includeStructured: boolean;
   structured: StructuredDiffAccumulator;
-  output: DiffOutputAccumulator;
+  appendDiff: (text: string) => void;
 }
 
 async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promise<boolean> {
-  const { cwd, change, ignoreWhitespace, includeStructured, structured, output } = input;
-  if (output.remainingBytes() === 0) {
-    if (
-      includeStructured &&
-      !appendStructuredFile(
-        structured,
-        buildPlaceholderParsedDiffFile(change, { status: "too_large", stat: null }),
-      )
-    ) {
-      return false;
+  const { cwd, change, ignoreWhitespace, includeStructured, structured, appendDiff } = input;
+  const { text, truncated, stat } = await getUntrackedDiffText(cwd, change, ignoreWhitespace);
+
+  if (!includeStructured) {
+    if (stat?.isBinary) {
+      appendDiff(`# ${change.path}: binary diff omitted\n`);
+    } else if (truncated) {
+      appendDiff(`# ${change.path}: diff too large omitted\n`);
+    } else {
+      appendDiff(text);
     }
     return true;
   }
 
-  const { text, truncated, stat } = await getUntrackedDiffText(cwd, change, ignoreWhitespace);
   if (stat?.isBinary) {
     if (
-      includeStructured &&
       !appendStructuredFile(
         structured,
         buildPlaceholderParsedDiffFile(change, { status: "binary", stat }),
@@ -4007,12 +3042,12 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
     ) {
       return false;
     }
-    output.tryAppend(`# ${change.path}: binary diff omitted\n`);
+    appendDiff(`# ${change.path}: binary diff omitted\n`);
     return true;
   }
-  if (truncated || !output.tryAppend(text)) {
+
+  if (truncated) {
     if (
-      includeStructured &&
       !appendStructuredFile(
         structured,
         buildPlaceholderParsedDiffFile(change, { status: "too_large", stat }),
@@ -4020,11 +3055,11 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
     ) {
       return false;
     }
-    output.tryAppend(`# ${change.path}: diff too large omitted\n`);
+    appendDiff(`# ${change.path}: diff too large omitted\n`);
     return true;
   }
-  if (!includeStructured) return true;
 
+  appendDiff(text);
   const parsed = await parseAndHighlightDiff(text, cwd);
   const parsedFile =
     parsed[0] ??
@@ -4040,7 +3075,6 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
   const file = {
     ...parsedFile,
     path: change.path,
-    ...(change.submodulePath !== undefined ? { submodulePath: change.submodulePath } : null),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     status: "ok",
@@ -4053,7 +3087,6 @@ interface ProcessTrackedChangesInput {
   refsForDiff: CheckoutDiffRefs;
   trackedChanges: CheckoutFileChange[];
   ignoreWhitespace: boolean;
-  totalDiffMaxBytes: number;
   appendDiff: (text: string) => void;
 }
 
@@ -4066,8 +3099,7 @@ interface ProcessTrackedChangesResult {
 async function processTrackedChanges(
   input: ProcessTrackedChangesInput,
 ): Promise<ProcessTrackedChangesResult> {
-  const { cwd, refsForDiff, trackedChanges, ignoreWhitespace, totalDiffMaxBytes, appendDiff } =
-    input;
+  const { cwd, refsForDiff, trackedChanges, ignoreWhitespace, appendDiff } = input;
   const trackedNumstatByPath =
     trackedChanges.length > 0
       ? await getTrackedNumstatByPath(cwd, refsForDiff, ignoreWhitespace)
@@ -4111,7 +3143,7 @@ async function processTrackedChanges(
         continue;
       }
       const diffBytes = Buffer.byteLength(fileDiff.text, "utf8");
-      if (trackedDiffBytes + diffBytes > totalDiffMaxBytes) {
+      if (trackedDiffBytes + diffBytes > TOTAL_DIFF_MAX_BYTES) {
         trackedPlaceholderByPath.set(fileDiff.path, {
           status: "too_large",
           stat: trackedNumstatByPath.get(fileDiff.path) ?? null,
@@ -4129,103 +3161,6 @@ async function processTrackedChanges(
     trackedPlaceholderByPath,
     trackedDiffText,
   };
-}
-
-interface AppendCheckoutDiffChangesInput {
-  cwd: string;
-  refsForDiff: CheckoutDiffRefs;
-  trackedChanges: CheckoutFileChange[];
-  untrackedChanges: CheckoutFileChange[];
-  submoduleTrackedChanges: SubmoduleTrackedFileChange[];
-  trackedDiff: ProcessTrackedChangesResult;
-  ignoreWhitespace: boolean;
-  includeStructured: boolean;
-  structured: StructuredDiffAccumulator;
-  output: DiffOutputAccumulator;
-}
-
-async function appendCheckoutDiffChanges(input: AppendCheckoutDiffChangesInput): Promise<boolean> {
-  const {
-    cwd,
-    refsForDiff,
-    trackedChanges,
-    untrackedChanges,
-    submoduleTrackedChanges,
-    trackedDiff,
-    ignoreWhitespace,
-    includeStructured,
-    structured,
-    output,
-  } = input;
-  const appendTrackedPlaceholderComment = (
-    change: CheckoutFileChange,
-    status: "binary" | "too_large",
-  ) => {
-    const description = status === "binary" ? "binary diff omitted" : "diff too large omitted";
-    output.tryAppend(`# ${change.path}: ${description}\n`);
-  };
-
-  if (includeStructured) {
-    const didAppendTrackedDiffs = await appendStructuredTrackedDiffs({
-      cwd,
-      trackedChanges,
-      trackedNumstatByPath: trackedDiff.trackedNumstatByPath,
-      trackedPlaceholderByPath: trackedDiff.trackedPlaceholderByPath,
-      trackedDiffText: trackedDiff.trackedDiffText,
-      refsForDiff,
-      ignoreWhitespace,
-      structured,
-      appendTrackedPlaceholderComment,
-    });
-    if (!didAppendTrackedDiffs) {
-      return false;
-    }
-  } else {
-    for (const change of trackedChanges) {
-      const placeholder = trackedDiff.trackedPlaceholderByPath.get(change.path);
-      if (placeholder) {
-        appendTrackedPlaceholderComment(change, placeholder.status);
-      }
-    }
-  }
-
-  const didAppendSubmoduleDiffs = await processSubmoduleTrackedChanges({
-    cwd,
-    trackedChanges: submoduleTrackedChanges,
-    ignoreWhitespace,
-    includeStructured,
-    structured,
-    output,
-  });
-  if (!didAppendSubmoduleDiffs) {
-    return false;
-  }
-
-  for (const change of untrackedChanges) {
-    if (output.remainingBytes() === 0) {
-      const placeholder = buildPlaceholderParsedDiffFile(change, {
-        status: "too_large",
-        stat: null,
-      });
-      if (includeStructured && !appendStructuredFile(structured, placeholder)) {
-        return false;
-      }
-      continue;
-    }
-    const didAppendUntrackedDiff = await processUntrackedChange({
-      cwd,
-      change,
-      ignoreWhitespace,
-      includeStructured,
-      structured,
-      output,
-    });
-    if (!didAppendUntrackedDiff) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 async function resolveCheckoutDiffRefs(
@@ -4247,12 +3182,13 @@ async function resolveCheckoutDiffRefs(
     };
   }
   const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const baseRef = compare.baseRef ?? resolvedBaseRef;
+  const baseRef = resolveOperationBaseRef({
+    storedBaseRef,
+    resolvedBaseRef,
+    requestedBaseRef: compare.baseRef,
+  });
   if (!baseRef) {
     return null;
-  }
-  if (storedBaseRef && compare.baseRef && compare.baseRef !== storedBaseRef) {
-    throw baseRefMismatchError({ stored: storedBaseRef, requested: compare.baseRef });
   }
   const bestBaseRef = await resolveBestComparisonBaseRef(cwd, baseRef);
   return {
@@ -4269,119 +3205,113 @@ export async function getCheckoutDiff(
 ): Promise<CheckoutDiffResult> {
   await requireGitRepo(cwd);
 
-  let refsForDiff = await resolveCheckoutDiffRefs(cwd, compare, context);
+  const refsForDiff = await resolveCheckoutDiffRefs(cwd, compare, context);
   if (!refsForDiff) {
     return { diff: "" };
   }
 
-  let snapshotDiffIndexDirectory: string | null = null;
-  if (compare.mode === "snapshot" && !refsForDiff.targetRef) {
-    const snapshotIndex = await createSnapshotDiffIndex(cwd, refsForDiff.baseRef);
-    snapshotDiffIndexDirectory = snapshotIndex.directory;
-    refsForDiff = { ...refsForDiff, indexFile: snapshotIndex.indexFile };
+  const ignoreWhitespace = compare.ignoreWhitespace === true;
+  let effectiveRefsForDiff = refsForDiff;
+  let changes: CheckoutFileChange[];
+  try {
+    changes = await listCheckoutFileChanges(cwd, effectiveRefsForDiff, ignoreWhitespace);
+  } catch (error) {
+    if (!isUnbornHeadDiffError(error)) {
+      throw error;
+    }
+    effectiveRefsForDiff = { ...refsForDiff, baseRef: EMPTY_TREE_OBJECT_ID };
+    changes = await listCheckoutFileChanges(cwd, effectiveRefsForDiff, ignoreWhitespace);
+  }
+  changes.sort((a, b) => {
+    if (a.path === b.path) return 0;
+    return a.path < b.path ? -1 : 1;
+  });
+
+  const structured = createStructuredDiffAccumulator();
+  let diffText = "";
+  let diffBytes = 0;
+  const appendDiff = (text: string) => {
+    if (!text) return;
+    if (diffBytes >= TOTAL_DIFF_MAX_BYTES) return;
+    const buf = Buffer.from(text, "utf8");
+    if (diffBytes + buf.length <= TOTAL_DIFF_MAX_BYTES) {
+      diffText += text;
+      diffBytes += buf.length;
+      return;
+    }
+    const remaining = TOTAL_DIFF_MAX_BYTES - diffBytes;
+    if (remaining > 0) {
+      diffText += buf.subarray(0, remaining).toString("utf8");
+      diffBytes = TOTAL_DIFF_MAX_BYTES;
+    }
+  };
+
+  const trackedChanges = changes.filter((change) => !change.isUntracked);
+  const untrackedChanges = changes.filter((change) => change.isUntracked === true);
+  const trackedDiff = await processTrackedChanges({
+    cwd,
+    refsForDiff: effectiveRefsForDiff,
+    trackedChanges,
+    ignoreWhitespace,
+    appendDiff,
+  });
+
+  const appendTrackedPlaceholderComment = (
+    change: CheckoutFileChange,
+    status: "binary" | "too_large",
+  ) => {
+    if (status === "binary") {
+      appendDiff(`# ${change.path}: binary diff omitted\n`);
+      return;
+    }
+    appendDiff(`# ${change.path}: diff too large omitted\n`);
+  };
+
+  if (compare.includeStructured) {
+    const didAppendTrackedDiffs = await appendStructuredTrackedDiffs({
+      cwd,
+      trackedChanges,
+      trackedNumstatByPath: trackedDiff.trackedNumstatByPath,
+      trackedPlaceholderByPath: trackedDiff.trackedPlaceholderByPath,
+      trackedDiffText: trackedDiff.trackedDiffText,
+      refsForDiff: effectiveRefsForDiff,
+      ignoreWhitespace,
+      structured,
+      appendTrackedPlaceholderComment,
+    });
+    if (!didAppendTrackedDiffs) {
+      return { diff: "", structured: [], diffTooLarge: true };
+    }
+  } else {
+    for (const change of trackedChanges) {
+      const placeholder = trackedDiff.trackedPlaceholderByPath.get(change.path);
+      if (placeholder) {
+        appendTrackedPlaceholderComment(change, placeholder.status);
+      }
+    }
   }
 
-  try {
-    const ignoreWhitespace = compare.ignoreWhitespace === true;
-    let effectiveRefsForDiff = refsForDiff;
-    let changes: CheckoutFileChange[];
-    try {
-      changes = await listCheckoutFileChanges(cwd, effectiveRefsForDiff, ignoreWhitespace);
-    } catch (error) {
-      if (!isUnbornHeadDiffError(error)) {
-        throw error;
-      }
-      effectiveRefsForDiff = { ...refsForDiff, baseRef: EMPTY_TREE_OBJECT_ID };
-      changes = await listCheckoutFileChanges(cwd, effectiveRefsForDiff, ignoreWhitespace);
+  for (const change of untrackedChanges) {
+    if (diffBytes >= TOTAL_DIFF_MAX_BYTES) {
+      break;
     }
-    changes.sort((a, b) => {
-      if (a.path === b.path) return 0;
-      return a.path < b.path ? -1 : 1;
-    });
-
-    const structured = createStructuredDiffAccumulator();
-    // Live diffs refresh on every edit, while committed diffs can cover a long-lived
-    // branch. Give the stable committed snapshot enough room to remain reviewable.
-    const totalDiffMaxBytes = refsForDiff.targetRef
-      ? (committedTotalDiffMaxBytesForTests ?? COMMITTED_TOTAL_DIFF_MAX_BYTES)
-      : LIVE_TOTAL_DIFF_MAX_BYTES;
-    const output = createDiffOutputAccumulator(totalDiffMaxBytes);
-    const appendDiff = (text: string): void => {
-      output.tryAppend(text);
-    };
-
-    const submoduleScanCache = createSubmoduleScanCache();
-    const rootHead = await readHeadObjectIdCached(cwd, submoduleScanCache);
-    const rootComparison: SubmoduleDiffComparison = {
-      mode: effectiveRefsForDiff.targetRef ? "committed" : "uncommitted",
-      oldEndpoint:
-        effectiveRefsForDiff.baseRef === EMPTY_TREE_OBJECT_ID
-          ? { kind: "absent" }
-          : {
-              kind: "commit",
-              ref: canonicalizeRootCommitRef(effectiveRefsForDiff.baseRef, rootHead),
-            },
-      newEndpoint: effectiveRefsForDiff.targetRef
-        ? {
-            kind: "commit",
-            ref: canonicalizeRootCommitRef(effectiveRefsForDiff.targetRef, rootHead),
-          }
-        : {
-            kind: "worktree",
-            recordedCommit: rootHead,
-            headCommit: rootHead,
-          },
-      includeUntracked: effectiveRefsForDiff.includeUntracked,
-    };
-    const submoduleFileChanges = await listSubmoduleFileChanges({
+    const didAppendUntrackedDiff = await processUntrackedChange({
       cwd,
-      ignoreWhitespace,
-      comparison: rootComparison,
-      cache: submoduleScanCache,
-    });
-    const trackedChanges = changes.filter(
-      (change) =>
-        !change.isUntracked && !submoduleFileChanges.expandedSubmodulePaths.has(change.path),
-    );
-    const untrackedChanges = changes.filter((change) => change.isUntracked === true);
-    if (effectiveRefsForDiff.includeUntracked) {
-      untrackedChanges.push(...submoduleFileChanges.untracked);
-      untrackedChanges.sort((a, b) => a.path.localeCompare(b.path));
-    }
-    const trackedDiff = await processTrackedChanges({
-      cwd,
-      refsForDiff: effectiveRefsForDiff,
-      trackedChanges,
-      ignoreWhitespace,
-      totalDiffMaxBytes,
-      appendDiff,
-    });
-
-    const didAppendChanges = await appendCheckoutDiffChanges({
-      cwd,
-      refsForDiff: effectiveRefsForDiff,
-      trackedChanges,
-      untrackedChanges,
-      submoduleTrackedChanges: submoduleFileChanges.tracked,
-      trackedDiff,
+      change,
       ignoreWhitespace,
       includeStructured: compare.includeStructured === true,
       structured,
-      output,
+      appendDiff,
     });
-    if (!didAppendChanges) {
+    if (!didAppendUntrackedDiff) {
       return { diff: "", structured: [], diffTooLarge: true };
     }
-
-    if (compare.includeStructured) {
-      return { diff: output.getText(), structured: structured.files };
-    }
-    return { diff: output.getText() };
-  } finally {
-    if (snapshotDiffIndexDirectory) {
-      await rm(snapshotDiffIndexDirectory, { recursive: true, force: true });
-    }
   }
+
+  if (compare.includeStructured) {
+    return { diff: diffText, structured: structured.files };
+  }
+  return { diff: diffText };
 }
 
 export async function commitChanges(
@@ -4471,18 +3401,18 @@ export async function mergeToBase(
   await requireGitRepo(cwd);
   const currentBranch = await getCurrentBranch(cwd);
   const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const baseRef = options.baseRef ?? resolvedBaseRef;
+  const baseRef = resolveOperationBaseRef({
+    storedBaseRef,
+    resolvedBaseRef,
+    requestedBaseRef: options.baseRef,
+  });
   if (!baseRef) {
     throw new Error("Unable to determine base branch for merge");
-  }
-  if (storedBaseRef && options.baseRef && options.baseRef !== storedBaseRef) {
-    throw baseRefMismatchError({ stored: storedBaseRef, requested: options.baseRef });
   }
   if (!currentBranch) {
     throw new Error("Unable to determine current branch for merge");
   }
-  let normalizedBaseRef = baseRef;
-  normalizedBaseRef = normalizeLocalBranchRefName(normalizedBaseRef);
+  const normalizedBaseRef = resolveMergeTargetBranch(baseRef);
   const currentWorktreeRoot = (await getWorktreeRoot(cwd, context)) ?? cwd;
   if (normalizedBaseRef === currentBranch) {
     return currentWorktreeRoot;
@@ -4547,12 +3477,13 @@ export async function mergeFromBase(
   }
 
   const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const baseRef = options.baseRef ?? resolvedBaseRef;
+  const baseRef = resolveOperationBaseRef({
+    storedBaseRef,
+    resolvedBaseRef,
+    requestedBaseRef: options.baseRef,
+  });
   if (!baseRef) {
     throw new Error("Unable to determine base branch for merge");
-  }
-  if (storedBaseRef && options.baseRef && options.baseRef !== storedBaseRef) {
-    throw baseRefMismatchError({ stored: storedBaseRef, requested: options.baseRef });
   }
 
   const requireCleanTarget = options.requireCleanTarget ?? true;
@@ -4566,8 +3497,7 @@ export async function mergeFromBase(
     }
   }
 
-  const normalizedBaseRef = normalizeLocalBranchRefName(baseRef);
-  const bestBaseRef = await resolveMostAheadBaseRef(cwd, normalizedBaseRef);
+  const bestBaseRef = await resolveMostAheadBaseRef(cwd, baseRef);
   if (bestBaseRef === currentBranch) {
     return;
   }
@@ -4881,17 +3811,18 @@ export async function createPullRequest(
 
   const head = options.head ?? (await getCurrentBranch(cwd));
   const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const base = options.base ?? resolvedBaseRef;
+  const base = resolveOperationBaseRef({
+    storedBaseRef,
+    resolvedBaseRef,
+    requestedBaseRef: options.base,
+  });
   if (!head) {
     throw new Error("Unable to determine head branch for PR");
   }
   if (!base) {
     throw new Error("Unable to determine base branch for PR");
   }
-  const normalizedBase = normalizeLocalBranchRefName(base);
-  if (storedBaseRef && options.base && options.base !== storedBaseRef) {
-    throw baseRefMismatchError({ stored: storedBaseRef, requested: options.base });
-  }
+  const normalizedBase = branchNameFromRef(base);
 
   // The push deliberately happens before the adapter resolves the target
   // repository: slug resolution is adapter-internal (e.g. `gh repo view`, which

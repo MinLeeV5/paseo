@@ -22,7 +22,6 @@ import Markdown, {
   type RenderRules,
 } from "react-native-markdown-display";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import { MermaidDiagram } from "@/components/mermaid/diagram";
 import { isMermaidFenceInfo } from "@/components/mermaid/language";
@@ -112,11 +111,7 @@ export function MarkdownRenderer({
     ],
   );
 
-  return (
-    <AppearanceStyleBoundary>
-      <MarkdownPartList parts={parts} rendererProps={rendererProps} />
-    </AppearanceStyleBoundary>
-  );
+  return <MarkdownPartList parts={parts} rendererProps={rendererProps} />;
 }
 
 type MarkdownPartRendererProps = Omit<MarkdownRendererProps, "text" | "enableHtmlish"> & {

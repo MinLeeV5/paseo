@@ -117,6 +117,7 @@ export async function fanOutReconciledWorkspaceUpdates(input: {
 }
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createGitHubService } from "../services/github-service.js";
 import { createPaseoWorktree as createRegisteredPaseoWorktree } from "./paseo-worktree-service.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
@@ -145,7 +146,6 @@ import {
 } from "./workspace-registry.js";
 import { FileBackedChatService } from "./chat/chat-service.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
-import { AgentSessionChangesManager } from "./agent-session-changes-manager.js";
 import { LoopService } from "./loop-service.js";
 import { ScheduleService } from "./schedule/service.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
@@ -606,6 +606,7 @@ export async function createPaseoDaemon(
     publicBaseUrl: serviceProxyPublicBaseUrl,
   });
   const scriptRuntimeStore = new WorkspaceScriptRuntimeStore();
+  const workspaceSetupRuntime = new WorkspaceSetupRuntime();
   const configuredHostnames = config.hostnames ?? config.allowedHosts;
   let wsServer: VoiceAssistantWebSocketServer | null = null;
   let serviceProxyListenTarget: ListenTarget | null = null;
@@ -810,12 +811,6 @@ export async function createPaseoDaemon(
       forgeOverrides: { github },
     },
   });
-  const agentSessionChangesManager = new AgentSessionChangesManager({
-    agentStorage,
-    workspaceGitService,
-    paseoHome: config.paseoHome,
-    logger,
-  });
   const workspaceProvisioning = createWorkspaceProvisioningService({
     serverId,
     projectRegistry,
@@ -841,28 +836,6 @@ export async function createPaseoDaemon(
     appendSystemPrompt: config.appendSystemPrompt,
     onWorkspaceStateMayHaveChanged: ({ cwd }) => {
       workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
-    },
-    onBeforeAgentTurn: async ({ agentId, cwd, prompt, messageId }) => {
-      return agentSessionChangesManager.beginTurn({
-        agentId,
-        cwd,
-        prompt,
-        ...(messageId ? { messageId } : null),
-      });
-    },
-    onAgentTurnStarted: async ({ agentId, preparationId, turnId }) => {
-      await agentSessionChangesManager.attachProviderTurnId({
-        agentId,
-        turnDiffRecordId: preparationId,
-        providerTurnId: turnId,
-      });
-    },
-    onAfterAgentTurn: async ({ agentId, preparationId, status }) => {
-      await agentSessionChangesManager.finishTurn({
-        agentId,
-        turnDiffRecordId: preparationId,
-        status,
-      });
     },
     mcpAuthToken: agentMcpAuthToken,
     logger,
@@ -1068,6 +1041,8 @@ export async function createPaseoDaemon(
           await emitWorkspaceUpdatesExternal([workspaceId]);
         },
         cacheWorkspaceSetupSnapshot: () => {},
+        startWorkspaceSetup: (workspaceId, operation) =>
+          workspaceSetupRuntime.start(workspaceId, operation),
         emit: emitExternalSessionMessage,
         sessionLogger: logger,
         terminalManager,
@@ -1108,12 +1083,14 @@ export async function createPaseoDaemon(
         agentStorage,
         findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
         listActiveWorkspaces: listActiveWorkspacesExternal,
+        getWorkspace: (workspaceIdToGet) => workspaceRegistry.get(workspaceIdToGet),
         archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
         emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
         markWorkspaceArchiving: markWorkspaceArchivingExternal,
         clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
         killTerminalsForWorkspace: (workspaceIdToKill) =>
           killTerminalsForWorkspace({ terminalManager, sessionLogger: logger }, workspaceIdToKill),
+        stopWorkspaceSetup: (workspaceIdToStop) => workspaceSetupRuntime.stop(workspaceIdToStop),
         sessionLogger: logger,
       },
       { scope: { kind: "workspace", workspaceId }, requestId },
@@ -1126,7 +1103,6 @@ export async function createPaseoDaemon(
     github,
     workspaceGitService,
     createPaseoWorktreeWorkflow: createPaseoWorktreeForTools,
-    terminalManager,
     archiveAgentForClose: (agentId) =>
       archiveAgentCommand({ agentManager, agentStorage, logger }, agentId),
     findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
@@ -1139,6 +1115,7 @@ export async function createPaseoDaemon(
     clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
     killTerminalsForWorkspace: (workspaceId) =>
       killTerminalsForWorkspace({ terminalManager, sessionLogger: logger }, workspaceId),
+    terminalManager,
     logger,
   });
   const hubRelationships = new HubRelationshipController({
@@ -1161,9 +1138,6 @@ export async function createPaseoDaemon(
         agentStorage,
         createAgent,
         interruptAgent: (agentId) => cancelAgentRunCommand({ agentManager, logger }, agentId),
-        archiveAgent: (agentId) =>
-          archiveAgentCommand({ agentManager, agentStorage, logger }, agentId),
-        listActiveWorkspaces: listActiveWorkspacesExternal,
         archiveWorkspace: archiveWorkspaceByIdExternal,
         cleanupFailedCreate: (input) =>
           hubAgentLifecycle.cleanupCreatedWorktreeAfterFailedAgentCreate(input),
@@ -1217,6 +1191,7 @@ export async function createPaseoDaemon(
         agentStorage,
         findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
         listActiveWorkspaces: listActiveWorkspacesExternal,
+        getWorkspace: (workspaceIdToGet) => workspaceRegistry.get(workspaceIdToGet),
         archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
         emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
         markWorkspaceArchiving: markWorkspaceArchivingExternal,
@@ -1229,6 +1204,7 @@ export async function createPaseoDaemon(
             },
             workspaceIdToKill,
           ),
+        stopWorkspaceSetup: (workspaceIdToStop) => workspaceSetupRuntime.stop(workspaceIdToStop),
         sessionLogger: logger,
       },
       {
@@ -1594,7 +1570,7 @@ export async function createPaseoDaemon(
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
               hubRelationships,
-              agentSessionChangesManager,
+              workspaceSetupRuntime,
             );
             relayRuntime = createRelayRuntime({
               config: {

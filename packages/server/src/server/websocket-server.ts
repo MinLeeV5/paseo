@@ -4,11 +4,7 @@ import { join } from "path";
 import { hostname as getHostname } from "node:os";
 import { randomUUID } from "node:crypto";
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import {
-  isCurrentGoalArchived,
-  type AgentManager,
-  type AgentMetricsSnapshot,
-} from "./agent/agent-manager.js";
+import type { AgentManager, AgentMetricsSnapshot } from "./agent/agent-manager.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
@@ -19,7 +15,6 @@ import type { FileBackedChatService } from "./chat/chat-service.js";
 import type { LoopService } from "./loop-service.js";
 import type { ScheduleService } from "./schedule/service.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
-import type { AgentSessionChangesManager } from "./agent-session-changes-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
   type ServerInfoStatusPayload,
@@ -39,6 +34,7 @@ import type { HostnamesConfig } from "./hostnames.js";
 import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
 import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
+import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import type { HubExecutionAgents } from "./hub/daemon-executions.js";
 import type { AgentProvider } from "./agent/agent-sdk-types.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
@@ -183,6 +179,7 @@ function createFallbackWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSna
       isDirty: null,
       baseRef: null,
       aheadBehind: null,
+      upstreamRef: null,
       aheadOfOrigin: null,
       behindOfOrigin: null,
       hasRemote: false,
@@ -249,8 +246,13 @@ function createFallbackWorkspaceGitService(): WorkspaceGitService {
       workingTreeWatchSetupInFlightCount: 0,
       workspaceRefreshInFlightCount: 0,
       workspaceRefreshQueuedCount: 0,
+      workspaceRefreshAdmissionActiveCount: 0,
+      workspaceRefreshAdmissionPendingCount: 0,
+      workspaceObservationSetupAdmissionActiveCount: 0,
+      workspaceObservationSetupAdmissionPendingCount: 0,
       fetchInFlightCount: 0,
       snapshotUpdatedListenerCount: 0,
+      watcherErrorCallbackCount: 0,
     }),
     dispose: () => {},
   };
@@ -517,7 +519,6 @@ export class VoiceAssistantWebSocketServer {
   private readonly loopService: LoopService;
   private readonly scheduleService: ScheduleService;
   private readonly checkoutDiffManager: CheckoutDiffManager;
-  private readonly agentSessionChangesManager: AgentSessionChangesManager | null;
   private readonly github: ForgeService;
   private readonly workspaceGitService: WorkspaceGitService;
   private readonly workspaceAutoName: WorkspaceAutoName;
@@ -542,6 +543,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly voiceSpeakHandlers = new Map<string, VoiceSpeakHandler>();
   private readonly voiceCallerContexts = new Map<string, VoiceCallerContext>();
   private readonly workspaceSetupSnapshots = new Map<string, WorkspaceSetupSnapshot>();
+  private readonly workspaceSetupRuntime: WorkspaceSetupRuntime;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private onLifecycleIntent!: ((intent: SessionLifecycleIntent) => void) | null;
   private onBranchChanged!:
@@ -609,9 +611,10 @@ export class VoiceAssistantWebSocketServer {
     serviceProxyPublicBaseUrl?: string | null,
     browserToolsBroker?: BrowserToolsBroker | null,
     hubRelationships?: HubRelationshipManagement | null,
-    agentSessionChangesManager?: AgentSessionChangesManager,
+    workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
   ) {
     this.logger = logger.child({ module: "websocket-server" });
+    this.workspaceSetupRuntime = workspaceSetupRuntime;
     this.advertiseDaemonStatusRpc = wsConfig.daemonStatusRpc !== false;
     this.advertiseRelayConfig = wsConfig.relayConfig !== false;
     this.serverId = serverId;
@@ -636,7 +639,6 @@ export class VoiceAssistantWebSocketServer {
     this.loopService = requiredServices.loopService;
     this.scheduleService = requiredServices.scheduleService;
     this.checkoutDiffManager = requiredServices.checkoutDiffManager;
-    this.agentSessionChangesManager = agentSessionChangesManager ?? null;
     this.github = github ?? createGitHubService();
     this.workspaceGitService = workspaceGitService ?? createFallbackWorkspaceGitService();
     this.workspaceAutoName = workspaceAutoName;
@@ -1033,7 +1035,6 @@ export class VoiceAssistantWebSocketServer {
     await Promise.all(cleanupPromises);
     this.providerSnapshotManager.destroy();
     this.checkoutDiffManager.dispose();
-    this.agentSessionChangesManager?.dispose();
     this.workspaceGitService.dispose();
     this.pendingConnections.clear();
     this.sessions.clear();
@@ -1340,7 +1341,6 @@ export class VoiceAssistantWebSocketServer {
       loopService: this.loopService,
       scheduleService: this.scheduleService,
       checkoutDiffManager: this.checkoutDiffManager,
-      agentSessionChangesManager: this.agentSessionChangesManager ?? undefined,
       github: this.github,
       workspaceGitService: this.workspaceGitService,
       workspaceAutoName: this.workspaceAutoName,
@@ -1357,6 +1357,7 @@ export class VoiceAssistantWebSocketServer {
       serviceProxy: this.serviceProxy ?? undefined,
       scriptRuntimeStore: this.scriptRuntimeStore ?? undefined,
       workspaceSetupSnapshots: this.workspaceSetupSnapshots,
+      workspaceSetupRuntime: this.workspaceSetupRuntime,
       onBranchChanged: this.onBranchChanged ?? undefined,
       getDaemonTcpPort: this.getDaemonTcpPort ?? undefined,
       getDaemonTcpHost: this.getDaemonTcpHost ?? undefined,
@@ -1541,17 +1542,18 @@ export class VoiceAssistantWebSocketServer {
         ...(this.advertiseRelayConfig ? { relayConfig: true } : {}),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
+        // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.
+        "terminal-input-mode-replay": true,
+        // COMPAT(terminalSizeOwnership): added in v0.2.6, remove gate after 2027-02-02.
+        "terminal-size-ownership": true,
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.
         rewind: true,
         // COMPAT(agentTimelinePromptIndex): added in v0.2.X, drop the gate when floor >= v0.2.X.
         agentTimelinePromptIndex: true,
+        // COMPAT(agentHistorySearch): added in v0.3.0, remove gate after 2027-02-07.
+        agentHistorySearch: true,
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: true,
-        // COMPAT(checkoutDiffSubmodulePaths): added in v0.1.103, remove gate after 2027-01-08.
-        checkoutDiffSubmodulePaths: true,
-        // COMPAT(agentSessionChanges): added in v1.1.114, remove gate after 2027-01-22.
-        agentSessionChanges: true,
-        agentTurnChanges: true,
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: true,
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
@@ -1566,8 +1568,6 @@ export class VoiceAssistantWebSocketServer {
         workspaceRecovery: true,
         // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
         workspaceFileEditing: true,
-        // COMPAT(workspaceFileSearch): added in v1.2.3, remove after 2027-01-29 once daemon floor >= v1.2.3.
-        workspaceFileSearch: true,
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
@@ -1586,12 +1586,6 @@ export class VoiceAssistantWebSocketServer {
         providerSubagents: true,
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: true,
-        // COMPAT(workspaceGithubClone): added in v0.1.108, remove gate after 2027-01-13.
-        workspaceGithubClone: true,
-        // COMPAT(agentGoalState): added in v1.1.111, remove gate after 2027-01-14.
-        agentGoalState: true,
-        // COMPAT(agentGoalArchive): added in v1.1.114, remove gate after 2027-01-22.
-        agentGoalArchive: true,
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: true,
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
@@ -2353,7 +2347,6 @@ export class VoiceAssistantWebSocketServer {
     agentId: string;
     provider: AgentProvider;
     reason: "finished" | "error" | "permission";
-    goal?: { objective: string; status: string };
   }): Promise<void> {
     const clientEntries: Array<{
       ws: WebSocketLike;
@@ -2376,16 +2369,7 @@ export class VoiceAssistantWebSocketServer {
     if (!agent?.workspaceId) {
       return;
     }
-    const isGoalNotification = params.reason === "finished" || params.goal !== undefined;
-    if (isGoalNotification && isCurrentGoalArchived(agent)) {
-      return;
-    }
     const assistantMessage = await this.agentManager.getLastAssistantMessage(params.agentId);
-    // Goal archive may race with the async assistant preview lookup. Re-check immediately before
-    // delivery so an already queued completion cannot notify after the Goal has been dismissed.
-    if (isGoalNotification && isCurrentGoalArchived(agent)) {
-      return;
-    }
     const notification = buildAgentAttentionNotificationPayload({
       reason: params.reason,
       serverId: this.serverId,
@@ -2393,13 +2377,12 @@ export class VoiceAssistantWebSocketServer {
       agentId: params.agentId,
       assistantMessage,
       permissionRequest: findLatestPermissionRequest(agent.pendingPermissions),
-      goal: params.goal,
     });
 
     const plan = computeNotificationPlan({
       allStates,
       focusTarget: { kind: "agent", id: params.agentId },
-      pushEligible: isPushEligibleAttentionReason(params.reason, params.goal?.status),
+      pushEligible: isPushEligibleAttentionReason(params.reason),
       nowMs,
     });
 

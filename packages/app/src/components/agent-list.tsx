@@ -22,6 +22,7 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { isAgentOngoing } from "@getpaseo/protocol/agent-state-bucket";
+import type { AgentSearchMatch } from "@getpaseo/protocol/messages";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -33,6 +34,8 @@ interface AgentListProps {
   listFooterComponent?: ReactElement | null;
   showAttentionIndicator?: boolean;
   showHostColumn?: boolean;
+  searchMatchesByAgentKey?: Record<string, AgentSearchMatch[]>;
+  flat?: boolean;
 }
 
 type DateSectionKey = "today" | "yesterday" | "thisWeek" | "thisMonth" | "older";
@@ -366,6 +369,7 @@ export function AgentList({
   listFooterComponent,
   showAttentionIndicator = true,
   showHostColumn = false,
+  flat = false,
 }: AgentListProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -436,6 +440,13 @@ export function AgentList({
   }, [actionAgent, actionClient, archiveAgent]);
 
   const flatItems = useMemo((): FlatListItem[] => {
+    if (flat) {
+      return agents.map((agent) => ({
+        type: "agent" as const,
+        key: `${agent.serverId}:${agent.id}`,
+        agent,
+      }));
+    }
     const buckets = new Map<DateSectionKey, AggregatedAgent[]>();
     for (const agent of agents) {
       const section = deriveDateSectionKey(agent.lastActivityAt);
@@ -456,7 +467,7 @@ export function AgentList({
       }
     }
     return result;
-  }, [agents]);
+  }, [agents, flat]);
 
   const renderItem: ListRenderItem<FlatListItem> = useCallback(
     ({ item }) => {
