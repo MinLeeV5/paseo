@@ -27,7 +27,8 @@ import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
-import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
+import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 
 const ThemedFileDiff = withUnistyles(FileDiff);
 const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
@@ -151,12 +152,17 @@ function WorkingDiffPanel() {
   const { t } = useTranslation();
   const toast = useToast();
   const { serverId, workspaceId, tabId, target } = usePaneContext();
+  const openWorkspaceTabFocused = useWorkspaceLayoutStore((state) => state.openTabFocused);
   const cwd = useWorkspaceDirectory(serverId, workspaceId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const isActive = useRetainedPanelActive();
   const panelPreferences = useDiffPanelPreferences();
   const [expandedPaths, setExpandedPaths] = useState<string[] | null>(null);
   invariant(target.kind === "working_diff", "WorkingDiffPanel requires working_diff target");
+  const persistenceKey = useMemo(
+    () => buildWorkspaceTabPersistenceKey({ serverId, workspaceId }),
+    [serverId, workspaceId],
+  );
 
   const workingDiff = useWorkingDiff({
     serverId,
@@ -201,6 +207,14 @@ function WorkingDiffPanel() {
   const toggleExpandAll = useCallback(() => {
     setExpandedPaths(allFilesExpanded ? [] : null);
   }, [allFilesExpanded]);
+  const openFile = useCallback(
+    (file: { path: string }) => {
+      if (persistenceKey) {
+        openWorkspaceTabFocused(persistenceKey, { kind: "file", path: file.path });
+      }
+    },
+    [openWorkspaceTabFocused, persistenceKey],
+  );
   const mode = useMemo(
     () => ({
       kind: "working_tab" as const,
@@ -208,9 +222,10 @@ function WorkingDiffPanel() {
       reviewActions: workingDiff.reviewActions,
       focusPath: target.focusPath,
       focusRequestId: target.focusRequestId,
+      onOpenFile: openFile,
       onExpandedPathsChange: setExpandedPaths,
     }),
-    [expandedPaths, target.focusPath, target.focusRequestId, workingDiff.reviewActions],
+    [expandedPaths, openFile, target.focusPath, target.focusRequestId, workingDiff.reviewActions],
   );
 
   const baseRefLabel = workingDiff.baseRef?.replace(/^refs\/(heads|remotes)\//, "") ?? "";

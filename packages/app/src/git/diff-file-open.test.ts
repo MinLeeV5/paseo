@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDiffFileOpenTarget } from "@/git/diff-file-open";
+import { createChangedFileSourceTarget, createDiffFileOpenTarget } from "@/git/diff-file-open";
 
 const diffContext = {
   cwd: "/repo",
@@ -9,6 +9,16 @@ const diffContext = {
 };
 
 describe("changed file open targets", () => {
+  it("opens the complete current file without diff context", () => {
+    expect(createChangedFileSourceTarget("docs/README.md")).toEqual({
+      kind: "file",
+      request: {
+        disposition: "main",
+        location: { path: "docs/README.md" },
+      },
+    });
+  });
+
   it("keeps checkout diff context when opening a changed file", () => {
     expect(
       createDiffFileOpenTarget({

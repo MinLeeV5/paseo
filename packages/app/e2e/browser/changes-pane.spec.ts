@@ -195,39 +195,95 @@ export function useMountedTabSet(input: UseMountedTabSetInput): UseMountedTabSet
 }
 `;
 
+const HTML_SOURCE_SENTINEL = "Complete source context outside the diff";
+const HTML_BEFORE = [
+  "<!doctype html>",
+  '<html lang="en">',
+  "  <body>",
+  "    <h1>Before preview</h1>",
+  ...Array.from({ length: 32 }, (_, index) => `    <p>Unchanged context ${index + 1}</p>`),
+  `    <footer>${HTML_SOURCE_SENTINEL}</footer>`,
+  "  </body>",
+  "</html>",
+  "",
+].join("\n");
+const HTML_AFTER = HTML_BEFORE.replace("Before preview", "After preview");
+
 test.afterEach(async () => {
   for (const task of cleanupTasks.splice(0)) {
     await task.run();
   }
 });
 
-test("changes file actions open below the right-click without a reserved kebab", async ({
-  page,
-}) => {
+test("changes file targets separate diff viewing from full-source opening", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff({ includeDeletedFile: true });
   await useUnwrappedDiffLines(page);
   await openWorkspaceChanges(page, workspace);
 
   await expect(page.getByTestId("diff-file-1")).toContainText("zz-deleted.ts");
-  await expect(page.getByTestId(/diff-file-\d+-actions/)).toHaveCount(0);
-  await page.getByTestId("diff-file-1-toggle").click({ button: "right" });
-  await expect(page.getByText("Copy path")).toBeVisible();
   await expect(page.getByTestId("diff-file-1-open-file")).toHaveCount(0);
-  await page.keyboard.press("Escape");
-
-  const fileRow = page.getByTestId("diff-file-0-toggle");
-  const fileRowBounds = await fileRow.boundingBox();
-  expect(fileRowBounds).not.toBeNull();
-  await fileRow.click({ button: "right", position: { x: 80, y: 10 } });
   await expect(page.getByTestId("diff-file-0-open-file")).toBeVisible();
-  const menuBounds = await page.getByTestId("diff-file-0-context-menu").boundingBox();
-  expect(menuBounds).not.toBeNull();
-  expect(menuBounds!.x).toBeCloseTo(fileRowBounds!.x + 80, 0);
-  expect(menuBounds!.y).toBeGreaterThan(fileRowBounds!.y + 10);
-  await page.getByTestId("diff-file-0-open-file").click();
 
-  await expect(page.getByTestId("workspace-file-pane")).toBeVisible();
+  await page.getByTestId("diff-file-0-file").click();
+  const visibleDiffPane = page.getByTestId("workspace-file-pane").filter({ visible: true });
+  await expect(visibleDiffPane.getByTestId("file-diff-view-unified")).toBeVisible();
+  await expect(visibleDiffPane.getByTestId("file-diff-mode-diff")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+
+  await page.getByTestId("diff-file-0-open-file").click();
+  const visibleSourcePane = page.getByTestId("workspace-file-pane").filter({ visible: true });
+  await expect(visibleSourcePane.getByTestId("file-source-editor")).toBeVisible();
+  await expect(visibleSourcePane.getByTestId("file-diff-mode")).toHaveCount(0);
+
   await expect(page.getByTestId("workspace-tab-file_src/use-mounted-tab-set.ts")).toBeVisible();
+});
+
+test("changed HTML separates diff source, full source, and preview", async ({ page }) => {
+  const workspace = await createWorkspaceWithHtmlDiff();
+  await useUnwrappedDiffLines(page);
+  await openHtmlWorkspaceChanges(page, workspace);
+
+  const explorerChanges = page.getByTestId("explorer-content-area");
+  await explorerChanges.getByTestId("diff-file-0-file").click();
+
+  const visibleDiffPane = page.getByTestId("workspace-file-pane").filter({ visible: true });
+  await expect(visibleDiffPane.getByTestId("file-diff-view-unified")).toBeVisible();
+  await expect(visibleDiffPane.getByTestId("file-diff-mode-diff")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(visibleDiffPane.getByTestId("file-html-preview")).toHaveCount(0);
+
+  const contextExpander = visibleDiffPane.getByTestId(/^diff-expand-context-/).first();
+  await expect(contextExpander).toBeVisible();
+  await contextExpander.click();
+  await expect(visibleDiffPane.getByTestId("file-diff-mode-source")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(visibleDiffPane.getByTestId("file-source-preview-scroll")).toContainText(
+    HTML_SOURCE_SENTINEL,
+  );
+
+  await explorerChanges.getByTestId("diff-file-0-open-file").click();
+  const visibleHtmlPane = page.getByTestId("workspace-file-pane").filter({ visible: true });
+  await expect(visibleHtmlPane.getByTestId("file-mode-preview")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(visibleHtmlPane.getByTestId("file-html-preview")).toBeVisible();
+  await expect(
+    page.frameLocator('[data-testid="file-html-preview"]').getByRole("heading", {
+      name: "After preview",
+    }),
+  ).toBeVisible();
+
+  await visibleHtmlPane.getByTestId("file-mode-source").click();
+  await expect(visibleHtmlPane.getByTestId("file-source-editor")).toContainText(
+    HTML_SOURCE_SENTINEL,
+  );
 });
 
 test("Changes switches between inline and full-tab navigation", async ({ page }) => {
@@ -510,14 +566,45 @@ async function createWorkspaceWithMountedTabDiff(
   return { id: createdWorkspace.workspace.id, repoPath: repo.path };
 }
 
+async function createWorkspaceWithHtmlDiff(): Promise<DirtyWorkspace> {
+  const repo = await createTempGitRepo("changes-pane-html-", {
+    files: [{ path: "preview.html", content: HTML_BEFORE }],
+  });
+  const client = await connectSeedClient();
+  cleanupTasks.push({
+    run: async () => {
+      await client.close().catch(() => undefined);
+      await repo.cleanup().catch(() => undefined);
+    },
+  });
+
+  await writeFile(path.join(repo.path, "preview.html"), HTML_AFTER);
+  const createdWorkspace = await client.createWorkspace({
+    source: { kind: "directory", path: repo.path },
+  });
+  if (!createdWorkspace.workspace) {
+    throw new Error(createdWorkspace.error ?? `Failed to create workspace ${repo.path}`);
+  }
+  return { id: createdWorkspace.workspace.id, repoPath: repo.path };
+}
+
 async function openWorkspaceChanges(page: Page, workspace: DirtyWorkspace): Promise<void> {
   await page.setViewportSize({ width: 1400, height: 900 });
   await page.goto(buildHostWorkspaceRoute(getServerId(), workspace.id));
   await waitForWorkspaceTabsVisible(page);
   await page.getByRole("button", { name: "Open explorer" }).click();
   await openChangesInVisibleExplorer(page);
-  await page.getByTestId("diff-file-0").click();
+  await page.getByTestId("diff-file-0-toggle").click();
   await expectExpandedMountedTabDiff(page);
+}
+
+async function openHtmlWorkspaceChanges(page: Page, workspace: DirtyWorkspace): Promise<void> {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto(buildHostWorkspaceRoute(getServerId(), workspace.id));
+  await waitForWorkspaceTabsVisible(page);
+  await page.getByRole("button", { name: "Open explorer" }).click();
+  await expect(page.getByTestId("explorer-tab-changes")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("preview.html", { exact: true })).toBeVisible({ timeout: 30_000 });
 }
 
 async function openChangesInVisibleExplorer(page: Page): Promise<void> {

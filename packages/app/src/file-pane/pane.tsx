@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import React, {
   useCallback,
   useEffect,
@@ -114,6 +115,7 @@ interface FilePreviewBodyProps {
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
+type FileDiffDisplayMode = "diff" | "source";
 const EMPTY_FILE_SEARCH_MATCHES: FileSearchMatch[] = [];
 
 function trimNonEmpty(value: string | null | undefined): string | null {
@@ -663,6 +665,7 @@ function FilePreviewBody({
           style={styles.previewContent}
           showsVerticalScrollIndicator
           onLayout={handlePreviewLayout}
+          testID="file-source-preview-scroll"
         >
           <View style={styles.previewCodeScrollContent} dataSet={CODE_SURFACE_DATASET}>
             {deletedFallbackRows.map((row) => (
@@ -776,6 +779,7 @@ function FilePreviewBody({
           style={styles.previewContent}
           showsVerticalScrollIndicator
           onLayout={handlePreviewLayout}
+          testID="file-source-preview-scroll"
         >
           {isMobile ? (
             <View style={styles.previewCodeScrollContent}>{codeLines}</View>
@@ -868,6 +872,7 @@ export function FilePane({
   const isDiffView = Boolean(location.diffContext);
   const defaultPreviewMode = getDefaultFilePaneMarkdownMode(isDiffView);
   const [previewMode, setPreviewMode] = useState<"preview" | "source">(defaultPreviewMode);
+  const [diffDisplayMode, setDiffDisplayMode] = useState<FileDiffDisplayMode>("diff");
   const [resolvedPreview, setResolvedPreview] = useState<{
     key: string | null;
     file: ExplorerFile | null;
@@ -936,6 +941,7 @@ export function FilePane({
   }, [liveFile.file, readTarget]);
 
   useEffect(() => setPreviewMode(defaultPreviewMode), [defaultPreviewMode, readTarget?.path]);
+  useEffect(() => setDiffDisplayMode("diff"), [isDiffView, readTarget?.path]);
 
   const previewKey = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
   const preview = resolvedPreview.key === previewKey ? resolvedPreview.file : null;
@@ -951,11 +957,12 @@ export function FilePane({
   const canTogglePreviewMode = isRenderable && !location.lineStart && !isDiffView;
   const lineCount =
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
-  const hasDeletedDiffFallback = collectDeletedRowsForFallback(diffDecorations).length > 0;
-  const errorMessage =
-    diffFile || hasDeletedDiffFallback
-      ? null
-      : getFileErrorMessage(liveFile.error, t("panels.file.failedToLoad"));
+  const errorMessage = resolveFilePaneErrorMessage({
+    hasDiffFile: Boolean(diffFile),
+    diffDecorations,
+    error: liveFile.error,
+    fallback: t("panels.file.failedToLoad"),
+  });
 
   return (
     <FilePanePresentation
@@ -980,6 +987,8 @@ export function FilePane({
       navigationRevision={navigationRevision}
       imagePreviewUri={imagePreviewUri}
       diffFile={diffFile}
+      diffDisplayMode={diffDisplayMode}
+      onDiffDisplayModeChange={setDiffDisplayMode}
       diffLayout={fileDiffPreferences.layout}
       diffWrapLines={fileDiffPreferences.wrapLines}
       canUseSplitDiffLayout={fileDiffPreferences.canUseSplitLayout}
@@ -1004,6 +1013,18 @@ function getFileErrorMessage(error: unknown, fallback: string): string | null {
   if (!error) return null;
   if (typeof error === "string") return error;
   return error instanceof Error ? error.message : fallback;
+}
+
+function resolveFilePaneErrorMessage(input: {
+  hasDiffFile: boolean;
+  diffDecorations: WorkspaceFileDiffDecorations | null;
+  error: unknown;
+  fallback: string;
+}): string | null {
+  if (input.hasDiffFile || collectDeletedRowsForFallback(input.diffDecorations).length > 0) {
+    return null;
+  }
+  return getFileErrorMessage(input.error, input.fallback);
 }
 
 function isEditableTextFile(input: {
@@ -1042,6 +1063,8 @@ function FilePanePresentation({
   navigationRevision,
   imagePreviewUri,
   diffFile,
+  diffDisplayMode,
+  onDiffDisplayModeChange,
   diffLayout,
   diffWrapLines,
   canUseSplitDiffLayout,
@@ -1073,6 +1096,8 @@ function FilePanePresentation({
   navigationRevision: number;
   imagePreviewUri: string | null;
   diffFile: ParsedDiffFile | null;
+  diffDisplayMode: FileDiffDisplayMode;
+  onDiffDisplayModeChange: (mode: FileDiffDisplayMode) => void;
   diffLayout: "unified" | "split";
   diffWrapLines: boolean;
   canUseSplitDiffLayout: boolean;
@@ -1143,6 +1168,8 @@ function FilePanePresentation({
       navigationRevision={navigationRevision}
       imagePreviewUri={imagePreviewUri}
       diffFile={diffFile}
+      diffDisplayMode={diffDisplayMode}
+      onDiffDisplayModeChange={onDiffDisplayModeChange}
       diffLayout={diffLayout}
       diffWrapLines={diffWrapLines}
       canUseSplitDiffLayout={canUseSplitDiffLayout}
@@ -1168,6 +1195,8 @@ function ReadOnlyFilePane({
   navigationRevision,
   imagePreviewUri,
   diffFile,
+  diffDisplayMode,
+  onDiffDisplayModeChange,
   diffLayout,
   diffWrapLines,
   canUseSplitDiffLayout,
@@ -1189,6 +1218,8 @@ function ReadOnlyFilePane({
   navigationRevision: number;
   imagePreviewUri: string | null;
   diffFile: ParsedDiffFile | null;
+  diffDisplayMode: FileDiffDisplayMode;
+  onDiffDisplayModeChange: (mode: FileDiffDisplayMode) => void;
   diffLayout: "unified" | "split";
   diffWrapLines: boolean;
   canUseSplitDiffLayout: boolean;
@@ -1199,8 +1230,10 @@ function ReadOnlyFilePane({
   isPaneFocused: boolean;
   searchHandlerId: string;
 }) {
+  const { t } = useTranslation();
   const textRenderMode = getSearchableTextRenderMode({ preview, location, mode: previewMode });
-  const canSearch = !diffFile && textRenderMode !== null;
+  const isShowingDiff = Boolean(diffFile && diffDisplayMode === "diff");
+  const canSearch = !isShowingDiff && textRenderMode !== null;
   const search = useFileSearch({
     content: preview?.kind === "text" ? (preview.content ?? "") : "",
     enabled: canSearch,
@@ -1210,7 +1243,7 @@ function ReadOnlyFilePane({
   });
   const diffLayoutAction = useMemo(
     () =>
-      diffFile && canUseSplitDiffLayout ? (
+      isShowingDiff && canUseSplitDiffLayout ? (
         <DiffLayoutToggle
           layout={diffLayout}
           isMobile={isMobile}
@@ -1218,7 +1251,38 @@ function ReadOnlyFilePane({
           onToggle={onToggleDiffLayout}
         />
       ) : undefined,
-    [canUseSplitDiffLayout, diffFile, diffLayout, isMobile, onToggleDiffLayout],
+    [canUseSplitDiffLayout, diffLayout, isMobile, isShowingDiff, onToggleDiffLayout],
+  );
+  const diffDisplayOptions = useMemo(
+    () => [
+      {
+        value: "diff" as const,
+        label: t("panels.file.editor.diff"),
+        testID: "file-diff-mode-diff",
+      },
+      {
+        value: "source" as const,
+        label: t("panels.file.editor.source"),
+        testID: "file-diff-mode-source",
+      },
+    ],
+    [t],
+  );
+  const diffActions = diffFile ? (
+    <>
+      {diffLayoutAction}
+      <SegmentedControl
+        size="xs"
+        value={diffDisplayMode}
+        onValueChange={onDiffDisplayModeChange}
+        options={diffDisplayOptions}
+        testID="file-diff-mode"
+      />
+    </>
+  ) : undefined;
+  const handleExpandContext = useCallback(
+    () => onDiffDisplayModeChange("source"),
+    [onDiffDisplayModeChange],
   );
 
   return (
@@ -1230,7 +1294,7 @@ function ReadOnlyFilePane({
           mode={previewMode}
           onModeChange={onPreviewModeChange}
           search={canSearch ? search : undefined}
-          actions={diffLayoutAction}
+          actions={diffActions}
         />
       ) : null}
       <View style={styles.contentLayer}>
@@ -1240,13 +1304,14 @@ function ReadOnlyFilePane({
           </View>
         ) : null}
 
-        {diffFile ? (
+        {isShowingDiff && diffFile ? (
           <FileDiffView
             file={diffFile}
             layout={diffLayout}
             wrapLines={diffWrapLines}
             codeFontSize={codeFontSize}
             monoFontFamily={monoFontFamily}
+            onExpandContext={handleExpandContext}
           />
         ) : (
           <FilePreviewBody
@@ -1257,7 +1322,7 @@ function ReadOnlyFilePane({
             navigationRevision={navigationRevision}
             imagePreviewUri={imagePreviewUri}
             diffDecorations={diffDecorations}
-            mode={previewMode}
+            mode={diffFile ? "source" : previewMode}
             search={canSearch ? search : undefined}
           />
         )}

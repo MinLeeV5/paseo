@@ -17,12 +17,14 @@ export function FileDiffView({
   wrapLines,
   codeFontSize,
   monoFontFamily,
+  onExpandContext,
 }: {
   file: ParsedDiffFile;
   layout: "unified" | "split";
   wrapLines: boolean;
   codeFontSize: number;
   monoFontFamily: string;
+  onExpandContext: () => void;
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const viewportHeightRef = useRef(0);
@@ -80,6 +82,7 @@ export function FileDiffView({
           wrapLines={wrapLines}
           codeFontSize={codeFontSize}
           textMetricsStyle={textMetricsStyle}
+          onExpandContext={onExpandContext}
           testID="file-diff-body"
         />
       </ScrollView>

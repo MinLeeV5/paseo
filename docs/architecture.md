@@ -187,7 +187,7 @@ Agent browser_keypress -> guest sendInputEvent(skipIfUnhandled)
   `-- guest does not handle ----> stop; never redispatch to the host window
 ```
 
-> **Local HTML previews use the system browser.** Electron browser webviews intentionally allow only `http:`, `https:`, and `about:blank` navigation. Git diff preview opens local `.html`/`.htm` files through the desktop external opener instead of trying to load `file://` URLs in an in-app browser pane.
+> **Local HTML previews stay in the file pane.** The file pane renders `.html`/`.htm` in a sandboxed preview with a Source switch. A changed-file target stays a source diff; Open file opens the full-file preview. Electron browser webviews intentionally allow only `http:`, `https:`, and `about:blank` navigation, so local previews never depend on `file://` URLs.
 
 ### `packages/website` — Marketing site
 

@@ -117,7 +117,7 @@ import {
 } from "@/utils/diff-rendering";
 import { isWeb, isNative } from "@/constants/platform";
 import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
-import { createDiffFileOpenTarget } from "@/git/diff-file-open";
+import { createChangedFileSourceTarget, createDiffFileOpenTarget } from "@/git/diff-file-open";
 import {
   type ReviewDraftComment,
   getInlineReviewThreadState,
@@ -410,6 +410,8 @@ function DiffTextLine({
   onHoverChange,
   hoverTargetKey,
   onHoverTargetChange,
+  onExpandContext,
+  contextTestID,
   textTestID,
 }: {
   line: DiffLine;
@@ -420,6 +422,8 @@ function DiffTextLine({
   onHoverChange?: (hovered: boolean) => void;
   hoverTargetKey?: string | null;
   onHoverTargetChange?: (key: string | null) => void;
+  onExpandContext?: () => void;
+  contextTestID?: string;
   textTestID?: string;
 }) {
   const visibleTokens = hasVisibleDiffTokens(line.tokens) ? line.tokens : null;
@@ -442,6 +446,32 @@ function DiffTextLine({
     ],
     [line.type, textMetricsStyle, wrapLines],
   );
+  let lineContent: ReactNode;
+  if (line.type === "header") {
+    lineContent = (
+      <DiffContextExpander
+        content={formatDiffContentText(line.content)}
+        textStyle={textStyle}
+        onPress={onExpandContext}
+        testID={contextTestID}
+      />
+    );
+  } else if (visibleTokens) {
+    lineContent = (
+      <HighlightedText
+        tokens={visibleTokens}
+        textMetricsStyle={textMetricsStyle}
+        wrapLines={wrapLines}
+        testID={textTestID}
+      />
+    );
+  } else {
+    lineContent = (
+      <Text style={textStyle} testID={textTestID}>
+        {formatDiffContentText(line.content)}
+      </Text>
+    );
+  }
 
   return (
     <LongPressableLine
@@ -452,19 +482,37 @@ function DiffTextLine({
       onHoverTargetChange={onHoverTargetChange}
       style={containerStyle}
     >
-      {line.type !== "header" && visibleTokens ? (
-        <HighlightedText
-          tokens={visibleTokens}
-          textMetricsStyle={textMetricsStyle}
-          wrapLines={wrapLines}
-          testID={textTestID}
-        />
-      ) : (
-        <Text style={textStyle} testID={textTestID}>
-          {formatDiffContentText(line.content)}
-        </Text>
-      )}
+      {lineContent}
     </LongPressableLine>
+  );
+}
+
+function DiffContextExpander({
+  content,
+  textStyle,
+  onPress,
+  testID,
+}: {
+  content: string;
+  textStyle: StyleProp<TextStyle>;
+  onPress?: () => void;
+  testID?: string;
+}) {
+  const { t } = useTranslation();
+  if (!onPress) {
+    return <Text style={textStyle}>{content}</Text>;
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t("panels.file.editor.expandFullFile")}
+      onPress={onPress}
+      style={styles.diffContextExpander}
+      testID={testID}
+    >
+      <Text style={textStyle}>{content}</Text>
+      <Text style={styles.diffContextExpandLabel}>{t("panels.file.editor.expandFullFile")}</Text>
+    </Pressable>
   );
 }
 
@@ -536,6 +584,8 @@ function DiffLineView({
   textMetricsStyle,
   reviewTarget,
   reviewActions,
+  onExpandContext,
+  contextTestID,
 }: {
   line: DiffLine;
   lineNumber: number | null;
@@ -544,6 +594,8 @@ function DiffLineView({
   textMetricsStyle: TextStyle;
   reviewTarget?: ReviewableDiffTarget | null;
   reviewActions?: InlineReviewActions;
+  onExpandContext?: () => void;
+  contextTestID?: string;
 }) {
   const [isLineHovered, setIsLineHovered] = useState(false);
   const visibleTokens = hasVisibleDiffTokens(line.tokens) ? line.tokens : null;
@@ -566,6 +618,27 @@ function DiffLineView({
     ],
     [line.type, textMetricsStyle, wrapLines],
   );
+  let lineContent: ReactNode;
+  if (line.type === "header") {
+    lineContent = (
+      <DiffContextExpander
+        content={formatDiffContentText(line.content)}
+        textStyle={textStyle}
+        onPress={onExpandContext}
+        testID={contextTestID}
+      />
+    );
+  } else if (visibleTokens) {
+    lineContent = (
+      <HighlightedText
+        tokens={visibleTokens}
+        textMetricsStyle={textMetricsStyle}
+        wrapLines={wrapLines}
+      />
+    );
+  } else {
+    lineContent = <Text style={textStyle}>{formatDiffContentText(line.content)}</Text>;
+  }
 
   return (
     <LongPressableLine
@@ -584,15 +657,7 @@ function DiffLineView({
         isLineHovered={isLineHovered}
         style={styles.lineNumberGutter}
       />
-      {line.type !== "header" && visibleTokens ? (
-        <HighlightedText
-          tokens={visibleTokens}
-          textMetricsStyle={textMetricsStyle}
-          wrapLines={wrapLines}
-        />
-      ) : (
-        <Text style={textStyle}>{formatDiffContentText(line.content)}</Text>
-      )}
+      {lineContent}
     </LongPressableLine>
   );
 }
@@ -779,6 +844,7 @@ function SplitDiffColumn({
   wrapLines,
   textMetricsStyle,
   reviewActions,
+  onExpandContext,
   showDivider = false,
 }: {
   rows: SplitDiffRow[];
@@ -787,6 +853,7 @@ function SplitDiffColumn({
   wrapLines: boolean;
   textMetricsStyle: TextStyle;
   reviewActions?: InlineReviewActions;
+  onExpandContext?: () => void;
   showDivider?: boolean;
 }) {
   const [scrollWidth, setScrollWidth] = useState(0);
@@ -822,7 +889,12 @@ function SplitDiffColumn({
             if (row.kind === "header") {
               return (
                 <View key={key} style={styles.splitHeaderRow}>
-                  <Text style={headerLineTextStyle}>{row.content}</Text>
+                  <DiffContextExpander
+                    content={row.content}
+                    textStyle={headerLineTextStyle}
+                    onPress={onExpandContext}
+                    testID={`diff-expand-context-${side}-${key}`}
+                  />
                 </View>
               );
             }
@@ -911,7 +983,12 @@ function SplitDiffColumn({
             if (row.kind === "header") {
               return (
                 <View key={key} style={styles.splitHeaderRow}>
-                  <Text style={headerLineTextStyle}>{row.content}</Text>
+                  <DiffContextExpander
+                    content={row.content}
+                    textStyle={headerLineTextStyle}
+                    onPress={onExpandContext}
+                    testID={`diff-expand-context-${side}-${key}`}
+                  />
                 </View>
               );
             }
@@ -1048,16 +1125,19 @@ const DiffFileHeader = memo(function DiffFileHeader({
     },
     [file.path, interactive, onToggle],
   );
+  const handleFilePress = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      onFilePress?.(file.path);
+    },
+    [file.path, onFilePress],
+  );
   const handleOpenFilePress = useCallback(
     (event: GestureResponderEvent) => {
       event.stopPropagation();
-      if (onOpenFile) {
-        onOpenFile(file);
-      } else {
-        onFilePress?.(file.path);
-      }
+      onOpenFile?.(file);
     },
-    [file, onFilePress, onOpenFile],
+    [file, onOpenFile],
   );
   const handleOpenInPreferredTool = useCallback(
     (event: GestureResponderEvent) => {
@@ -1173,22 +1253,21 @@ const DiffFileHeader = memo(function DiffFileHeader({
       )}
     </View>
   );
-  const fileTarget =
-    onOpenFile || onFilePress ? (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${openFileLabel}: ${fileName}`}
-        // Android: prevent parent pan/scroll gestures from canceling the tap release.
-        cancelable={false}
-        onPress={handleOpenFilePress}
-        style={fileHeaderFileTargetStyle}
-        testID={testID ? `${testID}-file` : undefined}
-      >
-        {fileContent}
-      </Pressable>
-    ) : (
-      <View style={styles.fileHeaderFileTarget}>{fileContent}</View>
-    );
+  const fileTarget = onFilePress ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={fileName}
+      // Android: prevent parent pan/scroll gestures from canceling the tap release.
+      cancelable={false}
+      onPress={handleFilePress}
+      style={fileHeaderFileTargetStyle}
+      testID={testID ? `${testID}-file` : undefined}
+    >
+      {fileContent}
+    </Pressable>
+  ) : (
+    <View style={styles.fileHeaderFileTarget}>{fileContent}</View>
+  );
   const headerContent = (
     <>
       {interactive ? (
@@ -1315,6 +1394,7 @@ export function DiffFileBody({
   codeFontSize,
   textMetricsStyle,
   reviewActions,
+  onExpandContext,
   onBodyHeightChange,
   testID,
 }: {
@@ -1324,6 +1404,7 @@ export function DiffFileBody({
   codeFontSize: number;
   textMetricsStyle: TextStyle;
   reviewActions?: InlineReviewActions;
+  onExpandContext?: () => void;
   onBodyHeightChange?: (file: ParsedDiffFile, height: number) => void;
   testID?: string;
 }) {
@@ -1389,6 +1470,7 @@ export function DiffFileBody({
                 wrapLines={wrapLines}
                 textMetricsStyle={textMetricsStyle}
                 reviewActions={reviewActions}
+                onExpandContext={onExpandContext}
               />
               <SplitDiffColumn
                 rows={rows}
@@ -1397,6 +1479,7 @@ export function DiffFileBody({
                 wrapLines={wrapLines}
                 textMetricsStyle={textMetricsStyle}
                 reviewActions={reviewActions}
+                onExpandContext={onExpandContext}
                 showDivider
               />
             </View>
@@ -1419,6 +1502,8 @@ export function DiffFileBody({
                       textMetricsStyle={textMetricsStyle}
                       reviewTarget={reviewTarget}
                       reviewActions={reviewActions}
+                      onExpandContext={onExpandContext}
+                      contextTestID={`diff-expand-context-${index}`}
                     />
                     <InlineReviewRow
                       reviewTarget={reviewTarget}
@@ -1477,6 +1562,8 @@ export function DiffFileBody({
                       reviewActions={reviewActions}
                       hoverTargetKey={reviewTarget?.key ?? null}
                       onHoverTargetChange={setHoveredReviewTargetKey}
+                      onExpandContext={onExpandContext}
+                      contextTestID={`diff-expand-context-${index}`}
                       textTestID={`diff-code-text-${index}`}
                     />
                     <InlineReviewThreadContent
@@ -2280,6 +2367,7 @@ interface SharedDiffViewProps {
         reviewActions: InlineReviewActions;
         focusPath?: string;
         focusRequestId?: number;
+        onOpenFile?: (file: ParsedDiffFile) => void;
         onExpandedPathsChange: (paths: string[]) => void;
       }
     | {
@@ -2343,7 +2431,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   const focusPath = mode.kind === "commit" ? undefined : mode.focusPath;
   const focusRequestId = mode.kind === "commit" ? undefined : mode.focusRequestId;
   const reviewFocusTarget = mode.kind === "working_tree" ? mode.reviewFocusTarget : undefined;
-  const onOpenFile = mode.kind === "working_tree" ? mode.onOpenFile : undefined;
+  const onOpenFile = mode.kind === "commit" ? undefined : mode.onOpenFile;
   const onOpenInPreferredTool =
     mode.kind === "working_tree" ? mode.onOpenInPreferredTool : undefined;
   const preferredOpenToolLabel =
@@ -2775,7 +2863,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
             interactive={interactive}
             onToggle={interactive ? handleToggleExpanded : undefined}
             onFilePress={onFilePress}
-            onOpenFile={onOpenFile}
+            onOpenFile={item.file.isDeleted ? undefined : onOpenFile}
             onOpenInPreferredTool={onOpenInPreferredTool}
             preferredOpenToolLabel={preferredOpenToolLabel}
             openingPreferredToolPath={openingPreferredToolPath}
@@ -3582,13 +3670,13 @@ export function GitDiffPane({
     enabled: activeChangesSource === "checkout" && !changesTabOpen,
   });
   const handleOpenDiffFile = useCallback(
-    (file: ParsedDiffFile) => {
+    (filePath: string) => {
       if (activeChangesSource === "session") {
         if (!focusedAgentId) {
           return;
         }
         const target = createDiffFileOpenTarget({
-          filePath: file.path,
+          filePath,
           diffContext: {
             source: "session",
             agentId: focusedAgentId,
@@ -3600,7 +3688,7 @@ export function GitDiffPane({
         return;
       }
       const target = createDiffFileOpenTarget({
-        filePath: file.path,
+        filePath,
         diffContext: {
           cwd,
           mode: diffMode,
@@ -3620,6 +3708,22 @@ export function GitDiffPane({
       onOpenWorkspaceFile,
       selectedPromptTurnId,
     ],
+  );
+  const handleViewDiffFile = useCallback(
+    (filePath: string) => {
+      if (activeChangesSource === "checkout" && onChangesFilePress) {
+        onChangesFilePress(filePath);
+        return;
+      }
+      handleOpenDiffFile(filePath);
+    },
+    [activeChangesSource, handleOpenDiffFile, onChangesFilePress],
+  );
+  const handleOpenSourceFile = useCallback(
+    (file: ParsedDiffFile) => {
+      onOpenWorkspaceFile?.(createChangedFileSourceTarget(file.path).request);
+    },
+    [onOpenWorkspaceFile],
   );
   const handleSelectUncommitted = useCallback(() => {
     setChangesSource("checkout");
@@ -3935,9 +4039,9 @@ export function GitDiffPane({
             }
           : undefined,
       ),
-      onFilePress: checkoutOnlyValue(activeChangesSource, onChangesFilePress),
+      onFilePress: onOpenWorkspaceFile ? handleViewDiffFile : undefined,
       workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
-      onOpenFile: onOpenWorkspaceFile ? handleOpenDiffFile : undefined,
+      onOpenFile: onOpenWorkspaceFile ? handleOpenSourceFile : undefined,
       onOpenInPreferredTool: preferredOpenTarget ? handleOpenInPreferredTool : undefined,
       preferredOpenToolLabel: preferredOpenTarget?.label,
       openingPreferredToolPath,
@@ -3955,12 +4059,12 @@ export function GitDiffPane({
       handleCollapsedFoldersChange,
       handleCollapsedGroupKeysChange,
       handleExpandedPathsChange,
-      handleOpenDiffFile,
+      handleOpenSourceFile,
+      handleViewDiffFile,
       handleOpenInPreferredTool,
       handleCopyPath,
       handleDownloadPath,
       onAddToChat,
-      onChangesFilePress,
       onOpenWorkspaceFile,
       openingPreferredToolPath,
       preferredOpenTarget,
@@ -4645,6 +4749,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   headerLineText: {
     color: theme.colors.foregroundMuted,
+  },
+  diffContextExpander: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  diffContextExpandLabel: {
+    flexShrink: 0,
+    color: theme.colors.accent,
+    fontSize: theme.fontSize.xs,
   },
   contextLineContainer: {
     backgroundColor: theme.colors.surface1,
