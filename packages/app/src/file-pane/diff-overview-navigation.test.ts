@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getFileDiffOverviewRowHeight,
   getFileDiffOverviewScrollOffset,
+  getFileSourceLineScrollOffset,
 } from "./diff-overview-navigation";
 
 describe("getFileDiffOverviewRowHeight", () => {
@@ -44,6 +45,30 @@ describe("getFileDiffOverviewScrollOffset", () => {
     expect(
       getFileDiffOverviewScrollOffset({
         marker: { key: "modified:1", state: "modified", startRow: 1, rowCount: 1 },
+        lineHeight: 20,
+        viewportHeight: 400,
+        contentTopInset: 16,
+      }),
+    ).toBe(0);
+  });
+});
+
+describe("getFileSourceLineScrollOffset", () => {
+  it("centers the source line selected from a diff hunk", () => {
+    expect(
+      getFileSourceLineScrollOffset({
+        lineNumber: 80,
+        lineHeight: 20,
+        viewportHeight: 400,
+        contentTopInset: 16,
+      }),
+    ).toBe(1406);
+  });
+
+  it("clamps source lines near the start of the file to the top", () => {
+    expect(
+      getFileSourceLineScrollOffset({
+        lineNumber: 3,
         lineHeight: 20,
         viewportHeight: 400,
         contentTopInset: 16,

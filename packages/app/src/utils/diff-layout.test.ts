@@ -135,6 +135,7 @@ describe("buildSplitDiffRows", () => {
     expect(rows[0]).toEqual({
       kind: "header",
       content: "@@ -10,1 +20,1 @@",
+      sourceLineNumber: 20,
     });
     expect(rows[1]).toMatchObject({
       kind: "pair",
@@ -179,6 +180,7 @@ describe("buildSplitDiffRows", () => {
     expect(rows[0]).toEqual({
       kind: "header",
       content: "@@ -10,1 +10,2 @@",
+      sourceLineNumber: 10,
     });
     expect(rows[1]).toMatchObject({
       kind: "pair",
@@ -267,11 +269,28 @@ describe("buildUnifiedDiffLines", () => {
     const lines = buildUnifiedDiffLines(file);
 
     expect(lines[0]?.lineNumber).toBeNull();
+    expect(lines[0]?.sourceLineNumber).toBe(75);
     expect(lines[1]?.lineNumber).toBe(75);
     expect(lines[3]?.lineNumber).toBe(77);
     expect(lines[4]?.lineNumber).toBeNull();
+    expect(lines[4]?.sourceLineNumber).toBe(166);
     expect(lines[5]?.lineNumber).toBe(166);
     expect(lines[6]?.lineNumber).toBe(167);
+  });
+
+  it("anchors deleted files to the old source line", () => {
+    const file = makeFile(
+      [
+        { type: "header", content: "@@ -75,2 +0,0 @@" },
+        { type: "remove", content: "removed" },
+      ],
+      { oldStart: 75, newStart: 0 },
+    );
+    file.isDeleted = true;
+
+    const lines = buildUnifiedDiffLines(file);
+
+    expect(lines[0]?.sourceLineNumber).toBe(75);
   });
 
   it("emits canonical review targets for unified add, remove, and context lines", () => {

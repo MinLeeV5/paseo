@@ -79,8 +79,12 @@ import { splitFileSearchTokens, type FileSearchMatch, type FileSearchTokenState 
 import { useFileSearch, type FileSearchController } from "./use-search";
 import { MarkdownSearchPreview } from "./markdown-search-preview";
 import { FileDiffOverviewRuler } from "./diff-overview-ruler";
-import { getFileDiffOverviewScrollOffset } from "./diff-overview-navigation";
+import {
+  getFileDiffOverviewScrollOffset,
+  getFileSourceLineScrollOffset,
+} from "./diff-overview-navigation";
 import { FileDiffView } from "./file-diff-view";
+import { selectWorkspaceFileDiffFiles } from "./workspace-file-diff-selection";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -308,7 +312,11 @@ function useWorkspaceFileDiffFiles(input: {
     ...input,
     diffContext: sessionDiffContext,
   });
-  return sessionDiffContext ? sessionFiles : checkoutFiles;
+  return selectWorkspaceFileDiffFiles({
+    diffContext: input.diffContext,
+    checkoutFiles,
+    sessionFiles,
+  });
 }
 
 function useWorkspaceFileDiffFile(input: {
@@ -380,7 +388,7 @@ const CodeLine = React.memo(function CodeLine({
     return segments.map((token, index) => ({ key: `${index}-${token.text}`, token }));
   }, [currentSearchMatchIndex, searchMatches, tokens]);
   return (
-    <View style={lineStyle}>
+    <View style={lineStyle} testID={`file-source-line-${lineNumber}`}>
       <View style={gutterStyle}>
         <Text numberOfLines={1} style={codeLineStyles.gutterText}>
           {String(lineNumber)}
@@ -410,7 +418,7 @@ function DeletedCodeLine({ row, gutterWidth }: DeletedCodeLineProps) {
     [],
   );
   return (
-    <View style={lineStyle}>
+    <View style={lineStyle} testID={`file-source-line-${row.oldLineNumber}`}>
       <View style={gutterStyle}>
         <Text numberOfLines={1} style={gutterTextStyle}>
           {String(row.oldLineNumber)}
@@ -567,6 +575,7 @@ function FilePreviewBody({
 
   const previewScrollRef = useRef<RNScrollView>(null);
   const previewViewportHeightRef = useRef(0);
+  const [previewViewportHeight, setPreviewViewportHeight] = useState(0);
 
   const highlightedLines = useMemo(() => {
     if (!preview || preview.kind !== "text" || textRenderMode !== "code" || renderKind) {
@@ -586,16 +595,28 @@ function FilePreviewBody({
     return lineNumberGutterWidth(lineCount, theme.fontSize.code);
   }, [highlightedLines, maxDeletedLineNumber, theme.fontSize.code]);
   const lineHeight = theme.fontSize.code * 1.45;
-  const lineSelection = useMemo(() => {
-    if (!highlightedLines) {
-      return null;
-    }
-    return clampLineSelection({
-      lineStart: location.lineStart,
-      lineEnd: location.lineEnd,
-      lineCount: highlightedLines.length,
-    });
-  }, [highlightedLines, location.lineEnd, location.lineStart]);
+  const lineSelection = useMemo(
+    () =>
+      clampLineSelection({
+        lineStart: location.lineStart,
+        lineEnd: location.lineEnd,
+        lineCount: Math.max(highlightedLines?.length ?? 0, maxDeletedLineNumber),
+      }),
+    [highlightedLines?.length, location.lineEnd, location.lineStart, maxDeletedLineNumber],
+  );
+  const sourceAnchorPadding = lineSelection
+    ? Math.max(0, previewViewportHeight / 2 - lineHeight / 2 - theme.spacing[4])
+    : 0;
+  const sourceAnchorContentStyle = useMemo(
+    () =>
+      sourceAnchorPadding > 0
+        ? inlineUnistylesStyle({
+            paddingTop: sourceAnchorPadding,
+            paddingBottom: sourceAnchorPadding,
+          })
+        : undefined,
+    [sourceAnchorPadding],
+  );
 
   const imageSource = useMemo(
     () => (imagePreviewUri ? { uri: imagePreviewUri } : null),
@@ -618,7 +639,11 @@ function FilePreviewBody({
   const { matchesByLine: searchMatchesByLine, currentMatchIndex: currentSearchMatchIndex } =
     useFilePreviewSearch({ search, scrollRef: previewScrollRef, lineHeight });
   const handlePreviewLayout = useCallback((event: LayoutChangeEvent) => {
-    previewViewportHeightRef.current = event.nativeEvent.layout.height;
+    const nextHeight = event.nativeEvent.layout.height;
+    previewViewportHeightRef.current = nextHeight;
+    setPreviewViewportHeight((currentHeight) =>
+      currentHeight === nextHeight ? currentHeight : nextHeight,
+    );
   }, []);
   const handleDiffOverviewMarkerPress = useCallback(
     (marker: WorkspaceFileDiffOverviewMarker) => {
@@ -636,17 +661,29 @@ function FilePreviewBody({
   );
 
   useEffect(() => {
-    if (!lineSelection) {
+    if (!lineSelection || previewViewportHeight <= 0) {
       return;
     }
     const timeout = setTimeout(() => {
       previewScrollRef.current?.scrollTo({
-        y: Math.max(0, (lineSelection.lineStart - 1) * lineHeight),
+        y: getFileSourceLineScrollOffset({
+          lineNumber: lineSelection.lineStart,
+          lineHeight,
+          viewportHeight: previewViewportHeight,
+          contentTopInset: theme.spacing[4] + sourceAnchorPadding,
+        }),
         animated: false,
       });
     }, 0);
     return () => clearTimeout(timeout);
-  }, [lineHeight, lineSelection, navigationRevision]);
+  }, [
+    lineHeight,
+    lineSelection,
+    navigationRevision,
+    previewViewportHeight,
+    sourceAnchorPadding,
+    theme.spacing,
+  ]);
 
   if (isLoading && !preview) {
     return (
@@ -663,6 +700,7 @@ function FilePreviewBody({
         <RNScrollView
           ref={previewScrollRef}
           style={styles.previewContent}
+          contentContainerStyle={sourceAnchorContentStyle}
           showsVerticalScrollIndicator
           onLayout={handlePreviewLayout}
           testID="file-source-preview-scroll"
@@ -777,6 +815,7 @@ function FilePreviewBody({
         <RNScrollView
           ref={previewScrollRef}
           style={styles.previewContent}
+          contentContainerStyle={sourceAnchorContentStyle}
           showsVerticalScrollIndicator
           onLayout={handlePreviewLayout}
           testID="file-source-preview-scroll"
@@ -1231,6 +1270,10 @@ function ReadOnlyFilePane({
   searchHandlerId: string;
 }) {
   const { t } = useTranslation();
+  const [diffSourceAnchor, setDiffSourceAnchor] = useState<{
+    filePath: string;
+    lineNumber: number;
+  } | null>(null);
   const textRenderMode = getSearchableTextRenderMode({ preview, location, mode: previewMode });
   const isShowingDiff = Boolean(diffFile && diffDisplayMode === "diff");
   const canSearch = !isShowingDiff && textRenderMode !== null;
@@ -1281,8 +1324,22 @@ function ReadOnlyFilePane({
     </>
   ) : undefined;
   const handleExpandContext = useCallback(
-    () => onDiffDisplayModeChange("source"),
-    [onDiffDisplayModeChange],
+    (sourceLineNumber: number) => {
+      setDiffSourceAnchor({ filePath: location.path, lineNumber: sourceLineNumber });
+      onDiffDisplayModeChange("source");
+    },
+    [location.path, onDiffDisplayModeChange],
+  );
+  const sourceLocation = useMemo<WorkspaceFileLocation>(
+    () =>
+      diffFile && diffSourceAnchor?.filePath === location.path
+        ? {
+            ...location,
+            lineStart: diffSourceAnchor.lineNumber,
+            lineEnd: diffSourceAnchor.lineNumber,
+          }
+        : location,
+    [diffFile, diffSourceAnchor, location],
   );
 
   return (
@@ -1318,7 +1375,7 @@ function ReadOnlyFilePane({
             preview={preview}
             isLoading={isLoading}
             isMobile={isMobile}
-            location={location}
+            location={sourceLocation}
             navigationRevision={navigationRevision}
             imagePreviewUri={imagePreviewUri}
             diffDecorations={diffDecorations}

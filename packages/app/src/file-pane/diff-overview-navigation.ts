@@ -22,3 +22,14 @@ export function getFileDiffOverviewScrollOffset(input: {
   const markerCenterOffset = input.contentTopInset + markerCenterRow * input.lineHeight;
   return Math.max(0, markerCenterOffset - input.viewportHeight / 2);
 }
+
+export function getFileSourceLineScrollOffset(input: {
+  lineNumber: number;
+  lineHeight: number;
+  viewportHeight: number;
+  contentTopInset: number;
+}): number {
+  const lineCenterOffset =
+    input.contentTopInset + (Math.max(1, input.lineNumber) - 0.5) * input.lineHeight;
+  return Math.max(0, lineCenterOffset - input.viewportHeight / 2);
+}

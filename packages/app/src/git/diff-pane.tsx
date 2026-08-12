@@ -411,6 +411,7 @@ function DiffTextLine({
   hoverTargetKey,
   onHoverTargetChange,
   onExpandContext,
+  contextSourceLineNumber,
   contextTestID,
   textTestID,
 }: {
@@ -422,7 +423,8 @@ function DiffTextLine({
   onHoverChange?: (hovered: boolean) => void;
   hoverTargetKey?: string | null;
   onHoverTargetChange?: (key: string | null) => void;
-  onExpandContext?: () => void;
+  onExpandContext?: (sourceLineNumber: number) => void;
+  contextSourceLineNumber?: number | null;
   contextTestID?: string;
   textTestID?: string;
 }) {
@@ -453,6 +455,7 @@ function DiffTextLine({
         content={formatDiffContentText(line.content)}
         textStyle={textStyle}
         onPress={onExpandContext}
+        sourceLineNumber={contextSourceLineNumber}
         testID={contextTestID}
       />
     );
@@ -491,22 +494,29 @@ function DiffContextExpander({
   content,
   textStyle,
   onPress,
+  sourceLineNumber,
   testID,
 }: {
   content: string;
   textStyle: StyleProp<TextStyle>;
-  onPress?: () => void;
+  onPress?: (sourceLineNumber: number) => void;
+  sourceLineNumber?: number | null;
   testID?: string;
 }) {
   const { t } = useTranslation();
-  if (!onPress) {
+  const handlePress = useCallback(() => {
+    if (sourceLineNumber) {
+      onPress?.(sourceLineNumber);
+    }
+  }, [onPress, sourceLineNumber]);
+  if (!onPress || !sourceLineNumber) {
     return <Text style={textStyle}>{content}</Text>;
   }
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={t("panels.file.editor.expandFullFile")}
-      onPress={onPress}
+      onPress={handlePress}
       style={styles.diffContextExpander}
       testID={testID}
     >
@@ -585,6 +595,7 @@ function DiffLineView({
   reviewTarget,
   reviewActions,
   onExpandContext,
+  contextSourceLineNumber,
   contextTestID,
 }: {
   line: DiffLine;
@@ -594,7 +605,8 @@ function DiffLineView({
   textMetricsStyle: TextStyle;
   reviewTarget?: ReviewableDiffTarget | null;
   reviewActions?: InlineReviewActions;
-  onExpandContext?: () => void;
+  onExpandContext?: (sourceLineNumber: number) => void;
+  contextSourceLineNumber?: number | null;
   contextTestID?: string;
 }) {
   const [isLineHovered, setIsLineHovered] = useState(false);
@@ -625,6 +637,7 @@ function DiffLineView({
         content={formatDiffContentText(line.content)}
         textStyle={textStyle}
         onPress={onExpandContext}
+        sourceLineNumber={contextSourceLineNumber}
         testID={contextTestID}
       />
     );
@@ -853,7 +866,7 @@ function SplitDiffColumn({
   wrapLines: boolean;
   textMetricsStyle: TextStyle;
   reviewActions?: InlineReviewActions;
-  onExpandContext?: () => void;
+  onExpandContext?: (sourceLineNumber: number) => void;
   showDivider?: boolean;
 }) {
   const [scrollWidth, setScrollWidth] = useState(0);
@@ -893,6 +906,7 @@ function SplitDiffColumn({
                     content={row.content}
                     textStyle={headerLineTextStyle}
                     onPress={onExpandContext}
+                    sourceLineNumber={row.sourceLineNumber}
                     testID={`diff-expand-context-${side}-${key}`}
                   />
                 </View>
@@ -987,6 +1001,7 @@ function SplitDiffColumn({
                     content={row.content}
                     textStyle={headerLineTextStyle}
                     onPress={onExpandContext}
+                    sourceLineNumber={row.sourceLineNumber}
                     testID={`diff-expand-context-${side}-${key}`}
                   />
                 </View>
@@ -1404,7 +1419,7 @@ export function DiffFileBody({
   codeFontSize: number;
   textMetricsStyle: TextStyle;
   reviewActions?: InlineReviewActions;
-  onExpandContext?: () => void;
+  onExpandContext?: (sourceLineNumber: number) => void;
   onBodyHeightChange?: (file: ParsedDiffFile, height: number) => void;
   testID?: string;
 }) {
@@ -1492,26 +1507,29 @@ export function DiffFileBody({
           return (
             <View style={styles.diffContent} dataSet={CODE_SURFACE_DATASET}>
               <View style={styles.linesContainer}>
-                {computedLines.map(({ line, lineNumber, key, reviewTarget }, index) => (
-                  <View key={key} testID={`diff-wrapped-row-${index}`}>
-                    <DiffLineView
-                      line={line}
-                      lineNumber={lineNumber}
-                      gutterWidth={gutterWidth}
-                      wrapLines={wrapLines}
-                      textMetricsStyle={textMetricsStyle}
-                      reviewTarget={reviewTarget}
-                      reviewActions={reviewActions}
-                      onExpandContext={onExpandContext}
-                      contextTestID={`diff-expand-context-${index}`}
-                    />
-                    <InlineReviewRow
-                      reviewTarget={reviewTarget}
-                      reviewActions={reviewActions}
-                      gutterWidth={gutterWidth}
-                    />
-                  </View>
-                ))}
+                {computedLines.map(
+                  ({ line, lineNumber, sourceLineNumber, key, reviewTarget }, index) => (
+                    <View key={key} testID={`diff-wrapped-row-${index}`}>
+                      <DiffLineView
+                        line={line}
+                        lineNumber={lineNumber}
+                        gutterWidth={gutterWidth}
+                        wrapLines={wrapLines}
+                        textMetricsStyle={textMetricsStyle}
+                        reviewTarget={reviewTarget}
+                        reviewActions={reviewActions}
+                        onExpandContext={onExpandContext}
+                        contextSourceLineNumber={sourceLineNumber}
+                        contextTestID={`diff-expand-context-${index}`}
+                      />
+                      <InlineReviewRow
+                        reviewTarget={reviewTarget}
+                        reviewActions={reviewActions}
+                        gutterWidth={gutterWidth}
+                      />
+                    </View>
+                  ),
+                )}
               </View>
             </View>
           );
@@ -1552,7 +1570,7 @@ export function DiffFileBody({
               contentContainerStyle={styles.diffContentInner}
             >
               <View style={linesContainerRowStyle}>
-                {computedLines.map(({ line, key, reviewTarget }, index) => (
+                {computedLines.map(({ line, sourceLineNumber, key, reviewTarget }, index) => (
                   <View key={key} testID={`diff-code-row-${index}`}>
                     <DiffTextLine
                       line={line}
@@ -1563,6 +1581,7 @@ export function DiffFileBody({
                       hoverTargetKey={reviewTarget?.key ?? null}
                       onHoverTargetChange={setHoveredReviewTargetKey}
                       onExpandContext={onExpandContext}
+                      contextSourceLineNumber={sourceLineNumber}
                       contextTestID={`diff-expand-context-${index}`}
                       textTestID={`diff-code-text-${index}`}
                     />

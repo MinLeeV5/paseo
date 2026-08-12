@@ -24,7 +24,7 @@ export function FileDiffView({
   wrapLines: boolean;
   codeFontSize: number;
   monoFontFamily: string;
-  onExpandContext: () => void;
+  onExpandContext: (sourceLineNumber: number) => void;
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const viewportHeightRef = useRef(0);

@@ -49,6 +49,7 @@ export interface NumberedDiffLine {
 export interface NumberedDiffHunk {
   hunkIndex: number;
   hunkHeader: string;
+  sourceLineNumber: number;
   lines: NumberedDiffLine[];
 }
 
@@ -64,6 +65,7 @@ export interface UnifiedDiffDisplayLine {
   key: string;
   line: DiffLine;
   lineNumber: number | null;
+  sourceLineNumber: number | null;
   reviewTarget: ReviewableDiffTarget | null;
 }
 
@@ -71,6 +73,7 @@ export type SplitDiffRow =
   | {
       kind: "header";
       content: string;
+      sourceLineNumber: number;
     }
   | {
       kind: "pair";
@@ -174,7 +177,12 @@ export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[]
       });
     }
 
-    numberedHunks.push({ hunkIndex, hunkHeader, lines });
+    numberedHunks.push({
+      hunkIndex,
+      hunkHeader,
+      sourceLineNumber: Math.max(1, file.isDeleted ? hunk.oldStart : hunk.newStart),
+      lines,
+    });
   }
 
   return numberedHunks;
@@ -231,6 +239,7 @@ export function buildUnifiedDiffLines(file: ParsedDiffFile): UnifiedDiffDisplayL
       key: numberedLine.key,
       line: numberedLine.line,
       lineNumber: numberedLine.unifiedCell?.lineNumber ?? null,
+      sourceLineNumber: numberedLine.line.type === "header" ? hunk.sourceLineNumber : null,
       reviewTarget: numberedLine.unifiedCell ? toReviewTarget(numberedLine.unifiedCell) : null,
     })),
   );
@@ -243,6 +252,7 @@ export function buildSplitDiffRows(file: ParsedDiffFile): SplitDiffRow[] {
     rows.push({
       kind: "header",
       content: hunk.hunkHeader,
+      sourceLineNumber: hunk.sourceLineNumber,
     });
 
     let pendingRemovals: NumberedDiffCell[] = [];

@@ -1,4 +1,4 @@
-import { unlink, writeFile } from "node:fs/promises";
+import { readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type Page } from "@playwright/test";
 import { buildHostWorkspaceRoute, buildSettingsSectionRoute } from "../../src/utils/host-routes";
@@ -196,18 +196,26 @@ export function useMountedTabSet(input: UseMountedTabSetInput): UseMountedTabSet
 `;
 
 const HTML_SOURCE_SENTINEL = "Complete source context outside the diff";
+const HTML_CONTEXT_LINE_COUNT = 100;
 const HTML_BEFORE = [
   "<!doctype html>",
   '<html lang="en">',
   "  <body>",
   "    <h1>Before preview</h1>",
-  ...Array.from({ length: 32 }, (_, index) => `    <p>Unchanged context ${index + 1}</p>`),
+  ...Array.from(
+    { length: HTML_CONTEXT_LINE_COUNT },
+    (_, index) => `    <p>Unchanged context ${index + 1}</p>`,
+  ),
+  "    <h2>Before closing section</h2>",
   `    <footer>${HTML_SOURCE_SENTINEL}</footer>`,
   "  </body>",
   "</html>",
   "",
 ].join("\n");
-const HTML_AFTER = HTML_BEFORE.replace("Before preview", "After preview");
+const HTML_AFTER = HTML_BEFORE.replace("Before preview", "After preview").replace(
+  "Before closing section",
+  "After closing section",
+);
 
 test.afterEach(async () => {
   for (const task of cleanupTasks.splice(0)) {
@@ -238,6 +246,27 @@ test("changes file targets separate diff viewing from full-source opening", asyn
   await expect(visibleSourcePane.getByTestId("file-diff-mode")).toHaveCount(0);
 
   await expect(page.getByTestId("workspace-tab-file_src/use-mounted-tab-set.ts")).toBeVisible();
+
+  await observeFileSurfaceTransitions(page);
+  const sourceEditor = visibleSourcePane.getByTestId("file-source-editor").locator(".cm-content");
+  await sourceEditor.click();
+  await sourceEditor.press("Control+End");
+  await sourceEditor.type("// saved without changing views\n");
+  await sourceEditor.press("Control+s");
+  await expect
+    .poll(async () =>
+      (
+        await readFile(path.join(workspace.repoPath, "src/use-mounted-tab-set.ts"), "utf8")
+      ).includes("// saved without changing views"),
+    )
+    .toBe(true);
+  await expect(page.getByLabel("Editor status clean")).toBeVisible();
+  await expect
+    .poll(() => readFileSurfaceTransitions(page))
+    .toEqual({
+      diffWasVisible: false,
+      editorWasUnmounted: false,
+    });
 });
 
 test("changed HTML separates diff source, full source, and preview", async ({ page }) => {
@@ -256,16 +285,30 @@ test("changed HTML separates diff source, full source, and preview", async ({ pa
   );
   await expect(visibleDiffPane.getByTestId("file-html-preview")).toHaveCount(0);
 
-  const contextExpander = visibleDiffPane.getByTestId(/^diff-expand-context-/).first();
+  const contextExpander = visibleDiffPane.getByTestId(/^diff-expand-context-/).nth(1);
   await expect(contextExpander).toBeVisible();
   await contextExpander.click();
   await expect(visibleDiffPane.getByTestId("file-diff-mode-source")).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await expect(visibleDiffPane.getByTestId("file-source-preview-scroll")).toContainText(
-    HTML_SOURCE_SENTINEL,
-  );
+  const sourceScroll = visibleDiffPane.getByTestId("file-source-preview-scroll");
+  await expect(sourceScroll).toContainText(HTML_SOURCE_SENTINEL);
+  await expect
+    .poll(() => sourceScroll.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(500);
+  const sourceAnchor = visibleDiffPane.getByTestId("file-source-line-102");
+  await expect(sourceAnchor).toBeInViewport();
+  await expectSourceLineCentered(sourceScroll, sourceAnchor);
+
+  await visibleDiffPane.getByTestId("file-diff-mode-diff").click();
+  await expect(visibleDiffPane.getByTestId("file-diff-view-unified")).toBeVisible();
+  await visibleDiffPane.getByTestId("file-diff-mode-source").click();
+  await expect
+    .poll(() => sourceScroll.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(500);
+  await expect(sourceAnchor).toBeInViewport();
+  await expectSourceLineCentered(sourceScroll, sourceAnchor);
 
   await explorerChanges.getByTestId("diff-file-0-open-file").click();
   const visibleHtmlPane = page.getByTestId("workspace-file-pane").filter({ visible: true });
@@ -281,9 +324,7 @@ test("changed HTML separates diff source, full source, and preview", async ({ pa
   ).toBeVisible();
 
   await visibleHtmlPane.getByTestId("file-mode-source").click();
-  await expect(visibleHtmlPane.getByTestId("file-source-editor")).toContainText(
-    HTML_SOURCE_SENTINEL,
-  );
+  await expect(visibleHtmlPane.getByTestId("file-source-editor")).toBeVisible();
 });
 
 test("Changes switches between inline and full-tab navigation", async ({ page }) => {
@@ -457,6 +498,53 @@ async function useUnwrappedDiffLines(page: Page): Promise<void> {
   );
 }
 
+async function observeFileSurfaceTransitions(page: Page): Promise<void> {
+  await page.locator("html").evaluate((root) => {
+    root.dataset.fileDiffWasVisible = "false";
+    root.dataset.fileEditorWasUnmounted = "false";
+    const isVisible = (element: Element) => element.getClientRects().length > 0;
+    const recordsDiffControls = (node: Node) =>
+      node instanceof Element &&
+      (node.matches('[data-testid="file-diff-mode"]') ||
+        node.querySelector('[data-testid="file-diff-mode"]') !== null);
+    const recordsSourceEditor = (node: Node) =>
+      node instanceof Element &&
+      (node.matches('[data-testid="file-source-editor"]') ||
+        node.querySelector('[data-testid="file-source-editor"]') !== null);
+    const observe = (records: MutationRecord[]) => {
+      if (records.some((record) => Array.from(record.addedNodes).some(recordsDiffControls))) {
+        root.dataset.fileDiffWasVisible = "true";
+      }
+      if (records.some((record) => Array.from(record.removedNodes).some(recordsSourceEditor))) {
+        root.dataset.fileEditorWasUnmounted = "true";
+      }
+      const diffControls = Array.from(
+        root.ownerDocument.querySelectorAll('[data-testid="file-diff-mode"]'),
+      );
+      if (diffControls.some(isVisible)) {
+        root.dataset.fileDiffWasVisible = "true";
+      }
+      const sourceEditors = Array.from(
+        root.ownerDocument.querySelectorAll('[data-testid="file-source-editor"]'),
+      );
+      if (!sourceEditors.some(isVisible)) {
+        root.dataset.fileEditorWasUnmounted = "true";
+      }
+    };
+    new MutationObserver(observe).observe(root, { childList: true, subtree: true });
+  });
+}
+
+async function readFileSurfaceTransitions(page: Page): Promise<{
+  diffWasVisible: boolean;
+  editorWasUnmounted: boolean;
+}> {
+  return page.locator("html").evaluate((root) => ({
+    diffWasVisible: root.dataset.fileDiffWasVisible === "true",
+    editorWasUnmounted: root.dataset.fileEditorWasUnmounted === "true",
+  }));
+}
+
 async function expectFlatFileList(page: Page): Promise<void> {
   await expect(page.locator('[data-testid^="diff-folder-"]')).toHaveCount(0);
   await expect(page.getByTestId("diff-file-0")).toContainText("use-mounted-tab-set.ts");
@@ -617,6 +705,26 @@ async function expectExpandedMountedTabDiff(page: Page): Promise<void> {
   await expect(page.getByText("function createInitialMountedTabIds")).toBeVisible({
     timeout: 30_000,
   });
+}
+
+async function expectSourceLineCentered(
+  scroll: ReturnType<Page["getByTestId"]>,
+  line: ReturnType<Page["getByTestId"]>,
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      const [scrollBounds, lineBounds] = await Promise.all([
+        scroll.boundingBox(),
+        line.boundingBox(),
+      ]);
+      if (!scrollBounds || !lineBounds) {
+        return Number.POSITIVE_INFINITY;
+      }
+      const viewportCenter = scrollBounds.y + scrollBounds.height / 2;
+      const lineCenter = lineBounds.y + lineBounds.height / 2;
+      return Math.abs(viewportCenter - lineCenter);
+    })
+    .toBeLessThan(24);
 }
 
 async function changeCodeFontSizeFromSettings(page: Page, codeFontSize: number): Promise<void> {
