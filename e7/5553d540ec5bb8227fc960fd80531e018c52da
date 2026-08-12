@@ -1,0 +1,67 @@
+packages/server/src/utils/worktree.ts
+  a5bc53616b290b01 38,991-1033
+packages/server/src/server/bootstrap.ts
+  a5bc53616b290b01 989-990
+docs/data-model.md
+  a5bc53616b290b01 585-590
+packages/server/src/server/worktree-core.posix.test.ts
+  a5bc53616b290b01 395
+docs/development.md
+  a5bc53616b290b01 301-304
+packages/server/src/server/worktree-session.ts
+  a5bc53616b290b01 51,127-128,530,597,607-611,613-631,635,644-645,661,663
+packages/app/src/composer/index.tsx
+  a5bc53616b290b01 896-897,1102,1823-1840,1854
+packages/server/src/utils/worktree.test.ts
+  a5bc53616b290b01 8,23,76,133-165
+packages/server/src/server/worktree-session.test.ts
+  a5bc53616b290b01 38,501,518,544-583,587-589,592-626,1151,1219
+packages/server/src/server/workspace-auto-name.test.ts
+  a5bc53616b290b01 1-4,12-13,23-31,33,89-90,92-251
+packages/server/src/server/workspace-auto-name.ts
+  a5bc53616b290b01 16-18,39-40,44-63,78-79,92-93,110,119-132,155-156,182-183,202,205,209-211,213,219-222,224-233,235,249,257-261,289,375-377,379,386-387,410
+packages/server/src/server/session.ts
+  a5bc53616b290b01 5601
+packages/app/src/screens/new-workspace-screen.tsx
+  a5bc53616b290b01 12-19,21,103-107,165,816,848,1593-1595,1970,1989,2002,2036,2124-2155,2266-2290,2424
+packages/server/src/server/paseo-worktree-service.test.ts
+  a5bc53616b290b01 32
+packages/server/src/utils/worktree.posix.test.ts
+  a5bc53616b290b01 108,314,738-743,779-784,1004-1010,1012-1015,1227
+packages/server/src/server/paseo-worktree-service.ts
+  a5bc53616b290b01 123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "e75553d540ec5bb8227fc960fd80531e018c52da",
+  "prompts": {
+    "1cc947cf1dc38082": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff419-23c6-7931-9e8c-52cdf39cc87d",
+        "model": "unknown"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "a5bc53616b290b01": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff419-0e9c-7143-9f70-8aec69411339",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 1737,
+      "total_deletions": 1160,
+      "accepted_lines": 1658,
+      "overriden_lines": 38,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/0c4cc3d1fc1dbaa91d06680fea5a1f7a3e46ed84ca4b830b9b7f8c9bab7a6be0"
+    }
+  }
+}
