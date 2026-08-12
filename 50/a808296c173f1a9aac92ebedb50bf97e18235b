@@ -1,0 +1,30 @@
+packages/server/src/server/worktree-branch-name-generator.ts
+  21b6884dce4044ac 82-86
+paseo.json
+  21b6884dce4044ac 2-6
+packages/server/src/server/worktree-branch-name-generator.test.ts
+  21b6884dce4044ac 37-39,293,303
+public-docs/metadata-generation.md
+  21b6884dce4044ac 81-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "50a808296c173f1a9aac92ebedb50bf97e18235b",
+  "prompts": {
+    "21b6884dce4044ac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff579-2c06-7252-8d4b-16bbb16ecf70",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 17,
+      "total_deletions": 5,
+      "accepted_lines": 17,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/7d148683ae8d970b62de2ea08717eee3d0b60421cf400e2822482a7009c27930"
+    }
+  }
+}
