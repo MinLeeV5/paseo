@@ -1,0 +1,30 @@
+packages/desktop/src/features/auto-updater.ts
+  3c45481a44983201 139-147,220,222-227
+packages/desktop/src/features/app-update-service.test.ts
+  3c45481a44983201 1,9,13,33,36,121-130,164-166,174-178,187,201-271,273-274
+packages/desktop/src/features/auto-updater.test.ts
+  3c45481a44983201 9-11,26-33,36-47,53,55-62,64,74,79,134-163,173-177
+packages/desktop/src/features/app-update-state.test.ts
+  3c45481a44983201 1-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "43d2dfcc41d0a8dc1c221b01ac0c7024a90c3200",
+  "prompts": {
+    "3c45481a44983201": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff581-dd76-7792-ac82-9f048b7d1f00",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 230,
+      "total_deletions": 10,
+      "accepted_lines": 226,
+      "overriden_lines": 2,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/df2e062da18186ecd808f98e9cf6e469d1ccc4d264404009456e27ac54a553e1"
+    }
+  }
+}
