@@ -1,0 +1,42 @@
+packages/app/src/file-pane/workspace-file-diff-selection.test.ts
+  f8b47573ab8ea6ce 1-39
+packages/app/src/utils/diff-layout.ts
+  f8b47573ab8ea6ce 52,68,76,180-185,242,255
+packages/app/src/file-pane/file-diff-view.tsx
+  f8b47573ab8ea6ce 27
+packages/app/src/file-pane/diff-overview-navigation.ts
+  f8b47573ab8ea6ce 25-35
+packages/app/src/file-pane/pane.tsx
+  f8b47573ab8ea6ce 82-85,87,315-319,391,421,578,598-619,642-646,664,669-674,679-686,703,818,1273-1276,1327-1342,1378
+packages/app/src/file-pane/diff-overview-navigation.test.ts
+  f8b47573ab8ea6ce 5,55-71
+packages/app/src/git/diff-pane.tsx
+  f8b47573ab8ea6ce 414,426-427,458,497,502-503,507-512,519,598,608-609,640,869,909,1004,1422,1510-1532,1573,1584
+packages/app/e2e/browser/changes-pane.spec.ts
+  f8b47573ab8ea6ce 1,199,205-209,215-218,249-269,288,295-311,327,501-547,710-727
+packages/app/src/utils/diff-layout.test.ts
+  f8b47573ab8ea6ce 138,183,272,276,281-293
+packages/app/src/file-pane/workspace-file-diff-selection.ts
+  f8b47573ab8ea6ce 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "179d242e1b7b562f69a95b91abc88c3d69d57939",
+  "prompts": {
+    "f8b47573ab8ea6ce": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff44f-fc1f-7a90-b4cd-fa8f7e0ede66",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 388,
+      "total_deletions": 88,
+      "accepted_lines": 367,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/a0a4fe10f4e01eae14ce5ff44d97763f898458e78f6e81534cc0344ac5d476f8"
+    }
+  }
+}
