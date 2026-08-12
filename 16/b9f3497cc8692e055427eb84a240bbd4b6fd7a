@@ -1,0 +1,38 @@
+packages/app/src/desktop/updates/update-callout-source.tsx
+  9f244bb2b2662b66 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "16b9f3497cc8692e055427eb84a240bbd4b6fd7a",
+  "prompts": {
+    "9f244bb2b2662b66": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff4ac-9bbe-71b2-a56c-5d8c91826d96",
+        "model": "gpt-5.4-mini"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/bdfaf7f7de00ab4c33f96c50716ed3aa4edd58dcc9f98a14d79da01522790f17"
+    },
+    "f8b47573ab8ea6ce": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff44f-fc1f-7a90-b4cd-fa8f7e0ede66",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 4,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/f86fdaab7b10daac922b32a64773a00c3265ed4a6a749ef2b8dfb83341d3929b"
+    }
+  }
+}
