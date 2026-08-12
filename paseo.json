@@ -1,4 +1,9 @@
 {
+  "metadataGeneration": {
+    "branchName": {
+      "instructions": "Use Conventional Branch names. Every branch starts with exactly one semantic prefix: feat/ for a new user-facing capability, fix/ for a bug fix, refactor/ for behavior-preserving restructuring, docs/ for documentation, test/ for tests, perf/ for performance, build/ for build or dependency work, ci/ for CI, or chore/ for maintenance. Follow it with a short lowercase slash-separated task slug."
+    }
+  },
   "worktree": {
     "setup": [
       "npm ci",

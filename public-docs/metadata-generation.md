@@ -78,3 +78,5 @@ You can steer the wording of each kind of metadata per repository with a `paseo.
 ```
 
 Each key is optional; only the ones you set are affected. Your instructions **replace** the default style for that metadata type — they are not appended to it — so your wording never competes with Paseo's defaults. The functional requirements (what to produce and the output format) always apply and cannot be overridden.
+
+Without project instructions, branch names use Conventional Branch prefixes such as `feat/`, `fix/`, and `refactor/`. Add `branchName.instructions` when your repository uses different prefixes, scopes, issue IDs, or another naming convention.

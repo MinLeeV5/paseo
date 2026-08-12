@@ -34,7 +34,9 @@ Good titles: "Swap sidebar history icon", "Composer keyboard shift", "Agent auto
 Bad titles: "Fix composer pushed up by keyboard in workspace", "Diagnose auto-titling still happening for agents", "Change sidebar history icon from clock to history icon".
 
 Branch style:
-A short task-shaped slug preserving the operation, target, and explicit identifier when present.
+Use a Conventional Branch name: choose exactly one semantic prefix, then a short task-shaped slug preserving the operation, target, and explicit identifier when present.
+Use `feat/` for a new user-facing capability, `fix/` for a bug fix, `refactor/` for behavior-preserving restructuring, `docs/` for documentation, `test/` for tests, `perf/` for performance work, `build/` for build or dependency work, `ci/` for CI, and `chore/` for maintenance.
+Never omit the prefix. Examples: `feat/agent-worktree-naming`, `fix/worktree-directory-move`, `refactor/branch-name-generator`.
 
 Return JSON only with fields 'title' and 'branch'.
 
@@ -288,7 +290,7 @@ describe("generateBranchNameFromFirstAgentContext", () => {
     expect(prompt).not.toContain("Aim for about 4 words");
     // Contract and branch style are not part of the title override.
     expect(prompt).toContain("Generate a title and a git branch name");
-    expect(prompt).toContain("Branch style:\nA short task-shaped slug");
+    expect(prompt).toContain("Branch style:\nUse a Conventional Branch name");
     expect(prompt).toContain("Return JSON only with fields 'title' and 'branch'.");
   });
 
@@ -298,7 +300,7 @@ describe("generateBranchNameFromFirstAgentContext", () => {
     });
 
     expect(prompt).toContain("Branch style:\nUse the prefix mb/.");
-    expect(prompt).not.toContain("A short task-shaped slug");
+    expect(prompt).not.toContain("Use a Conventional Branch name");
     expect(prompt).toContain("Aim for about 4 words");
   });
 
