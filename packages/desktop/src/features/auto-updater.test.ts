@@ -4,8 +4,11 @@ import path from "node:path";
 import { UUID } from "builder-util-runtime";
 import { describe, expect, it, vi } from "vitest";
 
-const { autoUpdaterMock } = vi.hoisted(() => {
+const { appOnceHandlers, autoUpdaterMock, electronAutoUpdaterMock } = vi.hoisted(() => {
   const handlers = new Map<string, (value: unknown) => void>();
+  const onceHandlers = new Map<string, (value?: unknown) => void>();
+  const electronAutoUpdaterHandlers = new Map<string, (value?: unknown) => void>();
+  const appBeforeQuitHandlers = new Map<string, (value?: unknown) => void>();
   return {
     autoUpdaterMock: {
       handlers,
@@ -20,16 +23,45 @@ const { autoUpdaterMock } = vi.hoisted(() => {
       on: vi.fn((event: string, handler: (value: unknown) => void) => {
         handlers.set(event, handler);
       }),
+      once: vi.fn((event: string, handler: (value?: unknown) => void) => {
+        onceHandlers.set(event, handler);
+      }),
+      removeListener: vi.fn((event: string, handler: (value?: unknown) => void) => {
+        if (onceHandlers.get(event) === handler) {
+          onceHandlers.delete(event);
+        }
+      }),
       quitAndInstall: vi.fn(),
     },
+    electronAutoUpdaterMock: {
+      handlers: electronAutoUpdaterHandlers,
+      once: vi.fn((event: string, handler: (value?: unknown) => void) => {
+        electronAutoUpdaterHandlers.set(event, handler);
+      }),
+      removeListener: vi.fn((event: string, handler: (value?: unknown) => void) => {
+        if (electronAutoUpdaterHandlers.get(event) === handler) {
+          electronAutoUpdaterHandlers.delete(event);
+        }
+      }),
+    },
+    appOnceHandlers: appBeforeQuitHandlers,
   };
 });
 
 vi.mock("electron", () => ({
   app: {
-    getPath: vi.fn(),
+    getPath: vi.fn(() => "/tmp/paseo-auto-updater-test"),
     isPackaged: true,
+    once: vi.fn((event: string, handler: (value?: unknown) => void) => {
+      appOnceHandlers.set(event, handler);
+    }),
+    removeListener: vi.fn((event: string, handler: (value?: unknown) => void) => {
+      if (appOnceHandlers.get(event) === handler) {
+        appOnceHandlers.delete(event);
+      }
+    }),
   },
+  autoUpdater: electronAutoUpdaterMock,
 }));
 
 vi.mock("electron-updater", () => ({
@@ -39,10 +71,12 @@ vi.mock("electron-updater", () => ({
 import {
   bucketFromStagingUserId,
   checkForAppUpdate,
+  downloadAndInstallUpdate,
   resolveStagingUserId,
   rolloutManifestSchema,
   shouldAdmitToRollout,
   shouldInstallAppUpdateOnQuit,
+  shouldUseAppQuitHandoff,
 } from "./auto-updater";
 
 describe("checkForAppUpdate", () => {
@@ -97,12 +131,50 @@ describe("checkForAppUpdate", () => {
   });
 });
 
+describe("downloadAndInstallUpdate", () => {
+  it("does not resolve until Electron confirms the native installer handoff", async () => {
+    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce({
+      isUpdateAvailable: true,
+      updateInfo: {
+        version: "1.2.4",
+        releaseDate: "2026-04-28T00:00:00.000Z",
+        rolloutHours: 0,
+      },
+    });
+    autoUpdaterMock.downloadUpdate.mockResolvedValueOnce(undefined);
+
+    const pending = downloadAndInstallUpdate({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true);
+    const handoff = electronAutoUpdaterMock.handlers.get("before-quit-for-update");
+    expect(handoff).toBeDefined();
+    handoff?.();
+
+    await expect(pending).resolves.toMatchObject({
+      installed: true,
+      version: "1.2.4",
+    });
+  });
+});
+
 describe("shouldInstallAppUpdateOnQuit", () => {
   it("keeps Linux AppImage updates on the manual install path", () => {
     expect(shouldInstallAppUpdateOnQuit({ platform: "linux", isAppImage: true })).toBe(false);
     expect(shouldInstallAppUpdateOnQuit({ platform: "linux", isAppImage: false })).toBe(true);
     expect(shouldInstallAppUpdateOnQuit({ platform: "darwin", isAppImage: false })).toBe(true);
     expect(shouldInstallAppUpdateOnQuit({ platform: "win32", isAppImage: false })).toBe(true);
+  });
+});
+
+describe("shouldUseAppQuitHandoff", () => {
+  it("uses the second app quit as macOS no-relaunch handoff evidence", () => {
+    expect(shouldUseAppQuitHandoff({ platform: "darwin", isForceRunAfter: false })).toBe(true);
+    expect(shouldUseAppQuitHandoff({ platform: "darwin", isForceRunAfter: true })).toBe(false);
+    expect(shouldUseAppQuitHandoff({ platform: "win32", isForceRunAfter: false })).toBe(false);
   });
 });
 

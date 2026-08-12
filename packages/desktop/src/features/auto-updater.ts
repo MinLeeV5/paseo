@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { app } from "electron";
+import { app, autoUpdater as electronAutoUpdater } from "electron";
 import { UUID } from "builder-util-runtime";
 import { autoUpdater } from "electron-updater";
 import {
@@ -16,6 +16,7 @@ import {
   type RuntimeUpdateInfo,
   type RuntimeUpdateProgress,
 } from "./app-update-service.js";
+import { createAppUpdateStateStore, type AppUpdateStateStore } from "./app-update-state.js";
 import {
   bucketFromStagingUserId,
   rolloutManifestSchema,
@@ -63,6 +64,16 @@ function emitDesktopAppUpdateEvent(event: DesktopAppUpdateEvent): void {
 let cachedStagingUserIdPromise: Promise<string> | null = null;
 
 const UPDATE_CHANNEL_NOT_PUBLISHED_CODE = "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND";
+const UPDATE_INSTALL_HANDOFF_TIMEOUT_MS = 15_000;
+
+let appUpdateStateStore: AppUpdateStateStore | null = null;
+
+function getAppUpdateStateStore(): AppUpdateStateStore {
+  appUpdateStateStore ??= createAppUpdateStateStore({
+    userDataPath: app.getPath("userData"),
+  });
+  return appUpdateStateStore;
+}
 
 function isUpdateChannelNotPublished(error: unknown): boolean {
   return (
@@ -123,6 +134,15 @@ export function shouldInstallAppUpdateOnQuit(input: {
   // AppImage's no-relaunch install path blocks while launching the replacement
   // binary, which can hang after the running file has already been replaced.
   return !(input.platform === "linux" && input.isAppImage);
+}
+
+export function shouldUseAppQuitHandoff(input: {
+  platform: NodeJS.Platform;
+  isForceRunAfter: boolean;
+}): boolean {
+  // MacUpdater calls app.quit() for a no-relaunch install instead of emitting
+  // Electron's before-quit-for-update event.
+  return input.platform === "darwin" && !input.isForceRunAfter;
 }
 
 class ElectronAppUpdateRuntime implements AppUpdateRuntime {
@@ -197,9 +217,46 @@ class ElectronAppUpdateRuntime implements AppUpdateRuntime {
     return autoUpdater.downloadUpdate();
   }
 
-  quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): void {
+  quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): Promise<void> {
     autoUpdater.autoRunAppAfterInstall = isForceRunAfter;
-    autoUpdater.quitAndInstall(isSilent, isForceRunAfter);
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const usesAppQuitHandoff = shouldUseAppQuitHandoff({
+        platform: process.platform,
+        isForceRunAfter,
+      });
+      const timeout = setTimeout(() => {
+        settle(new Error("Update installer did not take over before the timeout."));
+      }, UPDATE_INSTALL_HANDOFF_TIMEOUT_MS);
+
+      const settle = (error?: Error): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        electronAutoUpdater.removeListener("before-quit-for-update", onHandoff);
+        app.removeListener("before-quit", onHandoff);
+        autoUpdater.removeListener("error", onError);
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      };
+      const onHandoff = (): void => settle();
+      const onError = (error: Error): void => settle(error);
+
+      if (usesAppQuitHandoff) {
+        app.once("before-quit", onHandoff);
+      } else {
+        electronAutoUpdater.once("before-quit-for-update", onHandoff);
+      }
+      autoUpdater.once("error", onError);
+      try {
+        autoUpdater.quitAndInstall(isSilent, isForceRunAfter);
+      } catch (error) {
+        settle(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
   }
 }
 
@@ -208,6 +265,11 @@ const appUpdateService = createAppUpdateService({
   isPackaged: () => app.isPackaged,
   now: () => Date.now(),
   bucket: async () => bucketFromStagingUserId(await getStagingUserId()),
+  downloadedUpdateStore: {
+    load: async () => getAppUpdateStateStore().load(),
+    save: async (state) => getAppUpdateStateStore().save(state),
+    clear: async () => getAppUpdateStateStore().clear(),
+  },
   reportCheckError: (error) => {
     console.error("[auto-updater] Failed to check for updates:", error);
   },

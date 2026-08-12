@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createAppUpdateService,
@@ -6,9 +6,11 @@ import {
   type AppUpdateRuntimeConfiguration,
   type AppUpdateDownloadError,
   type AppUpdateDownloadProgress,
+  type RuntimeUpdateCheckResult,
   type RuntimeUpdateProgress,
   type RuntimeUpdateInfo,
 } from "./app-update-service";
+import type { AppUpdateStateStore } from "./app-update-state";
 
 class FakeAppUpdateRuntime implements AppUpdateRuntime {
   private checks: Array<
@@ -28,8 +30,10 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
     resolve(): void;
     reject(error: Error): void;
   } | null = null;
+  private installHandoff: Promise<void> = Promise.resolve();
   checkCount = 0;
   downloadCallCount = 0;
+  quitAndInstallCallCount = 0;
   downloadedVersions: string[] = [];
   installedVersions: string[] = [];
   installModes: Array<{ isSilent: boolean; isForceRunAfter: boolean }> = [];
@@ -114,6 +118,16 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
     return { resolve: activeDownload.resolve, reject: activeDownload.reject };
   }
 
+  deferInstallHandoff(): { resolve(): void; reject(error: Error): void } {
+    let resolvePromise!: () => void;
+    let rejectPromise!: (error: Error) => void;
+    this.installHandoff = new Promise<void>((resolve, reject) => {
+      resolvePromise = resolve;
+      rejectPromise = reject;
+    });
+    return { resolve: resolvePromise, reject: rejectPromise };
+  }
+
   async checkForUpdates(): Promise<{
     isUpdateAvailable: boolean;
     updateInfo: RuntimeUpdateInfo;
@@ -147,7 +161,9 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
     }
   }
 
-  quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): void {
+  async quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): Promise<void> {
+    this.quitAndInstallCallCount += 1;
+    await this.installHandoff;
     if (this.downloadedUpdate) {
       this.installedVersions.push(this.downloadedUpdate.version);
       this.installModes.push({ isSilent, isForceRunAfter });
@@ -155,7 +171,11 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
   }
 }
 
-function createService(input?: { now?: () => number; bucket?: () => Promise<number> }) {
+function createService(input?: {
+  now?: () => number;
+  bucket?: () => Promise<number>;
+  downloadedUpdateStore?: AppUpdateStateStore;
+}) {
   const runtime = new FakeAppUpdateRuntime();
   const progressEvents: AppUpdateDownloadProgress[] = [];
   const errorEvents: AppUpdateDownloadError[] = [];
@@ -164,6 +184,7 @@ function createService(input?: { now?: () => number; bucket?: () => Promise<numb
     isPackaged: () => true,
     now: input?.now ?? (() => Date.parse("2026-04-28T12:00:00.000Z")),
     bucket: input?.bucket ?? (async () => 0.99),
+    downloadedUpdateStore: input?.downloadedUpdateStore,
     onUpdateProgress: (progress) => progressEvents.push(progress),
     onUpdateError: (error) => errorEvents.push(error),
   });
@@ -177,6 +198,80 @@ const rolledOutUpdate = {
 };
 
 describe("app update service", () => {
+  it("does not report a manual install until the native installer takes over", async () => {
+    const { runtime, service } = createService({ bucket: async () => 0 });
+    const handoff = runtime.deferInstallHandoff();
+    const onBeforeQuit = vi.fn(async () => undefined);
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    const pending = service.downloadAndInstallUpdate(
+      {
+        currentVersion: "1.2.3",
+        releaseChannel: "stable",
+      },
+      onBeforeQuit,
+    );
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(onBeforeQuit).toHaveBeenCalledOnce();
+    expect(runtime.installedVersions).toEqual([]);
+
+    handoff.resolve();
+    await expect(pending).resolves.toMatchObject({
+      installed: true,
+      version: "1.2.4",
+    });
+    expect(runtime.installedVersions).toEqual(["1.2.4"]);
+  });
+
+  it("reports an install failure when the native installer does not take over", async () => {
+    const { runtime, service } = createService({ bucket: async () => 0 });
+    const handoff = runtime.deferInstallHandoff();
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    const pending = service.downloadAndInstallUpdate({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+    });
+    handoff.reject(new Error("installer handoff timed out"));
+
+    await expect(pending).resolves.toMatchObject({
+      installed: false,
+      errorMessage: "installer handoff timed out",
+    });
+    expect(runtime.installedVersions).toEqual([]);
+  });
+
+  it("restores a downloaded update after an app restart before quit-time revalidation", async () => {
+    let stored: { version: string; releaseChannel: "stable" | "beta" } | null = {
+      version: "1.2.4",
+      releaseChannel: "stable",
+    };
+    const downloadedUpdateStore: AppUpdateStateStore = {
+      load: async () => stored,
+      save: async (state) => {
+        stored = state;
+      },
+      clear: async () => {
+        stored = null;
+      },
+    };
+    const { runtime, service } = createService({
+      bucket: async () => 0,
+      downloadedUpdateStore,
+    });
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    const installed = await service.installUpdateOnQuit({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      signal: new AbortController().signal,
+    });
+
+    expect(installed).toBe(true);
+    expect(runtime.quitAndInstallCallCount).toBe(1);
+  });
+
   it("forwards download progress with the version being prepared", async () => {
     const { runtime, service, progressEvents } = createService({ bucket: async () => 0 });
     runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });

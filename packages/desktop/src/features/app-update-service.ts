@@ -4,6 +4,7 @@ import {
   type AppReleaseChannel,
   type AppUpdateCheckIntent,
 } from "./app-update-rollout.js";
+import type { AppUpdateStateStore } from "./app-update-state.js";
 
 export interface AppUpdateCheckResult {
   hasUpdate: boolean;
@@ -64,7 +65,7 @@ export interface AppUpdateRuntime {
   configure(input: AppUpdateRuntimeConfiguration): void;
   checkForUpdates(): Promise<RuntimeUpdateCheckResult | null>;
   downloadUpdate(): Promise<unknown>;
-  quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): void;
+  quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): Promise<void>;
 }
 
 export interface AppUpdateService {
@@ -95,6 +96,7 @@ export interface AppUpdateServiceDeps {
   reportCheckError?(error: unknown): void;
   reportRuntimeError?(error: unknown): void;
   reportInstallError?(message: string): void;
+  downloadedUpdateStore?: AppUpdateStateStore;
   onUpdateAvailable?(info: RuntimeUpdateInfo): void;
   onUpdateProgress?(progress: AppUpdateDownloadProgress): void;
   onUpdateDownloaded?(info: RuntimeUpdateInfo): void;
@@ -132,7 +134,7 @@ async function performQuitAndInstall(
   },
 ): Promise<void> {
   if (onBeforeQuit) await onBeforeQuit();
-  runtime.quitAndInstall(/* isSilent */ !restart, /* isForceRunAfter */ restart);
+  await runtime.quitAndInstall(/* isSilent */ !restart, /* isForceRunAfter */ restart);
 }
 
 function getErrorMessage(error: unknown): string {
@@ -169,9 +171,46 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
     preparingUpdateVersion = null;
   }
 
+  function reportStateStoreError(error: unknown): void {
+    deps.reportRuntimeError?.(error);
+  }
+
+  function persistDownloadedUpdate(version: string): void {
+    downloadedUpdateVersion = version;
+    if (!configuredReleaseChannel || !deps.downloadedUpdateStore) return;
+    void deps.downloadedUpdateStore
+      .save({ version, releaseChannel: configuredReleaseChannel })
+      .catch(reportStateStoreError);
+  }
+
+  function forgetDownloadedUpdate(): void {
+    downloadedUpdateVersion = null;
+    if (!deps.downloadedUpdateStore) return;
+    void deps.downloadedUpdateStore.clear().catch(reportStateStoreError);
+  }
+
+  async function restoreDownloadedUpdate(releaseChannel: AppReleaseChannel): Promise<void> {
+    if (downloadedUpdateVersion || !deps.downloadedUpdateStore) return;
+
+    try {
+      const state = await deps.downloadedUpdateStore.load();
+      if (!state) return;
+      if (state.releaseChannel === releaseChannel) {
+        downloadedUpdateVersion = state.version;
+        return;
+      }
+      await deps.downloadedUpdateStore.clear();
+    } catch (error) {
+      reportStateStoreError(error);
+    }
+  }
+
   function configureRuntime(releaseChannel: AppReleaseChannel, intent: AppUpdateCheckIntent): void {
     if (configuredReleaseChannel !== releaseChannel) {
-      clearUpdateState();
+      if (configuredReleaseChannel !== null) {
+        clearUpdateState();
+        forgetDownloadedUpdate();
+      }
       configuredReleaseChannel = releaseChannel;
     }
 
@@ -191,7 +230,9 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
       onUpdateAvailable(info) {
         const alreadyReady = downloadedUpdateVersion === info.version;
         cachedUpdateInfo = info;
-        downloadedUpdateVersion = alreadyReady ? info.version : null;
+        if (!alreadyReady) {
+          forgetDownloadedUpdate();
+        }
         if (!alreadyReady && preparingUpdateVersion === null) {
           preparingUpdateVersion = info.version;
         }
@@ -207,7 +248,8 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
         // A superseded download can finish after a newer manifest check. Keep
         // the validated manifest as the install target in that case.
         cachedUpdateInfo ??= info;
-        downloadedUpdateVersion = info.version;
+        if (cachedUpdateInfo.version !== info.version) return;
+        persistDownloadedUpdate(info.version);
         if (preparingUpdateVersion === info.version) {
           preparingUpdateVersion = null;
         }
@@ -218,6 +260,7 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
       },
       onUpdateNotAvailable() {
         clearUpdateState();
+        forgetDownloadedUpdate();
       },
       onError(error) {
         const failedVersion = preparingUpdateVersion;
@@ -268,6 +311,7 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
         const result = await deps.runtime.checkForUpdates();
         if (!result || !result.updateInfo || !result.isUpdateAvailable) {
           clearUpdateState();
+          forgetDownloadedUpdate();
           return buildCheckResult({
             currentVersion,
             hasUpdate: false,
@@ -296,6 +340,7 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
         }
 
         clearUpdateState();
+        forgetDownloadedUpdate();
         return buildCheckResult({
           currentVersion,
           hasUpdate: false,
@@ -376,7 +421,7 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
       // event clears that version, then the next iteration starts the newly
       // validated release instead of treating the stale artifact as ready.
       if (attemptedVersion === readyVersion && !isReadyToInstallVersion(readyVersion)) {
-        downloadedUpdateVersion = readyVersion;
+        persistDownloadedUpdate(readyVersion);
         preparingUpdateVersion = null;
       }
     }
@@ -461,9 +506,12 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
     releaseChannel: AppReleaseChannel;
     signal: AbortSignal;
   }): Promise<boolean> {
-    if (!deps.isPackaged() || !downloadedUpdateVersion) {
+    if (!deps.isPackaged()) {
       return false;
     }
+
+    await restoreDownloadedUpdate(releaseChannel);
+    if (!downloadedUpdateVersion) return false;
 
     const check = await checkForAppUpdate({
       currentVersion,
