@@ -35,8 +35,8 @@ Bad titles: "Fix composer pushed up by keyboard in workspace", "Diagnose auto-ti
 
 Branch style:
 Use a Conventional Branch name: choose exactly one semantic prefix, then a short task-shaped slug preserving the operation, target, and explicit identifier when present.
-Use `feat/` for a new user-facing capability, `fix/` for a bug fix, `refactor/` for behavior-preserving restructuring, `docs/` for documentation, `test/` for tests, `perf/` for performance work, `build/` for build or dependency work, `ci/` for CI, and `chore/` for maintenance.
-Never omit the prefix. Examples: `feat/agent-worktree-naming`, `fix/worktree-directory-move`, `refactor/branch-name-generator`.
+Use \`feat/\` for a new user-facing capability, \`fix/\` for a bug fix, \`refactor/\` for behavior-preserving restructuring, \`docs/\` for documentation, \`test/\` for tests, \`perf/\` for performance work, \`build/\` for build or dependency work, \`ci/\` for CI, and \`chore/\` for maintenance.
+Never omit the prefix. Examples: \`feat/agent-worktree-naming\`, \`fix/worktree-directory-move\`, \`refactor/branch-name-generator\`.
 
 Return JSON only with fields 'title' and 'branch'.
 
