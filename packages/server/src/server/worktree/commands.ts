@@ -72,7 +72,6 @@ export async function createPaseoWorktreeCommand<Result extends CreatePaseoWorkt
 
     const createdWorktree = await dependencies.createPaseoWorktreeWorkflow({
       ...input,
-      runSetup: input.runSetup === true,
       paseoHome: input.paseoHome ?? dependencies.paseoHome,
       worktreesRoot: input.worktreesRoot ?? dependencies.worktreesRoot,
     });

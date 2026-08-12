@@ -2104,6 +2104,7 @@ export const CreatePaseoWorktreeRequestSchema = z.object({
   // COMPAT(githubPrNumber): added in v0.1.106, remove after 2026-12-28 once
   // clients send checkoutSource: { kind: "change_request", forge, number }.
   githubPrNumber: z.number().int().positive().optional(),
+  // Explicitly run workspace setup after creation. Agent-created worktrees own their setup flow.
   runSetup: z.boolean().optional(),
   requestId: z.string(),
 });
@@ -2195,7 +2196,7 @@ export const WorkspaceCreateRequestSchema = z.object({
   title: z.string().optional(),
   // Optional prompt context for workspace-level name/branch generation.
   firstAgentContext: FirstAgentContextSchema.optional(),
-  // Optional explicit request to run setup after creating a worktree-backed workspace.
+  // Explicitly run workspace setup after creating a worktree-backed workspace.
   runSetup: z.boolean().optional(),
   source: z.discriminatedUnion("kind", [
     z.object({

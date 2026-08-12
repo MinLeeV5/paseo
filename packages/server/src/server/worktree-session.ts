@@ -48,6 +48,7 @@ import {
   listPaseoWorktreesCommand,
 } from "./worktree/commands.js";
 import type { WorkspaceSetupOperation } from "./workspace-setup-runtime.js";
+import type { AutoNamedWorktreeResult } from "./workspace-auto-name.js";
 
 const SAFE_GIT_REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
 
@@ -123,7 +124,8 @@ interface CreatePaseoWorktreeWorkflowDependencies extends CreatePaseoWorktreeInB
   autoNameWorkspaceBranchForFirstAgent: (input: {
     workspace: PersistedWorkspaceRecord;
     firstAgentContext: FirstAgentContext;
-  }) => void;
+    relocateWorktree: boolean;
+  }) => Promise<AutoNamedWorktreeResult | null> | void;
   startWorkspaceSetup?: (workspaceId: string, operation: WorkspaceSetupOperation) => void;
 }
 
@@ -231,7 +233,6 @@ export async function buildAgentSessionConfig(
         checkoutSource: normalized.checkoutSource,
         githubPrNumber: normalized.githubPrNumber,
         firstAgentContext,
-        runSetup: false,
         paseoHome: dependencies.paseoHome,
         worktreesRoot: dependencies.worktreesRoot,
       },
@@ -526,6 +527,7 @@ export async function handleCreatePaseoWorktreeRequest(
         action: request.action,
         checkoutSource: request.checkoutSource,
         githubPrNumber: request.githubPrNumber,
+        ...(request.runSetup === true ? { runSetup: true } : {}),
       },
     );
 
@@ -592,10 +594,9 @@ export async function createPaseoWorktreeWorkflow(
     setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
   },
 ): Promise<CreatePaseoWorktreeWorkflowResult> {
-  const createdWorktree = await dependencies.createPaseoWorktree(
+  let createdWorktree = await dependencies.createPaseoWorktree(
     {
       ...input,
-      runSetup: false,
       paseoHome: input.paseoHome ?? dependencies.paseoHome,
       worktreesRoot: input.worktreesRoot ?? dependencies.worktreesRoot,
     },
@@ -603,25 +604,45 @@ export async function createPaseoWorktreeWorkflow(
       ? { resolveDefaultBranch: options.resolveDefaultBranch }
       : undefined,
   );
+  if (input.firstAgentContext) {
+    try {
+      const autoNamed = await dependencies.autoNameWorkspaceBranchForFirstAgent({
+        workspace: createdWorktree.workspace,
+        firstAgentContext: input.firstAgentContext,
+        relocateWorktree: createdWorktree.created,
+      });
+      if (autoNamed) {
+        createdWorktree = {
+          ...createdWorktree,
+          workspace: autoNamed.workspace,
+          worktree: {
+            worktreePath: autoNamed.worktreePath,
+            branchName: autoNamed.branchName ?? createdWorktree.worktree.branchName,
+          },
+        };
+      }
+    } catch (error) {
+      dependencies.sessionLogger.warn(
+        { err: error, workspaceId: createdWorktree.workspace.workspaceId },
+        "Failed to auto-name worktree before use",
+      );
+    }
+  }
+
   const slug = basename(createdWorktree.worktree.worktreePath);
   const workspace = createdWorktree.workspace;
   const setupContinuation = options?.setupContinuation ?? { kind: "workspace" };
+  const shouldRunWorkspaceSetup = setupContinuation.kind === "workspace" && input.runSetup === true;
 
   setTimeout(() => {
-    if (input.firstAgentContext) {
-      dependencies.autoNameWorkspaceBranchForFirstAgent({
-        workspace,
-        firstAgentContext: input.firstAgentContext,
-      });
-    }
     void dependencies.warmWorkspaceGitData(workspace).catch((error) => {
       dependencies.sessionLogger.warn(
         { err: error, workspaceId: workspace.workspaceId },
         "Failed to warm workspace git data after creating worktree",
       );
     });
-    if (setupContinuation.kind === "workspace") {
-      const runSetup = (signal: AbortSignal) =>
+    if (shouldRunWorkspaceSetup) {
+      const runWorkspaceSetup = (signal: AbortSignal) =>
         runWorktreeSetupInBackground(
           dependencies,
           {
@@ -637,9 +658,9 @@ export async function createPaseoWorktreeWorkflow(
           signal,
         );
       if (dependencies.startWorkspaceSetup) {
-        dependencies.startWorkspaceSetup(workspace.workspaceId, runSetup);
+        dependencies.startWorkspaceSetup(workspace.workspaceId, runWorkspaceSetup);
       } else {
-        void runSetup(new AbortController().signal);
+        void runWorkspaceSetup(new AbortController().signal);
       }
     }
   }, 0);

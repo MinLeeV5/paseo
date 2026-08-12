@@ -298,6 +298,10 @@ Worktrees inherit committed Git state only; uncommitted source-checkout changes 
 `worktree.setup` and `worktree.teardown` accept either a multiline shell script or an array
 of commands. Both run sequentially.
 
+The **Create and run setup** action starts setup once after automatic workspace naming and worktree
+relocation finish. Agent-created worktrees defer setup until the Agent exists so setup output can
+attach to its timeline. Plain workspace creation does not run setup.
+
 Lifecycle commands run in the worktree through a stable script shell: `bash`
 resolved from `PATH` on macOS/Linux, and PowerShell with `-NoProfile` on
 Windows. They inherit the daemon environment plus Paseo's lifecycle variables;

@@ -79,7 +79,6 @@ async function createBootstrapWorktreeForTest(
       baseBranch: options.baseBranch,
       branchName: options.branchName,
     },
-    runSetup: false,
     paseoHome: options.paseoHome,
   });
   return { worktree, shouldBootstrap: true };

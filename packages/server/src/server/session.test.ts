@@ -4217,7 +4217,6 @@ describe("session paseo worktree creation handling", () => {
     await asSessionInternals(session).createPaseoWorktree({
       cwd: "/tmp/repo",
       worktreeSlug: "new-worktree",
-      runSetup: false,
     });
 
     expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith("/tmp/repo", {

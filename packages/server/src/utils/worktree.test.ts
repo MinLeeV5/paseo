@@ -5,6 +5,7 @@ import {
   deletePaseoWorktree,
   isPaseoOwnedWorktreeCwd,
   mapWorkspaceCwdToWorktree,
+  movePaseoWorktree,
   slugify,
   type CreateWorktreeOptions,
   type WorktreeConfig,
@@ -19,7 +20,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import { tmpdir } from "os";
 import { createRealpathAwarePathMatcher } from "./path";
 
@@ -28,7 +29,6 @@ interface LegacyCreateWorktreeTestOptions {
   cwd: string;
   baseBranch: string;
   worktreeSlug: string;
-  runSetup?: boolean;
   paseoHome?: string;
 }
 
@@ -47,7 +47,6 @@ function createLegacyWorktreeForTest(
       baseBranch: options.baseBranch,
       branchName: options.branchName,
     },
-    runSetup: options.runSetup ?? true,
     paseoHome: options.paseoHome,
   });
 }
@@ -74,7 +73,7 @@ describe("paseo worktree manager", () => {
   });
 
   afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
+    rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("treats a worktree as paseo-owned even when its .git admin is missing", async () => {
@@ -129,6 +128,41 @@ describe("paseo worktree manager", () => {
     expect(createRealpathAwarePathMatcher(created.worktreePath)(ownership.worktreePath ?? "")).toBe(
       true,
     );
+  });
+
+  it("moves a Paseo-owned worktree and updates Git's registered path", async () => {
+    const created = await createLegacyWorktreeForTest({
+      branchName: "placeholder-branch",
+      cwd: repoDir,
+      baseBranch: "main",
+      worktreeSlug: "placeholder-worktree",
+      paseoHome,
+    });
+
+    const movedPath = await movePaseoWorktree({
+      worktreePath: created.worktreePath,
+      targetName: "feature/generated-name",
+      paseoHome,
+    });
+
+    expect(movedPath).toBe(join(dirname(created.worktreePath), "feature-generated-name"));
+    expect(existsSync(created.worktreePath)).toBe(false);
+    expect(existsSync(movedPath)).toBe(true);
+    expect(
+      execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: repoDir })
+        .toString()
+        .split("\n"),
+    ).toContain(`worktree ${movedPath}`);
+  });
+
+  it("refuses to move a worktree outside Paseo's managed root", async () => {
+    await expect(
+      movePaseoWorktree({
+        worktreePath: repoDir,
+        targetName: "renamed-main-checkout",
+        paseoHome,
+      }),
+    ).rejects.toThrow("Refusing to move non-Paseo worktree");
   });
 
   it("maps only root-contained workspace paths into a replacement worktree", () => {

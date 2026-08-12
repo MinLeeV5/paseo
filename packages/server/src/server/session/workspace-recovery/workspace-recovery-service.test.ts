@@ -163,7 +163,6 @@ describe("workspace recovery", () => {
       cwd: repoDir,
       worktreeSlug: "mixed-project",
       source: { kind: "checkout-branch", branchName: branch },
-      runSetup: false,
       paseoHome,
       worktreesRoot,
     });
@@ -219,7 +218,6 @@ describe("workspace recovery", () => {
       cwd: repoDir,
       worktreeSlug: "without-subproject",
       source: { kind: "checkout-branch", branchName: branch },
-      runSetup: false,
       paseoHome,
       worktreesRoot,
     });

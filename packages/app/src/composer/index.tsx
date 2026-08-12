@@ -893,6 +893,8 @@ interface ComposerProps {
   onAttentionPromptSend?: () => void;
   /** Controlled agent controls rendered in input area (draft flows). */
   agentControls?: DraftAgentControlsProps;
+  /** Secondary action rendered in the toolbar immediately before the primary action. */
+  secondaryAction?: ReactNode;
   /** Extra styles merged onto the message input wrapper (e.g. elevated background). */
   inputWrapperStyle?: import("react-native").ViewStyle;
   /** Rendered below the input, inside the keyboard-shifted container. */
@@ -1097,6 +1099,7 @@ export function Composer({
   onAttentionInputFocus,
   onAttentionPromptSend,
   agentControls,
+  secondaryAction,
   inputWrapperStyle,
   footer,
   externalKeyboardShift,
@@ -1817,21 +1820,24 @@ export function Composer({
 
   const rightContent = useMemo(
     () => (
-      <ComposerRightControlsSlot
-        isVoiceModeForAgent={isVoiceModeForAgent}
-        hasAgent={hasAgent}
-        isAgentRunning={isAgentRunning}
-        hasSendableContent={hasSendableContent}
-        isCompact={isCompactLayout}
-        showVoice={mode.showVoice}
-        buttonIconSize={buttonIconSize}
-        handleToggleRealtimeVoice={handleToggleRealtimeVoice}
-        isConnected={isConnected}
-        isVoiceSwitching={isVoiceSwitching}
-        realtimeVoiceButtonStyle={realtimeVoiceButtonStyle}
-        voiceToggleKeys={voiceToggleKeys}
-        t={t}
-      />
+      <>
+        <ComposerRightControlsSlot
+          isVoiceModeForAgent={isVoiceModeForAgent}
+          hasAgent={hasAgent}
+          isAgentRunning={isAgentRunning}
+          hasSendableContent={hasSendableContent}
+          isCompact={isCompactLayout}
+          showVoice={mode.showVoice}
+          buttonIconSize={buttonIconSize}
+          handleToggleRealtimeVoice={handleToggleRealtimeVoice}
+          isConnected={isConnected}
+          isVoiceSwitching={isVoiceSwitching}
+          realtimeVoiceButtonStyle={realtimeVoiceButtonStyle}
+          voiceToggleKeys={voiceToggleKeys}
+          t={t}
+        />
+        {secondaryAction}
+      </>
     ),
     [
       buttonIconSize,
@@ -1845,6 +1851,7 @@ export function Composer({
       isVoiceSwitching,
       mode.showVoice,
       realtimeVoiceButtonStyle,
+      secondaryAction,
       t,
       voiceToggleKeys,
     ],

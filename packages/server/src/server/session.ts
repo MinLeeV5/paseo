@@ -5598,7 +5598,7 @@ export class Session {
         checkoutSource: source.checkoutSource,
         githubPrNumber: source.githubPrNumber,
         firstAgentContext: request.firstAgentContext,
-        runSetup: request.runSetup === true,
+        ...(request.runSetup === true ? { runSetup: true } : {}),
         title: request.title,
       },
       source.baseBranch
@@ -6132,10 +6132,15 @@ export class Session {
         createPaseoWorktree: (workflowInput, serviceOptions) =>
           this.createPaseoWorktree(workflowInput, serviceOptions),
         warmWorkspaceGitData: (workspace) => this.warmWorkspaceGitDataForWorkspace(workspace),
-        autoNameWorkspaceBranchForFirstAgent: (autoNameInput) =>
-          this.workspaceAutoName.scheduleForWorktree(autoNameInput, {
+        autoNameWorkspaceBranchForFirstAgent: (autoNameInput) => {
+          const context = {
             currentSelection: this.getFocusedAgentSelectionForCwd(autoNameInput.workspace.cwd),
-          }),
+          };
+          if (autoNameInput.relocateWorktree) {
+            return this.workspaceAutoName.autoNameWorktreeBeforeUse(autoNameInput, context);
+          }
+          this.workspaceAutoName.scheduleForWorktree(autoNameInput, context);
+        },
         startWorkspaceSetup: (workspaceId, operation) =>
           this.workspaceSetupRuntime.start(workspaceId, operation),
         emitWorkspaceUpdateForWorkspaceId: (workspaceId) =>

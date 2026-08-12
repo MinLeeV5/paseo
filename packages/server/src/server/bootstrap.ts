@@ -986,6 +986,8 @@ export async function createPaseoDaemon(
       await emitWorkspaceUpdatesExternal([workspaceId]);
     },
     logger,
+    paseoHome: config.paseoHome,
+    worktreesRoot: config.worktreesRoot,
   });
 
   setupAutoArchiveOnMerge({
@@ -1035,8 +1037,12 @@ export async function createPaseoDaemon(
               .map((session) => session.warmWorkspaceGitDataForWorkspace(workspace)) ?? [],
           );
         },
-        autoNameWorkspaceBranchForFirstAgent: (autoNameInput) =>
-          workspaceAutoName.scheduleForWorktree(autoNameInput),
+        autoNameWorkspaceBranchForFirstAgent: (autoNameInput) => {
+          if (autoNameInput.relocateWorktree) {
+            return workspaceAutoName.autoNameWorktreeBeforeUse(autoNameInput);
+          }
+          workspaceAutoName.scheduleForWorktree(autoNameInput);
+        },
         emitWorkspaceUpdateForWorkspaceId: async (workspaceId) => {
           await emitWorkspaceUpdatesExternal([workspaceId]);
         },

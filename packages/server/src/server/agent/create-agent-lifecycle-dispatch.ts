@@ -126,7 +126,6 @@ export class CreateAgentLifecycleDispatch {
     const baseInput = {
       cwd,
       firstAgentContext,
-      runSetup: false,
       paseoHome: this.dependencies.paseoHome,
       worktreesRoot: this.dependencies.worktreesRoot,
     } as const;

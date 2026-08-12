@@ -190,7 +190,6 @@ export function createWorkspaceRecoveryService(deps: {
         cwd: sourceRepoRoot,
         worktreeSlug: basename(previousWorktreePath),
         source: { kind: "checkout-branch", branchName: branch },
-        runSetup: false,
         paseoHome: deps.paseoHome,
         worktreesRoot: deps.worktreesRoot,
       });

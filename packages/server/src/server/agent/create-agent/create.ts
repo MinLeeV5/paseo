@@ -542,7 +542,6 @@ async function resolveMcpCwd(params: {
       action: worktree.action,
       githubPrNumber: worktree.githubPrNumber,
       firstAgentContext: { prompt: params.initialPrompt },
-      runSetup: false,
       paseoHome: dependencies.paseoHome,
       worktreesRoot: dependencies.worktreesRoot,
     },

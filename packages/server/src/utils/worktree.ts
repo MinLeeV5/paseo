@@ -35,7 +35,7 @@ import { spawnProcess } from "./spawn.js";
 import { resolvePaseoHome } from "../server/paseo-home.js";
 import { createExternalProcessEnv } from "../server/paseo-env.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
-import { validateBranchSlug } from "@getpaseo/protocol/branch-slug";
+import { slugify, validateBranchSlug } from "@getpaseo/protocol/branch-slug";
 import { expandTilde, getRealpathAwareRelativePath, isPathInsideRoot } from "./path.js";
 import { terminateWithTreeKill } from "./tree-kill.js";
 
@@ -202,7 +202,6 @@ export interface CreateWorktreeOptions {
   cwd: string;
   worktreeSlug: string;
   source: WorktreeSource;
-  runSetup: boolean;
   paseoHome?: string;
   worktreesRoot?: string;
 }
@@ -989,6 +988,49 @@ export async function isPaseoOwnedWorktreeCwd(
   };
 }
 
+const MAX_WORKTREE_MOVE_SUFFIX_ATTEMPTS = 50;
+
+export async function movePaseoWorktree(options: {
+  worktreePath: string;
+  targetName: string;
+  paseoHome?: string;
+  worktreesRoot?: string;
+}): Promise<string> {
+  const ownership = await isPaseoOwnedWorktreeCwd(options.worktreePath, {
+    paseoHome: options.paseoHome,
+    worktreesRoot: options.worktreesRoot,
+  });
+  if (!ownership.allowed || !ownership.worktreePath || !ownership.repoRoot) {
+    throw new Error("Refusing to move non-Paseo worktree");
+  }
+
+  const targetSlug = slugify(options.targetName);
+  if (!targetSlug) {
+    throw new Error("Cannot move Paseo worktree to an empty name");
+  }
+
+  const sourcePath = ownership.worktreePath;
+  const parentPath = dirname(sourcePath);
+  const desiredPath = join(parentPath, targetSlug);
+  if (desiredPath === sourcePath) {
+    return sourcePath;
+  }
+
+  let targetPath = desiredPath;
+  for (let suffix = 2; await pathExists(targetPath); suffix += 1) {
+    if (suffix > MAX_WORKTREE_MOVE_SUFFIX_ATTEMPTS) {
+      throw new Error(`No available Paseo worktree directory name for: ${targetSlug}`);
+    }
+    targetPath = join(parentPath, `${targetSlug}-${suffix}`);
+  }
+
+  await runGitCommand(["worktree", "move", sourcePath, targetPath], {
+    cwd: ownership.repoRoot,
+    timeout: 120_000,
+  });
+  return normalizePathForOwnership(targetPath);
+}
+
 type ParsedPaseoWorktreeInfo = Omit<PaseoWorktreeInfo, "createdAt">;
 
 function parseWorktreeList(output: string): ParsedPaseoWorktreeInfo[] {
@@ -1250,7 +1292,6 @@ export const createWorktree = async ({
   cwd,
   source,
   worktreeSlug,
-  runSetup,
   paseoHome,
   worktreesRoot,
 }: CreateWorktreeOptions): Promise<WorktreeConfig> => {
@@ -1297,14 +1338,6 @@ export const createWorktree = async ({
   });
 
   await seedPaseoConfigFile({ sourceCwd: cwd, targetCwd: worktreePath });
-
-  if (runSetup) {
-    await runWorktreeSetupCommands({
-      worktreePath,
-      branchName: sourcePlan.branchName,
-      cleanupOnFailure: true,
-    });
-  }
 
   return {
     branchName: sourcePlan.branchName,

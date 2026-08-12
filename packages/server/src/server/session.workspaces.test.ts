@@ -5873,7 +5873,6 @@ test("legacy refresh_agent_request restores a real deleted worktree", async () =
     cwd: repoDir,
     worktreeSlug: "keep",
     source: { kind: "checkout-branch", branchName: branch },
-    runSetup: false,
     paseoHome,
     worktreesRoot,
   });
@@ -6121,7 +6120,6 @@ test("archive_workspace_request archives a worktree-kind workspace and removes t
       baseBranch: "main",
       branchName: "worktree-kind-archive",
     },
-    runSetup: false,
     paseoHome,
   });
 

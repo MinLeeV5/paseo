@@ -35,6 +35,7 @@ import type { AgentStorage, StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentTimelineItem } from "./agent/agent-sdk-types.js";
 import {
   createPersistedProjectRecord,
+  createPersistedWorkspaceRecord,
   type PersistedProjectRecord,
   type PersistedWorkspaceRecord,
   type ProjectRegistry,
@@ -76,7 +77,6 @@ interface LegacyCreateWorktreeTestOptions {
   cwd: string;
   baseBranch: string;
   worktreeSlug: string;
-  runSetup?: boolean;
   paseoHome?: string;
 }
 
@@ -95,7 +95,6 @@ function createLegacyWorktreeForTest(
       baseBranch: options.baseBranch,
       branchName: options.branchName,
     },
-    runSetup: options.runSetup ?? true,
     paseoHome: options.paseoHome,
   });
 }
@@ -499,7 +498,7 @@ describe("resolveGitCreateBaseBranch", () => {
 });
 
 describe("workspace worktree setup trigger", () => {
-  test("workspace setup does not start unless runSetup is explicit", async () => {
+  test("workspace setup starts when explicitly requested", async () => {
     const { tempDir, repoDir } = createGitRepo({
       paseoConfig: {
         worktree: {
@@ -516,41 +515,7 @@ describe("workspace worktree setup trigger", () => {
         createWorkflowDependenciesForTest({ paseoHome, emitted }),
         {
           cwd: repoDir,
-          worktreeSlug: "no-explicit-setup",
-          runSetup: false,
-          paseoHome,
-        },
-      );
-      createdWorktreePath = result.worktree.worktreePath;
-
-      await new Promise((resolve) => setTimeout(resolve, 25));
-
-      expect(emitted.some((message) => message.type === "workspace_setup_progress")).toBe(false);
-      expect(existsSync(path.join(result.worktree.worktreePath, "setup.txt"))).toBe(false);
-    } finally {
-      await removeGitWorktreeForTest(repoDir, createdWorktreePath);
-      await removeTempDirForTest(tempDir);
-    }
-  });
-
-  test("workspace setup starts when runSetup is explicit", async () => {
-    const { tempDir, repoDir } = createGitRepo({
-      paseoConfig: {
-        worktree: {
-          setup: "node -e \"require('node:fs').writeFileSync('setup.txt', 'yes')\"",
-        },
-      },
-    });
-    const paseoHome = path.join(tempDir, ".paseo");
-    const emitted: SessionOutboundMessage[] = [];
-    let createdWorktreePath: string | null = null;
-
-    try {
-      const result = await createPaseoWorktreeWorkflow(
-        createWorkflowDependenciesForTest({ paseoHome, emitted }),
-        {
-          cwd: repoDir,
-          worktreeSlug: "explicit-setup",
+          worktreeSlug: "workspace-setup",
           runSetup: true,
           paseoHome,
         },
@@ -576,6 +541,89 @@ describe("workspace worktree setup trigger", () => {
 });
 
 describe("create-agent worktree setup boundary", () => {
+  test("returns the auto-named worktree path before the agent is created", async () => {
+    const originalWorkspace = createPersistedWorkspaceRecord({
+      workspaceId: "workspace-auto-named-before-agent",
+      projectId: "project-auto-named-before-agent",
+      cwd: "/worktrees/random-placeholder/packages/app",
+      kind: "worktree",
+      displayName: "random-placeholder",
+      branch: "random-placeholder",
+      worktreeRoot: "/worktrees/random-placeholder",
+      isPaseoOwnedWorktree: true,
+      mainRepoRoot: "/repo",
+      createdAt: "2026-08-12T00:00:00.000Z",
+      updatedAt: "2026-08-12T00:00:00.000Z",
+    });
+    const renamedWorkspace = {
+      ...originalWorkspace,
+      cwd: "/worktrees/generated-name/packages/app",
+      title: "Generated name",
+      branch: "generated-name",
+      worktreeRoot: "/worktrees/generated-name",
+    };
+
+    const result = await createPaseoWorktreeWorkflow(
+      {
+        paseoHome: "/paseo-home",
+        createPaseoWorktree: async () => ({
+          worktree: {
+            branchName: "random-placeholder",
+            worktreePath: "/worktrees/random-placeholder",
+          },
+          intent: {
+            kind: "branch-off",
+            baseBranch: "main",
+            branchName: "random-placeholder",
+          },
+          workspace: originalWorkspace,
+          repoRoot: "/repo",
+          created: true,
+        }),
+        warmWorkspaceGitData: async () => {},
+        autoNameWorkspaceBranchForFirstAgent: async (input) => {
+          expect(input.relocateWorktree).toBe(true);
+          return {
+            workspace: renamedWorkspace,
+            worktreePath: renamedWorkspace.worktreeRoot!,
+            branchName: renamedWorkspace.branch,
+          };
+        },
+        emitWorkspaceUpdateForWorkspaceId: async () => {},
+        cacheWorkspaceSetupSnapshot: () => {},
+        emit: () => {},
+        sessionLogger: createLogger(),
+        terminalManager: null,
+        archiveWorkspaceRecord: async () => {},
+        serviceProxy: null,
+        scriptRuntimeStore: null,
+        getDaemonTcpPort: null,
+        getDaemonTcpHost: null,
+        onScriptsChanged: null,
+      },
+      {
+        cwd: "/repo",
+        worktreeSlug: "random-placeholder",
+        firstAgentContext: { prompt: "Generate the final name" },
+      },
+      {
+        setupContinuation: {
+          kind: "agent",
+          terminalManager: null,
+          appendTimelineItem: async () => true,
+          emitLiveTimelineItem: async () => true,
+          logger: createLogger(),
+        },
+      },
+    );
+
+    expect(result.workspace).toEqual(renamedWorkspace);
+    expect(result.worktree).toEqual({
+      branchName: "generated-name",
+      worktreePath: "/worktrees/generated-name",
+    });
+  });
+
   test("agent setup continuation starts setup for the created agent timeline", async () => {
     const { tempDir, repoDir } = createGitRepo();
     const paseoHome = path.join(tempDir, ".paseo");
@@ -606,7 +654,6 @@ describe("create-agent worktree setup boundary", () => {
         {
           cwd: repoDir,
           worktreeSlug: "agent-setup-after-create",
-          runSetup: false,
           paseoHome,
         },
         {
@@ -710,7 +757,6 @@ describe("create-agent worktree setup boundary", () => {
         {
           cwd: repoDir,
           worktreeSlug,
-          runSetup: false,
           paseoHome,
           worktreesRoot,
         },
@@ -973,7 +1019,6 @@ describe("runWorktreeSetupInBackground", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-subdirectory-setup",
-      runSetup: false,
       paseoHome,
     });
     const workspaceCwd = path.join(createdWorktree.worktreePath, "packages", "app");
@@ -1022,7 +1067,6 @@ describe("runWorktreeSetupInBackground", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-no-setup",
-      runSetup: false,
       paseoHome,
     });
     const worktreePath = createdWorktree.worktreePath;
@@ -1104,7 +1148,7 @@ describe("runWorktreeSetupInBackground", () => {
     expect(emitWorkspaceUpdateForWorkspaceId).toHaveBeenCalledWith("42");
   });
 
-  test("keeps the workspace and emits a failed snapshot when setup cannot start", async () => {
+  test("archives the workspace record and emits a failed snapshot when setup cannot start", async () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
@@ -1121,7 +1165,6 @@ describe("runWorktreeSetupInBackground", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "broken-feature",
-      runSetup: false,
       paseoHome,
     });
     const worktreePath = createdWorktree.worktreePath;
@@ -1173,7 +1216,7 @@ describe("runWorktreeSetupInBackground", () => {
       status: "failed",
       error: expect.stringMatching(/Failed to parse paseo\.json at .*paseo\.json/),
     });
-    expect(archiveWorkspaceRecord).not.toHaveBeenCalled();
+    expect(archiveWorkspaceRecord).toHaveBeenCalledWith(workspaceId);
     expect(existsSync(worktreePath)).toBe(true);
     expect(emitWorkspaceUpdateForWorkspaceId).toHaveBeenCalledWith(workspaceId);
   });
@@ -1197,7 +1240,6 @@ describe("runWorktreeSetupInBackground", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "feature-running-setup",
-        runSetup: false,
         paseoHome,
       });
       const worktreePath = createdWorktree.worktreePath;
@@ -1320,7 +1362,6 @@ describe("runWorktreeSetupInBackground", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "reused-worktree",
-      runSetup: false,
       paseoHome,
     });
 
@@ -1411,7 +1452,6 @@ describe("runWorktreeSetupInBackground", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-service-failure",
-      runSetup: false,
       paseoHome,
     });
     const worktreePath = createdWorktree.worktreePath;
@@ -1497,7 +1537,6 @@ describe("runWorktreeSetupInBackground", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-socket-mode",
-      runSetup: false,
       paseoHome,
     });
     const worktreePath = createdWorktree.worktreePath;
@@ -1910,7 +1949,6 @@ describe("handleCreatePaseoWorktreeRequest", () => {
         cwd: repoDir,
         worktreeSlug: "resolver-feature",
         action: "branch-off",
-        runSetup: false,
         paseoHome,
       },
       { resolveDefaultBranch },
@@ -2171,7 +2209,6 @@ describe("handlePaseoWorktreeArchiveRequest worktree scope", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-worktree-scope",
-      runSetup: false,
       paseoHome,
     });
     const sharedCwd = created.worktreePath;
@@ -2246,7 +2283,6 @@ describe("handlePaseoWorktreeArchiveRequest worktree scope", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-default-scope",
-      runSetup: false,
       paseoHome,
     });
     const workspaceId = "ws-default-scope";
@@ -2319,7 +2355,6 @@ describe("handlePaseoWorktreeArchiveRequest worktree scope", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-default-scope-sibling",
-      runSetup: false,
       paseoHome,
     });
     const sharedCwd = created.worktreePath;
@@ -2395,7 +2430,6 @@ describe("handlePaseoWorktreeArchiveRequest worktree scope", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-delete-flag",
-      runSetup: false,
       paseoHome,
     });
     const sharedCwd = created.worktreePath;

@@ -582,6 +582,12 @@ Array of workspace records. A workspace is a specific working directory within a
 | `autoArchivedChangeRequestUrl` | `string \| null`                                | Change request whose merged state triggered auto-archive. Restore replaces it with the current merged change request, when present, so repeated snapshots cannot archive the workspace again. |
 | `pinnedAt`                     | `string \| null` (ISO 8601)                     | Pinned-to-top-of-sidebar timestamp; null means "not pinned"                                                                                                                                   |
 
+When creation includes first-Agent context, finish automatic title and branch naming before setup,
+terminals, or the Agent start. If the branch is renamed, move a Paseo-owned worktree with
+`git worktree move` and update both `cwd` and `worktreeRoot` while retaining `workspaceId`.
+Never move an external worktree or a worktree that is already in use; those keep their directory
+when a later first-Agent rename updates only the title and branch.
+
 > **Opaque-ID invariant:** `workspaceId` is opaque identity, never a filesystem path. Filesystem and git operations take `cwd`/`workspaceDirectory` only — never the id. A compatibility-only first-materialization bootstrap still groups pre-registry agent records by path and Git remote so existing installs retain their legacy records. That grouping never runs against a live registry, and its keys are not runtime project or workspace identity.
 
 `projectId` is still a real FK: workspace records should have a matching project record. Read-only
