@@ -56,13 +56,8 @@ const HOVER_OPEN_DELAY_MS = 90;
  * its way down into the flyout, so leaving the trigger cannot close it immediately.
  */
 const HOVER_CLOSE_GRACE_MS = 260;
-/**
- * How far the flyout sits *over* its parent surface rather than beside it. The overlap is what
- * makes the hand-off reliable: with a gap there is a strip of backdrop between the two where the
- * pointer belongs to neither, and every pixel of it is a chance to dismiss the thing you are
- * reaching for. Overlapping removes the strip instead of timing around it.
- */
-const SUBMENU_OVERLAP = 5;
+/** Flyouts touch their parent edge without covering its rows or leaving a pointer dead zone. */
+const SUBMENU_EDGE_OFFSET = 0;
 
 export interface MenuPageDefinition {
   id: string;
@@ -284,7 +279,7 @@ function MenuFlyout({
       anchorRef={anchorRef}
       side="right"
       align="start"
-      offset={-SUBMENU_OVERLAP}
+      offset={SUBMENU_EDGE_OFFSET}
       minWidth={minWidth}
       maxHeight={maxHeight}
       scrollable={scrollable}

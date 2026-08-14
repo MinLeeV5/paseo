@@ -48,11 +48,38 @@ describe("computePosition", () => {
   });
 
   it("places side placements flush with the trigger top and ignores alignment", () => {
-    const left = position({ placement: "left", alignment: "end" });
-    expect(left).toEqual({ x: 8, y: 100, actualPlacement: "left" });
+    const centeredTrigger = { ...TRIGGER, x: 400 };
+    const left = position({
+      placement: "left",
+      alignment: "end",
+      triggerRect: centeredTrigger,
+    });
+    expect(left).toEqual({ x: 196, y: 100, actualPlacement: "left" });
 
-    const right = position({ placement: "right", alignment: "end" });
-    expect(right).toEqual({ x: 144, y: 100, actualPlacement: "right" });
+    const right = position({
+      placement: "right",
+      alignment: "end",
+      triggerRect: centeredTrigger,
+    });
+    expect(right).toEqual({ x: 444, y: 100, actualPlacement: "right" });
+  });
+
+  it("opens a right-side submenu to the left when the display edge would overlap its parent", () => {
+    const result = position({
+      placement: "right",
+      offset: 0,
+      triggerRect: { ...TRIGGER, x: 800 },
+    });
+    expect(result).toEqual({ x: 600, y: 100, actualPlacement: "left" });
+  });
+
+  it("opens a left-side submenu to the right when that side has more room", () => {
+    const result = position({
+      placement: "left",
+      offset: 0,
+      triggerRect: { ...TRIGGER, x: 20 },
+    });
+    expect(result).toEqual({ x: 60, y: 100, actualPlacement: "right" });
   });
 
   it("keeps the surface inside a display area that does not start at the origin", () => {

@@ -13,11 +13,11 @@ Do not add a third menu implementation. The two that existed were byte-identical
 `MenuRoot` picks one from form factor, never from platform — a tablet in a narrow split view
 sheets the same way a phone does.
 
-| Screen                         | Surface                         | Submenus                                           |
-| ------------------------------ | ------------------------------- | -------------------------------------------------- |
-| Wide                           | Popover anchored to the trigger | Flyout overlapping the row, opened by hover intent |
-| Compact, `compactMode="sheet"` | Bottom sheet                    | The page is replaced in place, with a back header  |
-| Compact, default               | Popover                         | Same as wide                                       |
+| Screen                         | Surface                         | Submenus                                          |
+| ------------------------------ | ------------------------------- | ------------------------------------------------- |
+| Wide                           | Popover anchored to the trigger | Edge-adjacent flyout, opened by hover intent      |
+| Compact, `compactMode="sheet"` | Bottom sheet                    | The page is replaced in place, with a back header |
+| Compact, default               | Popover                         | Same as wide                                      |
 
 `compactMode` defaults to `"popover"`, so adopting the sheet is per-menu. That is deliberate:
 flipping every menu in the app to sheets at once is not a change anyone can review. Opt a menu in
@@ -64,10 +64,9 @@ swapping between them.
 
 ## Hover intent
 
-A flyout **overlaps its parent by 5pt** rather than sitting beside it. With a gap there is a strip
-of backdrop between the two that belongs to neither surface, and every pixel of it is a chance to
-dismiss the menu you are reaching for. Overlapping deletes the strip; don't reintroduce the gap
-and try to cover it with a longer timer.
+A flyout sits flush against its parent's edge. It leaves no backdrop gap for the pointer to cross
+and does not cover the parent rows. Near a display edge it opens on the opposite side; clamping a
+fixed-direction flyout back across its parent makes both menus unreadable.
 
 On top of that, a flyout opens after the pointer rests ~90ms, closes ~260ms after it leaves, and
 cancels its own pending close while the pointer is inside it. The grace still matters because the

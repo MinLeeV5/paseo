@@ -38,20 +38,29 @@ export function measureElement(element: View): Promise<Rect> {
  * there is more room above. Both conditions matter: flipping into a side that is equally
  * cramped just moves the clipping, so a surface taller than the whole viewport stays put.
  *
- * Only the vertical placements flip. A left/right submenu that doesn't fit is handled by the
- * caller choosing its side up front, because flipping it mid-open would move the surface out
- * from under the pointer that is travelling toward it.
+ * Horizontal placements use the same rule. A submenu is measured before its first positioned
+ * paint, so choosing the roomier side here prevents edge clamping from pulling it across its
+ * parent menu without making an already-visible flyout jump under the pointer.
  */
 function flipPlacement(input: {
   placement: Placement;
   triggerRect: Rect;
+  contentWidth: number;
   contentHeight: number;
   displayArea: Rect;
 }): Placement {
-  const { placement, triggerRect, contentHeight, displayArea } = input;
+  const { placement, triggerRect, contentWidth, contentHeight, displayArea } = input;
+  const spaceLeft = triggerRect.x - displayArea.x;
+  const spaceRight = displayArea.x + displayArea.width - (triggerRect.x + triggerRect.width);
   const spaceTop = triggerRect.y - displayArea.y;
   const spaceBottom = displayArea.y + displayArea.height - (triggerRect.y + triggerRect.height);
 
+  if (placement === "right" && spaceRight < contentWidth && spaceLeft > spaceRight) {
+    return "left";
+  }
+  if (placement === "left" && spaceLeft < contentWidth && spaceRight > spaceLeft) {
+    return "right";
+  }
   if (placement === "bottom" && spaceBottom < contentHeight && spaceTop > spaceBottom) {
     return "top";
   }
@@ -131,6 +140,7 @@ export function computePosition({
   const actualPlacement = flipPlacement({
     placement,
     triggerRect,
+    contentWidth: contentSize.width,
     contentHeight: contentSize.height,
     displayArea,
   });
