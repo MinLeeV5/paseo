@@ -1,0 +1,42 @@
+packages/app/src/file-pane/file-diff-view.tsx
+  50610ec255f6aae3 60-62,72,83-87,91,93-125
+packages/app/e2e/browser/changes-pane.spec.ts
+  50610ec255f6aae3 20,360-372,1064-1069,1091
+packages/app/src/file-pane/pane.tsx
+  50610ec255f6aae3 1401
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "adadc748b903debbae83f7da1934b2bf06a848a6",
+  "prompts": {
+    "50610ec255f6aae3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fff50-88ea-7f11-9692-9a19965b0491",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 68,
+      "total_deletions": 6,
+      "accepted_lines": 65,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/92d0b00bbc62495f69ed9d7df68ccf5824b487614a6571d66d1cddc1eec40b60"
+    },
+    "5397fcc39e03969b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ffe24-8ad2-7422-8848-35208665da96",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 156,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/3adfca2e381e06d65a895869c42f544eead7c516ec7875562426438e209e7185"
+    }
+  }
+}
