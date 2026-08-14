@@ -57,6 +57,9 @@ export function FileDiffView({
   const scrollRef = useRef<ScrollView>(null);
   const viewportHeightRef = useRef(0);
   const contentHeightRef = useRef(0);
+  const hasScrolledToFirstChangeRef = useRef(false);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
   const lineHeight = Math.round(codeFontSize * 1.5);
   const fullFile = useMemo(() => buildFullFileDiff({ file, source }), [file, source]);
   const overview = useMemo(
@@ -66,6 +69,7 @@ export function FileDiffView({
         : EMPTY_DIFF_OVERVIEW,
     [fullFile, layout],
   );
+  const firstChange = overview.markers[0] ?? null;
   const showLoadingIndicator = useDelayedLoadingIndicator(fullFile === null);
   const textMetricsStyle = useMemo<TextStyle>(() => {
     const trimmedMonoFontFamily = monoFontFamily.trim();
@@ -76,11 +80,49 @@ export function FileDiffView({
     };
   }, [codeFontSize, lineHeight, monoFontFamily]);
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    viewportHeightRef.current = event.nativeEvent.layout.height;
+    const nextHeight = event.nativeEvent.layout.height;
+    viewportHeightRef.current = nextHeight;
+    setViewportHeight((currentHeight) =>
+      currentHeight === nextHeight ? currentHeight : nextHeight,
+    );
   }, []);
   const handleContentSizeChange = useCallback((_width: number, height: number) => {
     contentHeightRef.current = height;
+    setContentHeight((currentHeight) => (currentHeight === height ? currentHeight : height));
   }, []);
+
+  useEffect(() => {
+    if (
+      hasScrolledToFirstChangeRef.current ||
+      !firstChange ||
+      viewportHeight <= 0 ||
+      contentHeight <= 0
+    ) {
+      return;
+    }
+
+    const scrollView = scrollRef.current;
+    if (!scrollView) {
+      return;
+    }
+    const effectiveLineHeight = getFileDiffOverviewRowHeight({
+      defaultRowHeight: lineHeight,
+      contentHeight,
+      totalRows: overview.totalRows,
+      wrapLines: true,
+    });
+    scrollView.scrollTo({
+      y: getFileDiffOverviewScrollOffset({
+        marker: firstChange,
+        lineHeight: effectiveLineHeight,
+        viewportHeight,
+        contentTopInset: 0,
+      }),
+      animated: false,
+    });
+    hasScrolledToFirstChangeRef.current = true;
+  }, [contentHeight, firstChange, lineHeight, overview.totalRows, viewportHeight]);
+
   const handleMarkerPress = useCallback(
     (marker: WorkspaceFileDiffOverviewMarker) => {
       const effectiveLineHeight = getFileDiffOverviewRowHeight({

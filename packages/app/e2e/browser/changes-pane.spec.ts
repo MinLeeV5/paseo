@@ -17,6 +17,7 @@ interface DirtyWorkspace {
 
 interface WorkspaceFixtureOptions {
   includeDeletedFile?: boolean;
+  leadingUnchangedLineCount?: number;
   includeNestedFolders?: boolean;
   includeRenamedFile?: boolean;
   includeUntrackedFile?: boolean;
@@ -354,6 +355,19 @@ test("changed files follow the Changes diff layout while the file menu opens sou
       diffWasVisible: false,
       editorWasUnmounted: false,
     });
+});
+
+test("opening a changed file scrolls to its first change", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff({ leadingUnchangedLineCount: 200 });
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await page.getByTestId("diff-file-0-view-source").click();
+  const visibleDiffPane = page.getByTestId("workspace-file-pane").filter({ visible: true });
+  const diffScroll = visibleDiffPane.getByTestId("file-diff-scroll");
+
+  await expect(visibleDiffPane.getByTestId("file-diff-view-unified")).toBeVisible();
+  await expect.poll(() => diffScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 });
 
 test("changed HTML defaults to preview and keeps annotated source available", async ({ page }) => {
@@ -1047,7 +1061,12 @@ async function readVisibleDiffRowGeometry(page: Page): Promise<{
 async function createWorkspaceWithMountedTabDiff(
   options: WorkspaceFixtureOptions = {},
 ): Promise<DirtyWorkspace> {
-  const files = [{ path: "src/use-mounted-tab-set.ts", content: BEFORE }];
+  const leadingUnchangedLines = Array.from(
+    { length: options.leadingUnchangedLineCount ?? 0 },
+    (_, index) => `// unchanged line ${index + 1}`,
+  ).join("\n");
+  const sourcePrefix = leadingUnchangedLines ? `${leadingUnchangedLines}\n` : "";
+  const files = [{ path: "src/use-mounted-tab-set.ts", content: `${sourcePrefix}${BEFORE}` }];
   if (options.includeDeletedFile) {
     files.push({ path: "src/zz-deleted.ts", content: "export const deleted = true;\n" });
   }
@@ -1069,7 +1088,7 @@ async function createWorkspaceWithMountedTabDiff(
     },
   });
 
-  await writeFile(path.join(repo.path, "src/use-mounted-tab-set.ts"), AFTER);
+  await writeFile(path.join(repo.path, "src/use-mounted-tab-set.ts"), `${sourcePrefix}${AFTER}`);
   if (options.includeUntrackedFile) {
     await writeFile(path.join(repo.path, "zz-untracked.txt"), "remove me\n");
   }

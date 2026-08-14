@@ -1398,6 +1398,7 @@ function ReadOnlyFilePane({
 
         {isShowingDiff && diffFile ? (
           <FileDiffView
+            key={`${location.path}:${navigationRevision}`}
             file={diffFile}
             source={preview?.kind === "text" ? (preview.content ?? "") : null}
             layout={diffLayout}
