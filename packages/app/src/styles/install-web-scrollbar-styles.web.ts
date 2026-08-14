@@ -1,4 +1,5 @@
 import {
+  WEB_COMPACT_SCROLLBAR_SIZE_PX,
   WEB_SCROLLBAR_SIZE_PX,
   webScrollbarColor,
   webScrollbarThumbColor,
@@ -21,6 +22,20 @@ export function installWebScrollbarStyles(): () => void {
 
 [data-composer-input] {
   scrollbar-gutter: stable;
+}
+
+[data-workspace-tabs-scroll="true"] {
+  scrollbar-gutter: stable;
+  scrollbar-color: auto;
+  scrollbar-width: auto;
+}
+
+[data-workspace-tabs-scroll="true"]::-webkit-scrollbar {
+  height: ${WEB_COMPACT_SCROLLBAR_SIZE_PX}px;
+}
+
+[data-workspace-tabs-scroll="true"]::-webkit-scrollbar-thumb {
+  border-width: 1px;
 }
 
 *::-webkit-scrollbar {

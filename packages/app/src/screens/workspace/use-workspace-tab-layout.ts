@@ -13,6 +13,7 @@ interface UseWorkspaceTabLayoutInput {
     actionsReservedWidth: number;
     rowPaddingHorizontal: number;
     tabGap: number;
+    minTabWidth: number;
     maxTabWidth: number;
     tabIconWidth: number;
     tabHorizontalPadding: number;
