@@ -435,16 +435,19 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
 
   // --- Workspace index jump ---
   {
+    // Keep this binding id stable so existing user overrides survive the
+    // reallocation of Cmd+Digit to tabs. Cmd+Alt+Digit remains the direct
+    // workspace jump; Cmd+Alt+ArrowUp/Down handles relative workspace navigation.
     id: "workspace-navigate-index-cmd-digit-mac",
     action: "workspace.navigate.index",
-    combo: "Cmd+Digit",
-    when: { mac: true, desktop: true, commandCenter: false },
+    combo: "Cmd+Alt+Digit",
+    when: { mac: true, desktop: true, commandCenter: false, editable: false },
     payload: { type: "index" },
     help: {
       id: "workspace-jump-index",
       section: "workspaces",
       label: "Jump to workspace",
-      defaultDisplayKeys: ["mod", "1-9"],
+      defaultDisplayKeys: ["mod", "alt", "1-9"],
     },
   },
   {
@@ -476,16 +479,18 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
 
   // --- Tab index jump ---
   {
+    // Keep this binding id stable so existing user overrides survive the
+    // default shortcut change from Cmd+Alt+Digit to Cmd+Digit.
     id: "workspace-tab-navigate-index-cmd-alt-digit-mac-desktop",
     action: "workspace.tab.navigate.index",
-    combo: "Cmd+Alt+Digit",
+    combo: "Cmd+Digit",
     when: { mac: true, desktop: true, commandCenter: false },
     payload: { type: "index" },
     help: {
       id: "workspace-tab-jump-index",
       section: "tabs-panes",
       label: "Jump to tab",
-      defaultDisplayKeys: ["mod", "alt", "1-9"],
+      defaultDisplayKeys: ["mod", "1-9"],
     },
   },
   {
@@ -517,9 +522,12 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
 
   // --- Workspace relative navigation ---
   {
+    // Keep the binding id stable while moving the default to a vertical
+    // workspace gesture. Cmd+Alt+ArrowUp/Down remains available to user
+    // overrides.
     id: "workspace-navigate-relative-cmd-left-mac",
     action: "workspace.navigate.relative",
-    combo: "Cmd+[",
+    combo: "Cmd+Alt+ArrowUp",
     when: { mac: true, desktop: true, commandCenter: false },
     payload: { type: "delta", delta: -1 },
     help: {
@@ -543,7 +551,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
   {
     id: "workspace-navigate-relative-cmd-right-mac",
     action: "workspace.navigate.relative",
-    combo: "Cmd+]",
+    combo: "Cmd+Alt+ArrowDown",
     when: { mac: true, desktop: true, commandCenter: false },
     payload: { type: "delta", delta: 1 },
     help: {

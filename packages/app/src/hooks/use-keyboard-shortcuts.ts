@@ -107,10 +107,10 @@ export function useKeyboardShortcuts({
     if (!enabled) return;
     if (!shortcutsAvailable) return;
 
-    // Only the modifier that actually performs the workspace-index jump on this
-    // runtime should reveal the sidebar number badges (Alt on web, Cmd on
-    // desktop Mac, Ctrl on desktop non-Mac). The store ORs altDown/cmdOrCtrlDown
-    // to drive badge visibility, so we set the flag matching this runtime.
+    // Only the modifier(s) that actually perform the workspace-index jump on
+    // this runtime should reveal number badges (Alt on web, Cmd+Alt on desktop
+    // Mac, Ctrl on desktop non-Mac). Mac desktop keeps separate workspace and
+    // tab badge state because both use Cmd with different Alt requirements.
     // Derived from the effective bindings: `null` when the user unassigned or
     // rebound the jump shortcut, and no `event.key` ever equals null, so the
     // badges simply never appear.
