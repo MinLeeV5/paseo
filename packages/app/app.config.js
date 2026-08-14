@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const pkg = require("./package.json");
+const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storage-size");
 const withAndroidProfileable = require("./plugins/with-android-profileable");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const appVariant = process.env.APP_VARIANT ?? "production";
@@ -168,6 +169,7 @@ export default {
     },
     plugins: [
       "expo-router",
+      [withAndroidAsyncStorageSize, 10],
       ...buildProfile.cameraPlugins,
       [
         "expo-splash-screen",

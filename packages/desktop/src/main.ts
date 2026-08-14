@@ -83,6 +83,7 @@ import {
 } from "./daemon/daemon-manager.js";
 import {
   createQuitLifecycle,
+  registerExternalQuitSignals,
   stopDesktopManagedDaemonOnQuitIfNeeded,
 } from "./daemon/quit-lifecycle.js";
 import { runDesktopStartup } from "./desktop-startup.js";
@@ -1093,6 +1094,7 @@ const quitLifecycle = createQuitLifecycle({
 // electron-updater forwards this event through Electron's built-in autoUpdater.
 electronAutoUpdater.on("before-quit-for-update", quitLifecycle.handleBeforeQuitForUpdate);
 app.on("before-quit", quitLifecycle.handleBeforeQuit);
+registerExternalQuitSignals({ signals: process, quit: () => app.quit() });
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

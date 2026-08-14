@@ -23,8 +23,7 @@ import Markdown, {
 } from "react-native-markdown-display";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
-import { MermaidDiagram } from "@/components/mermaid/diagram";
-import { isMermaidFenceInfo } from "@/components/mermaid/language";
+import { MarkdownFenceBlock } from "@/components/markdown/fence";
 import { MarkdownParagraphView, MarkdownTextSpan } from "@/components/markdown-text";
 import { MarkdownTableCellText } from "@/components/markdown-text-selection";
 import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-list";
@@ -32,6 +31,7 @@ import { markdownNodeContainsType } from "@/utils/markdown-ast";
 import { createCompactMarkdownStyles, createMarkdownStyles } from "@/styles/markdown-styles";
 import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { isNative } from "@/constants/platform";
 import {
   splitHtmlishMarkdown,
   type MarkdownDisplayPart,
@@ -39,6 +39,8 @@ import {
 } from "./html-ish";
 import { resolveInlineImageSize, type InlineImageDimensions } from "./inline-image-size";
 import { groupMarkdownParts, type MarkdownPartGroup } from "./part-groups";
+import { colorMarkdownLinkChildren } from "./link-children";
+import { MarkdownLinkText } from "./link-text";
 
 export type MarkdownStyles = Record<string, TextStyle & ViewStyle & { [key: string]: unknown }>;
 
@@ -479,6 +481,15 @@ function SharedMarkdownLink({
     if (onLinkPress?.(href) === false) return;
     void openExternalUrl(href);
   }, [href, onLinkPress]);
+  const style = useMemo(() => [inheritedStyles, linkStyle], [inheritedStyles, linkStyle]);
+
+  if (!isNative) {
+    return (
+      <MarkdownLinkText style={style} onPress={handlePress}>
+        {children}
+      </MarkdownLinkText>
+    );
+  }
 
   return (
     <MarkdownInheritedText
@@ -607,21 +618,16 @@ export function createSharedMarkdownRules(): RenderRules {
       _parent: ASTNode[],
       styles: MarkdownStyles,
       inheritedStyles: TextStyle = {},
-    ) => {
-      if (isMermaidFenceInfo(node.sourceInfo)) {
-        return <MermaidDiagram key={node.key} diagram={node.content} />;
-      }
-
-      return (
-        <HighlightedCodeBlock
-          key={node.key}
-          code={node.content}
-          language={node.sourceInfo}
-          inheritedStyles={inheritedStyles}
-          textStyle={styles.fence}
-        />
-      );
-    },
+    ) => (
+      <MarkdownFenceBlock
+        key={node.key}
+        code={node.content}
+        info={node.sourceInfo}
+        phase="complete"
+        inheritedStyles={inheritedStyles}
+        textStyle={styles.fence}
+      />
+    ),
     code_inline: (
       node: ASTNode,
       _children: ReactNode[],
@@ -721,7 +727,7 @@ export function createSharedMarkdownRules(): RenderRules {
         linkStyle={styles.link}
         onLinkPress={onLinkPress}
       >
-        {children}
+        {colorMarkdownLinkChildren(children, styles.link.color)}
       </SharedMarkdownLink>
     ),
   };

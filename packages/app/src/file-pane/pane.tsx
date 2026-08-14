@@ -853,7 +853,6 @@ function FilePreviewBody({
           <RNScrollView
             ref={previewScrollRef}
             style={styles.previewContent}
-            contentContainerStyle={styles.previewMarkdownScrollContent}
             showsVerticalScrollIndicator
           >
             <MermaidDiagram diagram={preview.content ?? ""} />

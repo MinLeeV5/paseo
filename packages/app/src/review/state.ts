@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type ReviewDraftMode = "uncommitted" | "base";
 export type ReviewDraftSide = "old" | "new";
 
@@ -32,8 +34,28 @@ export interface ReviewDraftStoreState {
 // Drafts and revision-bound review markers are persisted; diffModeOverrides is excluded.
 export interface SerializedReviewDraftState {
   drafts: Record<string, ReviewDraftComment[]>;
-  reviewedFiles: Record<string, Record<string, string>>;
+  reviewedFiles?: Record<string, Record<string, string>>;
+  activeModesByScope?: Record<string, ReviewDraftMode>;
 }
+
+const IsoDateTimeSchema = z.string().datetime({ offset: true });
+export const ReviewDraftCommentSchema: z.ZodType<ReviewDraftComment> = z.strictObject({
+  id: z.string(),
+  filePath: z.string(),
+  side: z.enum(["old", "new"]),
+  lineNumber: z.number().int().positive(),
+  body: z.string(),
+  createdAt: IsoDateTimeSchema,
+  updatedAt: IsoDateTimeSchema,
+});
+
+export const SerializedReviewDraftStateSchema: z.ZodType<SerializedReviewDraftState> =
+  z.strictObject({
+    drafts: z.record(z.string(), z.array(ReviewDraftCommentSchema)),
+    reviewedFiles: z.record(z.string(), z.record(z.string(), z.string())).optional(),
+    // COMPAT(reviewDraftModes): v1 persisted this field; v2 discards it during migration.
+    activeModesByScope: z.record(z.string(), z.enum(["uncommitted", "base"])).optional(),
+  });
 
 export function setDiffModeOverrideInState(
   state: ReviewDraftStoreState,
@@ -193,66 +215,12 @@ export function serializeReviewDraftState(
 }
 
 export function normalizePersistedState(state: unknown): ReviewDraftStoreState {
-  if (!state || typeof state !== "object") {
-    return { drafts: {}, reviewedFiles: {}, diffModeOverrides: {} };
-  }
-  // activeModesByScope may be present in old persisted JSON — tolerate and ignore it.
-  const persisted = state as { drafts?: unknown; reviewedFiles?: unknown };
-  const drafts = persisted.drafts;
-  if (!drafts || typeof drafts !== "object" || Array.isArray(drafts)) {
-    return { drafts: {}, reviewedFiles: {}, diffModeOverrides: {} };
-  }
-
-  const normalized: Record<string, ReviewDraftComment[]> = {};
-  for (const [key, value] of Object.entries(drafts)) {
-    if (!Array.isArray(value)) {
-      continue;
-    }
-    normalized[key] = value.filter((comment): comment is ReviewDraftComment =>
-      isReviewDraftComment(comment),
-    );
-  }
-
-  const reviewedFiles: Record<string, Record<string, string>> = {};
-  if (
-    persisted.reviewedFiles &&
-    typeof persisted.reviewedFiles === "object" &&
-    !Array.isArray(persisted.reviewedFiles)
-  ) {
-    for (const [key, value] of Object.entries(persisted.reviewedFiles)) {
-      if (!value || typeof value !== "object" || Array.isArray(value)) {
-        continue;
-      }
-      const revisions = Object.fromEntries(
-        Object.entries(value).filter((entry): entry is [string, string] => {
-          return typeof entry[1] === "string";
-        }),
-      );
-      if (Object.keys(revisions).length > 0) {
-        reviewedFiles[key] = revisions;
-      }
-    }
-  }
-
-  return { drafts: normalized, reviewedFiles, diffModeOverrides: {} };
-}
-
-export function isReviewDraftComment(value: unknown): value is ReviewDraftComment {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.id === "string" &&
-    typeof record.filePath === "string" &&
-    (record.side === "old" || record.side === "new") &&
-    typeof record.lineNumber === "number" &&
-    Number.isInteger(record.lineNumber) &&
-    record.lineNumber > 0 &&
-    typeof record.body === "string" &&
-    typeof record.createdAt === "string" &&
-    typeof record.updatedAt === "string"
-  );
+  const result = SerializedReviewDraftStateSchema.safeParse(state);
+  return {
+    drafts: result.success ? result.data.drafts : {},
+    reviewedFiles: result.success ? (result.data.reviewedFiles ?? {}) : {},
+    diffModeOverrides: {},
+  };
 }
 
 function applyCommentUpdates(

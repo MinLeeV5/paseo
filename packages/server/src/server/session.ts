@@ -41,7 +41,6 @@ import {
 } from "./persistence-hooks.js";
 import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
 import {
-  formatSystemNotificationPrompt,
   sendPromptToAgent,
   waitForAgentRunStartWithTimeout,
   unarchiveAgentState,
@@ -161,7 +160,7 @@ import {
   createAgentStructuredTextGeneration,
   createGitMetadataGenerator,
 } from "./session/checkout/git-metadata-generator.js";
-import { ChatScheduleLoopSession } from "./session/chat/chat-schedule-loop-session.js";
+import { ScheduleSession } from "./session/schedule/schedule-session.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
@@ -172,7 +171,7 @@ import type { HubRelationshipManagement } from "./hub/relationship-controller.js
 import { HubExecutionController } from "./hub/execution-controller.js";
 import type { HubExecutionAgents } from "./hub/daemon-executions.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
-import { PushTokenStore } from "./push/token-store.js";
+import type { PushNotifications } from "./push/index.js";
 import {
   archivePersistedWorkspaceRecord,
   archiveWorkspaceContents,
@@ -206,8 +205,6 @@ import type { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import type { Resolvable } from "./speech/provider-resolver.js";
 import type { SpeechReadinessSnapshot } from "./speech/speech-runtime.js";
 import type pino from "pino";
-import { FileBackedChatService } from "./chat/chat-service.js";
-import { LoopService } from "./loop-service.js";
 import { ScheduleService } from "./schedule/service.js";
 import {
   createGitHubService,
@@ -444,7 +441,7 @@ export interface SessionOptions {
   onWorkspaceRecovered?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
   logger: pino.Logger;
   downloadTokenStore: DownloadTokenStore;
-  pushTokenStore: PushTokenStore;
+  pushNotifications: PushNotifications;
   paseoHome: string;
   worktreesRoot?: string;
   agentManager: AgentManager;
@@ -452,9 +449,7 @@ export interface SessionOptions {
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
   filesystem?: SessionFileSystem;
-  chatService: FileBackedChatService;
   scheduleService: ScheduleService;
-  loopService: LoopService;
   checkoutDiffManager: CheckoutDiffManager;
   agentSessionChangesManager?: AgentSessionChangesManager;
   github?: ForgeService;
@@ -607,16 +602,6 @@ function createAgentSessionChangesSession(
   });
 }
 
-function createOptionalHubExecutionController(
-  agents: HubExecutionAgents | undefined,
-  send: (message: SessionOutboundMessage) => void,
-): HubExecutionController | null {
-  if (!agents) {
-    return null;
-  }
-  return new HubExecutionController({ agents, send });
-}
-
 /**
  * Session represents a single connected client session.
  * It owns all state management, orchestration logic, and message processing.
@@ -658,7 +643,7 @@ export class Session {
   private readonly workspaceProvisioning: WorkspaceProvisioningService;
   private readonly workspaceRecovery: WorkspaceRecoveryService;
   private readonly daemonConfigStore: DaemonConfigStore;
-  private readonly pushTokenStore: PushTokenStore;
+  private readonly pushNotifications: PushNotifications;
   private unsubscribeAgentEvents: (() => void) | null = null;
   private unsubscribeProjectMutations: (() => void) | null = null;
   private unsubscribeWorkspaceMutations: (() => void) | null = null;
@@ -680,6 +665,7 @@ export class Session {
     appVisible: boolean;
     appVisibilityChangedAt: Date;
   } | null = null;
+  private registeredPushToken: string | null = null;
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly serviceProxy: ServiceProxySubsystem | null;
@@ -697,9 +683,9 @@ export class Session {
   private readonly workspaceDirectory: WorkspaceDirectory;
   private readonly voiceSession: VoiceSession;
   private readonly checkoutSession: CheckoutSession;
-  private readonly agentSessionChangesManager: AgentSessionChangesManager | null;
+  private readonly agentSessionChangesManager: AgentSessionChangesManager | undefined;
   private readonly agentSessionChangesSession: AgentSessionChangesSession | null;
-  private readonly chatScheduleLoopSession: ChatScheduleLoopSession;
+  private readonly scheduleSession: ScheduleSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
   private readonly agentConfigSession: AgentConfigSession;
@@ -724,7 +710,7 @@ export class Session {
       onWorkspaceRecovered,
       logger,
       downloadTokenStore,
-      pushTokenStore,
+      pushNotifications,
       paseoHome,
       worktreesRoot,
       agentManager,
@@ -732,9 +718,7 @@ export class Session {
       projectRegistry,
       workspaceRegistry,
       filesystem,
-      chatService,
       scheduleService,
-      loopService,
       checkoutDiffManager,
       agentSessionChangesManager,
       github,
@@ -777,7 +761,7 @@ export class Session {
     this.getTransportBufferedAmount = getTransportBufferedAmount ?? (() => 0);
     this.onLifecycleIntent = onLifecycleIntent ?? null;
     this.onWorkspaceRecovered = onWorkspaceRecovered ?? null;
-    this.pushTokenStore = pushTokenStore;
+    this.pushNotifications = pushNotifications;
     this.paseoHome = paseoHome;
     this.worktreesRoot = worktreesRoot;
     this.sessionLogger = logger.child({
@@ -850,7 +834,7 @@ export class Session {
       worktreesRoot: this.worktreesRoot,
       logger: this.sessionLogger,
     });
-    this.agentSessionChangesManager = agentSessionChangesManager ?? null;
+    this.agentSessionChangesManager = agentSessionChangesManager;
     this.agentSessionChangesSession = createAgentSessionChangesSession(
       agentSessionChangesManager,
       (message) => this.emit(message),
@@ -866,27 +850,9 @@ export class Session {
       onBranchChanged,
       logger: this.sessionLogger,
     });
-    this.chatScheduleLoopSession = new ChatScheduleLoopSession({
-      host: {
-        emit: (msg) => this.emit(msg),
-        listStoredAgents: () => this.agentStorage.list(),
-        listLiveAgents: () => this.agentManager.listAgents(),
-        resolveAgentIdentifier: (identifier) => this.resolveAgentIdentifier(identifier),
-        sendAgentMessage: async (agentId, text) => {
-          await sendPromptToAgent({
-            agentManager: this.agentManager,
-            agentStorage: this.agentStorage,
-            agentId,
-            prompt: formatSystemNotificationPrompt(text),
-            unarchive: false,
-            logger: this.sessionLogger,
-          });
-        },
-      },
-      chatService,
+    this.scheduleSession = new ScheduleSession({
+      host: { emit: (msg) => this.emit(msg) },
       scheduleService,
-      loopService,
-      clientId: this.clientId,
       logger: this.sessionLogger,
     });
     this.providerCatalogSession = new ProviderCatalogSession({
@@ -949,10 +915,14 @@ export class Session {
       logger: this.sessionLogger,
       hubRelationships: options.hubRelationships,
     });
-    this.hubExecutionController = createOptionalHubExecutionController(
-      options.hubExecutionAgents,
-      (message) => this.emit(message),
-    );
+    this.hubExecutionController = options.hubExecutionAgents
+      ? new HubExecutionController({
+          agents: options.hubExecutionAgents,
+          validateAgentConfiguration: (input) =>
+            providerSnapshotManager.validateAgentConfiguration(input),
+          send: (message) => this.emit(message),
+        })
+      : null;
     this.daemonConfigStore = daemonConfigStore;
     this.terminalManager = terminalManager;
     this.terminalController = new TerminalSessionController({
@@ -1887,7 +1857,7 @@ export class Session {
       this.dispatchWorkspaceFileMessage(msg, source) ??
       this.dispatchProviderMessage(msg) ??
       this.dispatchTerminalMessage(msg) ??
-      this.dispatchChatScheduleLoopMessage(msg) ??
+      this.dispatchScheduleMessage(msg) ??
       this.dispatchMiscMessage(msg);
     if (promise) await promise;
   }
@@ -2008,6 +1978,9 @@ export class Session {
     if (msg.type === "hub.execution.agent.create.request") {
       return this.hubExecutionController?.createAgent(msg);
     }
+    if (msg.type === "hub.execution.agent.validate.request") {
+      return this.hubExecutionController?.validateAgent(msg);
+    }
     if (msg.type === "hub.execution.control.request") {
       return this.hubExecutionController?.controlExecution(msg);
     }
@@ -2069,6 +2042,8 @@ export class Session {
         return this.agentConfigSession.handleSetAgentFeatureRequest(msg);
       case "set_agent_thinking_request":
         return this.agentConfigSession.handleSetAgentThinkingRequest(msg);
+      case "agent.config.apply.request":
+        return this.agentConfigSession.handleAgentConfigApplyRequest(msg);
       case "get_daemon_config_request":
         this.emit({
           type: "get_daemon_config_response",
@@ -2141,6 +2116,8 @@ export class Session {
         return this.checkoutSession.handleCheckoutPushRequest(msg);
       case "checkout.refresh.request":
         return this.checkoutSession.handleRefreshRequest(msg);
+      case "checkout.discard_changes.request":
+        return this.checkoutSession.handleCheckoutDiscardChangesRequest(msg);
       case "checkout_pr_create_request":
         return this.checkoutSession.handleCheckoutPrCreateRequest(msg);
       case "checkout_pr_merge_request":
@@ -2233,6 +2210,14 @@ export class Session {
         return undefined;
       case "fs.file.write.request":
         return this.workspaceFilesSession.handleFileWriteRequest(msg);
+      case "fs.entry.create.request":
+        return this.workspaceFilesSession.handleFileEntryCreateRequest(msg);
+      case "fs.entry.rename.request":
+        return this.workspaceFilesSession.handleFileEntryRenameRequest(msg);
+      case "fs.entry.duplicate.request":
+        return this.workspaceFilesSession.handleFileEntryDuplicateRequest(msg);
+      case "fs.entry.delete.request":
+        return this.workspaceFilesSession.handleFileEntryDeleteRequest(msg);
       case "project_icon_request":
         return this.workspaceFilesSession.handleProjectIconRequest(msg);
       case "project.icon.get.request":
@@ -2296,51 +2281,26 @@ export class Session {
     }
   }
 
-  // eslint-disable-next-line complexity
-  private dispatchChatScheduleLoopMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+  private dispatchScheduleMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
-      case "chat/create":
-        return this.chatScheduleLoopSession.handleChatCreateRequest(msg);
-      case "chat/list":
-        return this.chatScheduleLoopSession.handleChatListRequest(msg);
-      case "chat/inspect":
-        return this.chatScheduleLoopSession.handleChatInspectRequest(msg);
-      case "chat/delete":
-        return this.chatScheduleLoopSession.handleChatDeleteRequest(msg);
-      case "chat/post":
-        return this.chatScheduleLoopSession.handleChatPostRequest(msg);
-      case "chat/read":
-        return this.chatScheduleLoopSession.handleChatReadRequest(msg);
-      case "chat/wait":
-        return this.chatScheduleLoopSession.handleChatWaitRequest(msg);
-      case "loop/run":
-        return this.chatScheduleLoopSession.handleLoopRunRequest(msg);
-      case "loop/list":
-        return this.chatScheduleLoopSession.handleLoopListRequest(msg);
-      case "loop/inspect":
-        return this.chatScheduleLoopSession.handleLoopInspectRequest(msg);
-      case "loop/logs":
-        return this.chatScheduleLoopSession.handleLoopLogsRequest(msg);
-      case "loop/stop":
-        return this.chatScheduleLoopSession.handleLoopStopRequest(msg);
       case "schedule/create":
-        return this.chatScheduleLoopSession.handleScheduleCreateRequest(msg);
+        return this.scheduleSession.handleScheduleCreateRequest(msg);
       case "schedule/list":
-        return this.chatScheduleLoopSession.handleScheduleListRequest(msg);
+        return this.scheduleSession.handleScheduleListRequest(msg);
       case "schedule/inspect":
-        return this.chatScheduleLoopSession.handleScheduleInspectRequest(msg);
+        return this.scheduleSession.handleScheduleInspectRequest(msg);
       case "schedule/logs":
-        return this.chatScheduleLoopSession.handleScheduleLogsRequest(msg);
+        return this.scheduleSession.handleScheduleLogsRequest(msg);
       case "schedule/pause":
-        return this.chatScheduleLoopSession.handleSchedulePauseRequest(msg);
+        return this.scheduleSession.handleSchedulePauseRequest(msg);
       case "schedule/resume":
-        return this.chatScheduleLoopSession.handleScheduleResumeRequest(msg);
+        return this.scheduleSession.handleScheduleResumeRequest(msg);
       case "schedule/delete":
-        return this.chatScheduleLoopSession.handleScheduleDeleteRequest(msg);
+        return this.scheduleSession.handleScheduleDeleteRequest(msg);
       case "schedule/run-once":
-        return this.chatScheduleLoopSession.handleScheduleRunOnceRequest(msg);
+        return this.scheduleSession.handleScheduleRunOnceRequest(msg);
       case "schedule/update":
-        return this.chatScheduleLoopSession.handleScheduleUpdateRequest(msg);
+        return this.scheduleSession.handleScheduleUpdateRequest(msg);
       default:
         return undefined;
     }
@@ -2353,6 +2313,16 @@ export class Session {
         return;
       case "register_push_token":
         this.handleRegisterPushToken(msg.token);
+        return;
+      case "push.unregister.request":
+        this.pushNotifications.revoke(msg.token);
+        if (this.registeredPushToken?.trim() === msg.token.trim()) {
+          this.registeredPushToken = null;
+        }
+        this.emit({
+          type: "push.unregister.response",
+          payload: { requestId: msg.requestId },
+        });
         return;
     }
   }
@@ -2647,25 +2617,22 @@ export class Session {
     didUnarchive: boolean;
     originalArchivedAt: string | null;
   } | null> {
-    const records = await this.agentStorage.list();
-    const matched = records
-      .filter(
-        (record) =>
-          record.persistence?.provider === handle.provider &&
-          record.persistence?.sessionId === handle.sessionId,
-      )
-      .reduce<StoredAgentRecord | null>((latest, candidate) => {
-        if (!latest) {
-          return candidate;
-        }
-        const updatedDelta =
-          Date.parse(resolveStoredAgentPayloadUpdatedAt(candidate)) -
-          Date.parse(resolveStoredAgentPayloadUpdatedAt(latest));
-        if (updatedDelta !== 0) {
-          return updatedDelta > 0 ? candidate : latest;
-        }
-        return Date.parse(candidate.createdAt) > Date.parse(latest.createdAt) ? candidate : latest;
-      }, null);
+    const records = await this.agentStorage.listByProviderSession(
+      handle.provider,
+      handle.sessionId,
+    );
+    const matched = records.reduce<StoredAgentRecord | null>((latest, candidate) => {
+      if (!latest) {
+        return candidate;
+      }
+      const updatedDelta =
+        Date.parse(resolveStoredAgentPayloadUpdatedAt(candidate)) -
+        Date.parse(resolveStoredAgentPayloadUpdatedAt(latest));
+      if (updatedDelta !== 0) {
+        return updatedDelta > 0 ? candidate : latest;
+      }
+      return Date.parse(candidate.createdAt) > Date.parse(latest.createdAt) ? candidate : latest;
+    }, null);
     if (!matched) {
       return null;
     }
@@ -3913,6 +3880,9 @@ export class Session {
     if (msg.appVisible && focusedTerminalId) {
       void this.clearFocusedTerminalAttention(focusedTerminalId);
     }
+    if (this.registeredPushToken) {
+      this.pushNotifications.renew(this.registeredPushToken);
+    }
   }
 
   private async clearFocusedTerminalAttention(terminalId: string): Promise<void> {
@@ -3931,7 +3901,8 @@ export class Session {
    * Handle push token registration
    */
   private handleRegisterPushToken(token: string): void {
-    this.pushTokenStore.addToken(token);
+    this.registeredPushToken = token;
+    this.pushNotifications.renew(token);
     this.sessionLogger.info("Registered push token");
   }
 

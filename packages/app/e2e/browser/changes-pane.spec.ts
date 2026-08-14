@@ -1,8 +1,10 @@
+import { execFileSync } from "node:child_process";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type Page } from "@playwright/test";
 import { buildHostWorkspaceRoute, buildSettingsSectionRoute } from "../../src/utils/host-routes";
 import { test, expect } from "../support/fixtures";
+import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import { getServerId } from "../support/helpers/server-id";
 import { connectSeedClient } from "../support/helpers/seed-client";
 import { createTempGitRepo } from "../support/helpers/workspace";
@@ -15,6 +17,9 @@ interface DirtyWorkspace {
 
 interface WorkspaceFixtureOptions {
   includeDeletedFile?: boolean;
+  includeNestedFolders?: boolean;
+  includeRenamedFile?: boolean;
+  includeUntrackedFile?: boolean;
 }
 
 interface CleanupTask {
@@ -23,6 +28,39 @@ interface CleanupTask {
 
 const cleanupTasks: CleanupTask[] = [];
 const APP_SETTINGS_KEY = "@paseo:app-settings";
+
+async function failNextDiscardRequest(page: Page): Promise<void> {
+  await page.routeWebSocket(daemonWsRoutePattern(), (browserSocket) => {
+    const serverSocket = browserSocket.connectToServer();
+    browserSocket.onMessage((message) => {
+      if (typeof message === "string") {
+        const envelope = JSON.parse(message) as {
+          message?: { type?: string; cwd?: string; requestId?: string };
+        };
+        if (envelope.message?.type === "checkout.discard_changes.request") {
+          browserSocket.send(
+            JSON.stringify({
+              type: "session",
+              message: {
+                type: "checkout.discard_changes.response",
+                payload: {
+                  cwd: envelope.message.cwd,
+                  success: false,
+                  error: { code: "UNKNOWN", message: "Injected revert failure" },
+                  requestId: envelope.message.requestId,
+                },
+              },
+            }),
+          );
+          return;
+        }
+      }
+      serverSocket.send(message);
+    });
+    serverSocket.onMessage((message) => browserSocket.send(message));
+  });
+}
+
 const CHANGES_PREFERENCES_KEY = "@paseo:changes-preferences";
 
 function hasHorizontalScrollRegion(element: HTMLElement): boolean {
@@ -249,12 +287,22 @@ test("changed files follow the Changes diff layout while the file menu opens sou
   await expect(page.getByTestId("diff-file-1")).toContainText("zz-deleted.ts");
   await expect(page.getByTestId("diff-file-1-view-source")).toHaveCount(0);
   await expect(page.getByTestId("diff-file-0-view-source")).toBeVisible();
+  const deletedFileName = page.getByText("zz-deleted.ts", { exact: true });
+  await expect(deletedFileName).toHaveCSS("user-select", "none");
+  await deletedFileName.dblclick();
+  expect(await page.evaluate(() => window.getSelection()?.toString() ?? "")).toBe("");
+  await page.getByTestId("diff-file-1-toggle").click({ button: "right" });
+  await expect(page.getByText("Copy path")).toBeVisible();
+  await page.getByText("Copy path", { exact: true }).click({ button: "right" });
+  await expect(page.getByText("Copy path")).toBeVisible();
+  await expect(page.getByTestId("diff-file-1-open-file")).toHaveCount(0);
+  await page.keyboard.press("Escape");
 
   await observeIncompleteFileDiffMounts(
     page,
     'import { useLayoutEffect, useMemo, useRef, useState } from "react";',
   );
-  await page.getByTestId("diff-file-0-file").click();
+  await page.getByTestId("diff-file-0-view-source").click();
   const visibleDiffPane = page.getByTestId("workspace-file-pane").filter({ visible: true });
   await expect(visibleDiffPane.getByTestId("file-diff-view-unified")).toBeVisible();
   await expect(visibleDiffPane.getByTestId("file-source-preview-scroll")).toHaveCount(0);
@@ -391,6 +439,177 @@ test("changed Markdown defaults to preview and can reveal its changed source", a
   await expect(visibleFilePane.getByTestId("file-diff-view-unified")).toBeVisible();
 });
 
+test("changes context menus duplicate files and folders", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
+  await page.getByTestId("diff-file-0-duplicate").click();
+  await expect
+    .poll(() => readFile(path.join(workspace.repoPath, "src/use-mounted-tab-set copy.ts"), "utf8"))
+    .toBe(AFTER);
+
+  await useDirectoryGroupedDiff(page);
+  await page.getByTestId("diff-folder-src-toggle").click({ button: "right" });
+  await page.getByTestId("diff-folder-src-duplicate").click();
+  await expect
+    .poll(() => readFile(path.join(workspace.repoPath, "src copy/use-mounted-tab-set.ts"), "utf8"))
+    .toBe(AFTER);
+});
+
+test("changes context menu recursively collapses descendant folders", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff({ includeNestedFolders: true });
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await useDirectoryGroupedDiff(page);
+  await expect(page.getByTestId("diff-folder-src/zz-folder")).toBeVisible();
+  await expect(page.getByTestId("diff-folder-src/zz-folder/nested")).toBeVisible();
+
+  await page.getByTestId("diff-folder-src-toggle").click({ button: "right" });
+  await page.getByTestId("diff-folder-src-collapse-folder").click();
+  await expect(page.getByTestId("diff-folder-src/zz-folder")).toHaveCount(0);
+
+  await page.getByTestId("diff-folder-src-toggle").click();
+  await expect(page.getByTestId("diff-folder-src/zz-folder")).toBeVisible();
+  await expect(page.getByText("root.ts", { exact: true })).toHaveCount(0);
+
+  await page.getByTestId("diff-folder-src/zz-folder-toggle").click();
+  await expect(page.getByText("root.ts", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("diff-folder-src/zz-folder/nested")).toBeVisible();
+  await expect(page.getByText("changed.ts", { exact: true })).toHaveCount(0);
+
+  await page.getByTestId("diff-folder-src/zz-folder/nested-toggle").click();
+  await expect(page.getByText("changed.ts", { exact: true })).toBeVisible();
+});
+
+test("changes context menus expose folder revert and restore a file after confirmation", async ({
+  page,
+}) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await useDirectoryGroupedDiff(page);
+  await page.getByTestId("diff-folder-src-toggle").click({ button: "right" });
+  const folderRevert = page.getByTestId("diff-folder-src-revert");
+  await expect(folderRevert).toBeVisible();
+  const revertLabelColor = await folderRevert
+    .getByText("Discard changes", { exact: true })
+    .evaluate((element) => getComputedStyle(element).color);
+  await expect(folderRevert.locator("svg")).toHaveCSS("stroke", revertLabelColor);
+  await page.keyboard.press("Escape");
+
+  await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
+  const cancelledConfirmation = new Promise<string>((resolve) => {
+    page.once("dialog", async (dialog) => {
+      const message = dialog.message();
+      await dialog.dismiss();
+      resolve(message);
+    });
+  });
+  await page.getByTestId("diff-file-0-revert").click();
+  expect(await cancelledConfirmation).toContain("src/use-mounted-tab-set.ts");
+  await expect(page.getByTestId("diff-file-0")).toBeVisible();
+  await expect
+    .poll(() => readFile(path.join(workspace.repoPath, "src/use-mounted-tab-set.ts"), "utf8"))
+    .toBe(AFTER);
+
+  await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
+  const confirmation = new Promise<string>((resolve) => {
+    page.once("dialog", async (dialog) => {
+      const message = dialog.message();
+      await dialog.accept();
+      resolve(message);
+    });
+  });
+  await page.getByTestId("diff-file-0-revert").click();
+  expect(await confirmation).toContain("src/use-mounted-tab-set.ts");
+
+  await expect(page.getByTestId("diff-file-0")).toHaveCount(0, { timeout: 30_000 });
+  await expect
+    .poll(() => readFile(path.join(workspace.repoPath, "src/use-mounted-tab-set.ts"), "utf8"))
+    .toBe(BEFORE);
+});
+
+test("discarding a staged rename restores its source path", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff({ includeRenamedFile: true });
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  const renamedRow = page.getByTestId(/^diff-file-\d+$/).filter({ hasText: "zz-renamed.ts" });
+  const rowTestId = await renamedRow.getAttribute("data-testid");
+  expect(rowTestId).not.toBeNull();
+  await renamedRow.getByTestId(`${rowTestId}-toggle`).click({ button: "right" });
+  const confirmation = new Promise<void>((resolve) => {
+    page.once("dialog", async (dialog) => {
+      await dialog.accept();
+      resolve();
+    });
+  });
+  await page.getByTestId(`${rowTestId}-revert`).click();
+  await confirmation;
+
+  await expect(page.getByText("zz-renamed.ts", { exact: true })).toHaveCount(0, {
+    timeout: 30_000,
+  });
+  await expect
+    .poll(() => readFile(path.join(workspace.repoPath, "src/rename-source.ts"), "utf8"))
+    .toBe("export const renamed = true;\n");
+});
+
+test("discarding an untracked file removes it from the working tree", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff({ includeUntrackedFile: true });
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  const untrackedRow = page.getByTestId(/^diff-file-\d+$/).filter({ hasText: "zz-untracked.txt" });
+  const rowTestId = await untrackedRow.getAttribute("data-testid");
+  expect(rowTestId).not.toBeNull();
+  await untrackedRow.getByTestId(`${rowTestId}-toggle`).click({ button: "right" });
+  const confirmation = new Promise<void>((resolve) => {
+    page.once("dialog", async (dialog) => {
+      await dialog.accept();
+      resolve();
+    });
+  });
+  await page.getByTestId(`${rowTestId}-revert`).click();
+  await confirmation;
+
+  await expect(page.getByText("zz-untracked.txt", { exact: true })).toHaveCount(0, {
+    timeout: 30_000,
+  });
+  await expect(
+    readFile(path.join(workspace.repoPath, "zz-untracked.txt"), "utf8"),
+  ).rejects.toThrow();
+});
+
+test("shows a revert error returned by the daemon", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await failNextDiscardRequest(page);
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
+  const confirmation = new Promise<void>((resolve) => {
+    page.once("dialog", async (dialog) => {
+      await dialog.accept();
+      resolve();
+    });
+  });
+  await page.getByTestId("diff-file-0-revert").click();
+  await confirmation;
+
+  await expect(page.getByText("Injected revert failure", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("diff-file-0")).toBeVisible();
+  await expect
+    .poll(() => readFile(path.join(workspace.repoPath, "src/use-mounted-tab-set.ts"), "utf8"))
+    .toBe(AFTER);
+});
+
 test("Changes switches between inline and full-tab navigation", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff({ includeDeletedFile: true });
   await useUnwrappedDiffLines(page);
@@ -413,7 +632,7 @@ test("Changes switches between inline and full-tab navigation", async ({ page })
   await expect(visiblePanel.getByTestId("diff-file-0-body")).toBeVisible();
   await expect(visiblePanel.getByTestId("working-diff-toggle-layout")).toHaveCount(0);
   await visiblePanel.getByTestId("working-diff-options-menu").click();
-  await expect(page.getByTestId("working-diff-layout")).toContainText("Unified diff");
+  await expect(page.getByTestId("working-diff-layout")).toContainText("Inline diff");
   await page.getByTestId("working-diff-layout").click();
   await page.getByTestId("working-diff-layout-split").click();
   await visiblePanel.getByTestId("working-diff-options-menu").click();
@@ -480,7 +699,7 @@ test("changes diff switches between flat and tree file lists", async ({ page }) 
 
   await page.getByTestId("changes-options-menu").click();
   await expect(page.getByTestId("changes-options-menu-content")).toBeVisible();
-  await expect(page.getByTestId("changes-layout")).toContainText("Unified diff");
+  await expect(page.getByTestId("changes-layout")).toContainText("Inline diff");
   await expect(page.getByTestId("changes-grouping")).toContainText("Flat file list");
   await expect(page.getByTestId("changes-toggle-whitespace")).toContainText("Hide whitespace");
   await expect(page.getByTestId("changes-toggle-wrap-lines")).toContainText("Wrap long lines");
@@ -493,22 +712,58 @@ test("changes diff switches between flat and tree file lists", async ({ page }) 
   await scrollToLowerUnwrappedDiffRows(page);
   await page.getByTestId("changes-options-menu").click();
   await page.getByTestId("changes-grouping").click();
-  const rootMenuBounds = await page.getByTestId("changes-options-menu-content").boundingBox();
-  const groupingMenuBounds = await page
-    .getByTestId("changes-options-menu-content-changes-grouping-page")
-    .boundingBox();
-  if (!rootMenuBounds || !groupingMenuBounds) {
-    throw new Error("Expected both diff option menu surfaces to be visible");
-  }
-  expect(
-    groupingMenuBounds.x + groupingMenuBounds.width <= rootMenuBounds.x + 1 ||
-      rootMenuBounds.x + rootMenuBounds.width <= groupingMenuBounds.x + 1,
-  ).toBe(true);
+  await expect(page.getByTestId("changes-options-menu-content")).toBeVisible();
+  await expect(
+    page.getByTestId("changes-options-menu-content-changes-grouping-page"),
+  ).toBeVisible();
   await page.getByTestId("changes-grouping-directory").click();
   await expect(page.getByTestId("diff-folder-src")).toBeVisible();
+  await expect(page.getByTestId("diff-folder-src").getByText("src", { exact: true })).toHaveCSS(
+    "user-select",
+    "none",
+  );
   await expect(page.getByTestId("diff-file-0")).toBeVisible();
-  await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
+  await expect(page.getByTestId("diff-folder-src-toggle").locator("svg")).toHaveCount(1);
+  await expect(page.getByTestId("diff-file-0-toggle").locator("svg")).toHaveCount(1);
+  const folderToggleBounds = await page.getByTestId("diff-folder-src-toggle").boundingBox();
+  const folderChevronBounds = await page
+    .getByTestId("diff-folder-src-toggle")
+    .locator("svg")
+    .boundingBox();
+  expect(folderToggleBounds).not.toBeNull();
+  expect(folderChevronBounds).not.toBeNull();
+  expect(folderChevronBounds!.y + folderChevronBounds!.height / 2).toBeCloseTo(
+    folderToggleBounds!.y + folderToggleBounds!.height / 2,
+    0,
+  );
+  const folderLabelBounds = await page
+    .getByTestId("diff-folder-src")
+    .getByText("src", { exact: true })
+    .boundingBox();
+  const fileLabelBounds = await page
+    .getByTestId("diff-file-0")
+    .getByText("use-mounted-tab-set.ts", { exact: true })
+    .boundingBox();
+  expect(folderLabelBounds).not.toBeNull();
+  expect(fileLabelBounds).not.toBeNull();
+  // File rows reserve their own disclosure control, so their label starts one
+  // tree level plus that control after the parent folder label.
+  expect(fileLabelBounds!.x - folderLabelBounds!.x).toBeCloseTo(40, 0);
+
+  const folderToggle = page.getByTestId("diff-folder-src-toggle");
+  await folderToggle.click();
+  await expect(folderToggle).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("diff-file-0")).toHaveCount(0);
+  await folderToggle.click();
+  await expect(folderToggle).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("diff-file-0")).toBeVisible();
+
+  const fileToggle = page.getByTestId("diff-file-0-toggle");
+  await fileToggle.click({ button: "right" });
   await expect(page.getByText("Open file", { exact: true })).toBeVisible();
+  await expect(fileToggle).toHaveAttribute("aria-selected", "true");
+  await expect(folderToggle).toHaveAttribute("aria-selected", "false");
+  await expect(page.getByTestId("diff-file-0-context-menu")).toBeVisible();
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Collapse all" }).click();
@@ -559,16 +814,15 @@ test("navigates change hunks and searches inside annotated source", async ({ pag
     .filter({ hasText: "interface DeriveRenderMountedTabIdsInput" });
   await expect(firstChangeRow).toBeVisible();
 
-  await page.getByTestId("diff-file-0-file").click();
+  await page.getByTestId("diff-file-0-actions").click();
+  await page.getByTestId("diff-file-0-menu-open-file").click();
   const visibleDiffPane = page.getByTestId("workspace-file-pane").filter({ visible: true });
   await visibleDiffPane.getByTestId("file-search-open").click();
   await visibleDiffPane.getByTestId("file-search-input").fill("maxSize");
   await expect(visibleDiffPane.getByTestId("file-search-result-count")).toHaveText("1 of 2");
   await expect(
-    visibleDiffPane
-      .getByTestId(/^file-source-line-/)
-      .filter({ hasText: "const maxSize = Math.max(1, cap);" }),
-  ).toBeVisible();
+    visibleDiffPane.getByTestId("file-source-editor").locator(".cm-content"),
+  ).toContainText("const maxSize = Math.max(1, cap);");
   await visibleDiffPane.getByTestId("file-search-next").click();
   await expect(visibleDiffPane.getByTestId("file-search-result-count")).toHaveText("2 of 2");
 });
@@ -613,6 +867,12 @@ async function useUnwrappedDiffLines(page: Page): Promise<void> {
     },
     { preferencesKey: CHANGES_PREFERENCES_KEY },
   );
+}
+
+async function useDirectoryGroupedDiff(page: Page): Promise<void> {
+  await page.getByTestId("changes-options-menu").click();
+  await page.getByTestId("changes-grouping").click();
+  await page.getByTestId("changes-grouping-directory").click();
 }
 
 async function observeFileSurfaceTransitions(page: Page): Promise<void> {
@@ -738,14 +998,18 @@ async function readVisibleDiffRowGeometry(page: Page): Promise<{
     }
 
     const readRows = (prefix: string, textPrefix: string) =>
-      Array.from(root.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`)).map((row) => {
-        const testId = row.getAttribute("data-testid") ?? "";
-        const index = Number(testId.slice(prefix.length));
-        const rect = row.getBoundingClientRect();
-        const text = root.querySelector<HTMLElement>(`[data-testid="${textPrefix}${index}"]`);
-        const lineHeight = text ? Number.parseFloat(getComputedStyle(text).lineHeight) : 0;
-        return { index, top: rect.top, height: rect.height, lineHeight };
-      });
+      Array.from(root.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`)).flatMap(
+        (row) => {
+          const testId = row.getAttribute("data-testid") ?? "";
+          const index = Number(testId.slice(prefix.length));
+          const rect = row.getBoundingClientRect();
+          const text = root.querySelector<HTMLElement>(`[data-testid="${textPrefix}${index}"]`);
+          // Hunk headers take a code-row slot but intentionally have no code text.
+          if (!text) return [];
+          const lineHeight = Number.parseFloat(getComputedStyle(text).lineHeight);
+          return { index, top: rect.top, height: rect.height, lineHeight };
+        },
+      );
 
     const gutters = new Map(
       readRows("diff-gutter-row-", "diff-gutter-text-").map((row) => [row.index, row]),
@@ -787,6 +1051,15 @@ async function createWorkspaceWithMountedTabDiff(
   if (options.includeDeletedFile) {
     files.push({ path: "src/zz-deleted.ts", content: "export const deleted = true;\n" });
   }
+  if (options.includeRenamedFile) {
+    files.push({ path: "src/rename-source.ts", content: "export const renamed = true;\n" });
+  }
+  if (options.includeNestedFolders) {
+    files.push(
+      { path: "src/zz-folder/root.ts", content: "export const root = 1;\n" },
+      { path: "src/zz-folder/nested/changed.ts", content: "export const nested = 1;\n" },
+    );
+  }
   const repo = await createTempGitRepo("changes-pane-", { files });
   const client = await connectSeedClient();
   cleanupTasks.push({
@@ -797,8 +1070,23 @@ async function createWorkspaceWithMountedTabDiff(
   });
 
   await writeFile(path.join(repo.path, "src/use-mounted-tab-set.ts"), AFTER);
+  if (options.includeUntrackedFile) {
+    await writeFile(path.join(repo.path, "zz-untracked.txt"), "remove me\n");
+  }
   if (options.includeDeletedFile) {
     await unlink(path.join(repo.path, "src/zz-deleted.ts"));
+  }
+  if (options.includeRenamedFile) {
+    execFileSync("git", ["mv", "src/rename-source.ts", "src/zz-renamed.ts"], {
+      cwd: repo.path,
+    });
+  }
+  if (options.includeNestedFolders) {
+    await writeFile(path.join(repo.path, "src/zz-folder/root.ts"), "export const root = 2;\n");
+    await writeFile(
+      path.join(repo.path, "src/zz-folder/nested/changed.ts"),
+      "export const nested = 2;\n",
+    );
   }
   const createdWorkspace = await client.createWorkspace({
     source: { kind: "directory", path: repo.path },

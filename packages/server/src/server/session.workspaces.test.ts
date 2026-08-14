@@ -54,10 +54,8 @@ import {
   asAgentManager,
   asAgentStorage,
   asDownloadTokenStore,
-  asPushTokenStore,
-  asChatService,
+  asPushNotifications,
   asScheduleService,
-  asLoopService,
   asCheckoutDiffManager,
   asDaemonConfigStore,
   asTerminalManager,
@@ -673,7 +671,7 @@ function createSessionForWorkspaceTests(
       onWorkspaceRecovered: options.onWorkspaceRecovered,
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
-      pushTokenStore: asPushTokenStore(),
+      pushNotifications: asPushNotifications(),
       paseoHome: options.paseoHome ?? "/tmp/paseo-test",
       worktreesRoot: options.worktreesRoot,
       agentManager,
@@ -724,9 +722,7 @@ function createSessionForWorkspaceTests(
       },
       workspaceRegistry,
       filesystem: { isDirectory: async () => true },
-      chatService: asChatService(),
       scheduleService: asScheduleService(),
-      loopService: asLoopService(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },
@@ -982,15 +978,13 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
         onMessage: (message) => emitted.push(message),
         logger: asSessionLogger(logger),
         downloadTokenStore: asDownloadTokenStore(),
-        pushTokenStore: asPushTokenStore(),
+        pushNotifications: asPushNotifications(),
         paseoHome: path.join(workdir, "paseo-home"),
         agentManager,
         agentStorage,
         projectRegistry,
         workspaceRegistry,
-        chatService: asChatService(),
         scheduleService: asScheduleService(),
-        loopService: asLoopService(),
         checkoutDiffManager: asCheckoutDiffManager({
           subscribe: async () => ({
             initial: { cwd: child, files: [], error: null },
@@ -1347,15 +1341,13 @@ test("create_agent_request launches from an exact subdirectory in a created work
       onMessage: (message) => emitted.push(message),
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
-      pushTokenStore: asPushTokenStore(),
+      pushNotifications: asPushNotifications(),
       paseoHome: path.join(workdir, "paseo-home"),
       agentManager,
       agentStorage,
       projectRegistry,
       workspaceRegistry,
-      chatService: asChatService(),
       scheduleService: asScheduleService(),
-      loopService: asLoopService(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: child, files: [], error: null },
@@ -1522,15 +1514,13 @@ test("the first agent automatically names a setup-created worktree in Chinese", 
         onMessage: vi.fn(),
         logger: asSessionLogger(logger),
         downloadTokenStore: asDownloadTokenStore(),
-        pushTokenStore: asPushTokenStore(),
+        pushNotifications: asPushNotifications(),
         paseoHome: path.join(workdir, "paseo-home"),
         agentManager,
         agentStorage,
         projectRegistry,
         workspaceRegistry,
-        chatService: asChatService(),
         scheduleService: asScheduleService(),
-        loopService: asLoopService(),
         checkoutDiffManager: asCheckoutDiffManager({
           subscribe: async () => ({
             initial: { cwd, files: [], error: null },
@@ -1814,7 +1804,7 @@ test("archive emits an authoritative agent_update upsert for subscribed clients"
       onMessage: (message) => emitted.push(message),
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
-      pushTokenStore: asPushTokenStore(),
+      pushNotifications: asPushNotifications(),
       paseoHome: "/tmp/paseo-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
@@ -1881,9 +1871,7 @@ test("archive emits an authoritative agent_update upsert for subscribed clients"
           remove: async () => {},
         };
       })(),
-      chatService: asChatService(),
       scheduleService: asScheduleService(),
-      loopService: asLoopService(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: REPO_CWD, files: [], error: null },
@@ -2181,7 +2169,7 @@ test("close_items_request archives agents and kills terminals in one batch", asy
       onMessage: (message) => emitted.push(message),
       logger: asSessionLogger(sessionLogger),
       downloadTokenStore: asDownloadTokenStore(),
-      pushTokenStore: asPushTokenStore(),
+      pushNotifications: asPushNotifications(),
       paseoHome: "/tmp/paseo-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
@@ -2243,9 +2231,7 @@ test("close_items_request archives agents and kills terminals in one batch", asy
           remove: async () => {},
         };
       })(),
-      chatService: asChatService(),
       scheduleService: asScheduleService(),
-      loopService: asLoopService(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },
@@ -2351,7 +2337,7 @@ test("close_items_request archives stored agents that are not currently loaded",
       onMessage: (message) => emitted.push(message),
       logger: asSessionLogger(sessionLogger),
       downloadTokenStore: asDownloadTokenStore(),
-      pushTokenStore: asPushTokenStore(),
+      pushNotifications: asPushNotifications(),
       paseoHome: "/tmp/paseo-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
@@ -2430,9 +2416,7 @@ test("close_items_request archives stored agents that are not currently loaded",
           remove: async () => {},
         };
       })(),
-      chatService: asChatService(),
       scheduleService: asScheduleService(),
-      loopService: asLoopService(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },
@@ -2512,7 +2496,7 @@ test("close_items_request continues after an archive failure", async () => {
       onMessage: (message) => emitted.push(message),
       logger: asSessionLogger(sessionLogger),
       downloadTokenStore: asDownloadTokenStore(),
-      pushTokenStore: asPushTokenStore(),
+      pushNotifications: asPushNotifications(),
       paseoHome: "/tmp/paseo-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
@@ -2579,9 +2563,7 @@ test("close_items_request continues after an archive failure", async () => {
           remove: async () => {},
         };
       })(),
-      chatService: asChatService(),
       scheduleService: asScheduleService(),
-      loopService: asLoopService(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },
@@ -3775,7 +3757,7 @@ test("workspace update stream keeps persisted workspace visible after agents sto
       onMessage: (message) => emitted.push(message),
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
-      pushTokenStore: asPushTokenStore(),
+      pushNotifications: asPushNotifications(),
       paseoHome: "/tmp/paseo-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
@@ -3825,9 +3807,7 @@ test("workspace update stream keeps persisted workspace visible after agents sto
         archive: async () => {},
         remove: async () => {},
       },
-      chatService: asChatService(),
       scheduleService: asScheduleService(),
-      loopService: asLoopService(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },
