@@ -89,4 +89,5 @@ packages/protocol/src/generated/validation/*.aot.ts
 /artifacts
 packages/desktop/.cache/
 packages/desktop/src-tauri/resources/managed-runtime/
+packages/app/modules/paseo-native-trace/android/.gradle/
 app.json
