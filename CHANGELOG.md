@@ -1,54 +1,70 @@
 # Changelog
 
-## 0.4.0 - 2026-08-13
+## 1.5.0 - 2026-08-14
 
-### Breaking
+### 破坏性变更（官方）
 
-- Removed `paseo chat` and `paseo loop` ([#3053](https://github.com/getpaseo/paseo/pull/3053))
+- 移除 `paseo chat` 与 `paseo loop`，本地版本随上游统一使用 Schedules ([#3053](https://github.com/getpaseo/paseo/pull/3053))
 
-### Added
+### 官方新增
 
-- Added host-wide agent profiles for reusable provider, model, mode, thinking, and feature settings ([#3208](https://github.com/getpaseo/paseo/pull/3208))
-- Added workspace file search to Cmd/Ctrl+P ([#3059](https://github.com/getpaseo/paseo/pull/3059))
-- Added file and folder actions to Files and Changes ([#3027](https://github.com/getpaseo/paseo/pull/3027) by [@nikuscs](https://github.com/nikuscs))
-- Added interactive Mermaid diagrams to chats and Markdown previews ([#2306](https://github.com/getpaseo/paseo/pull/2306) by [@dmeledon](https://github.com/dmeledon))
-- Added live task progress above the composer and in the timeline ([#3227](https://github.com/getpaseo/paseo/pull/3227))
-- Added a model setting for generated workspace titles, branch names, commits, and pull request drafts ([#3215](https://github.com/getpaseo/paseo/pull/3215))
-- Added the supported `@getpaseo/client` TypeScript SDK ([#3141](https://github.com/getpaseo/paseo/pull/3141))
-- Added provider installation diagnostics to the CLI ([#3243](https://github.com/getpaseo/paseo/pull/3243))
-- Added workspace rename to the CLI ([#3209](https://github.com/getpaseo/paseo/pull/3209) by [@martinhanzik](https://github.com/martinhanzik))
+- 新增主机级 Agent Profiles，可复用 Provider、模型、模式、思考等级与功能配置 ([#3208](https://github.com/getpaseo/paseo/pull/3208))
+- 新增 Cmd/Ctrl+P 工作区文件搜索 ([#3059](https://github.com/getpaseo/paseo/pull/3059))
+- 新增 Files 与 Changes 的文件、目录上下文操作 ([#3027](https://github.com/getpaseo/paseo/pull/3027) by [@nikuscs](https://github.com/nikuscs))
+- 新增聊天和 Markdown 预览中的可交互 Mermaid 图表 ([#2306](https://github.com/getpaseo/paseo/pull/2306) by [@dmeledon](https://github.com/dmeledon))
+- 新增输入框上方和时间线中的实时任务进度 ([#3227](https://github.com/getpaseo/paseo/pull/3227))
+- 新增工作区标题、分支名、提交信息与 PR 草稿的生成模型设置 ([#3215](https://github.com/getpaseo/paseo/pull/3215))
+- 新增受支持的 `@getpaseo/client` TypeScript SDK ([#3141](https://github.com/getpaseo/paseo/pull/3141))
+- 新增 CLI Provider 安装诊断 ([#3243](https://github.com/getpaseo/paseo/pull/3243))
+- 新增 CLI 工作区重命名 ([#3209](https://github.com/getpaseo/paseo/pull/3209) by [@martinhanzik](https://github.com/martinhanzik))
+- 新增 Hub 引导式配置流程 ([#3318](https://github.com/getpaseo/paseo/pull/3318))
+- 新增 Hub 多文件工作流部署 ([#3128](https://github.com/getpaseo/paseo/pull/3128))
 
-### Improved
+### 官方改进
 
-- Added a centered reading layout and formatted YAML front matter to Markdown previews ([#3240](https://github.com/getpaseo/paseo/pull/3240))
-- Added sidebar grouping to the Command Center ([#3063](https://github.com/getpaseo/paseo/pull/3063) by [@cleiter](https://github.com/cleiter))
-- Added every built-in theme to theme shortcuts ([#3214](https://github.com/getpaseo/paseo/pull/3214))
-- Removed periodic Git polling for idle workspaces ([#3323](https://github.com/getpaseo/paseo/pull/3323))
-- Set provider catalog refreshes to a configurable two-minute deadline ([#3322](https://github.com/getpaseo/paseo/pull/3322))
+- 为 Markdown 预览新增居中阅读布局 ([#3240](https://github.com/getpaseo/paseo/pull/3240))
+- 在 Markdown 预览中格式化 YAML front matter ([#3240](https://github.com/getpaseo/paseo/pull/3240))
+- 为 Command Center 新增侧边栏分组 ([#3063](https://github.com/getpaseo/paseo/pull/3063) by [@cleiter](https://github.com/cleiter))
+- 将全部内置主题加入主题快捷方式 ([#3214](https://github.com/getpaseo/paseo/pull/3214))
+- 移除空闲工作区的周期性 Git 轮询 ([#3323](https://github.com/getpaseo/paseo/pull/3323))
+- 将 Provider Catalog 刷新超时设为可配置的两分钟期限 ([#3322](https://github.com/getpaseo/paseo/pull/3322))
 
-### Fixed
+### 本地增强与官方差异
 
-- Fixed terminal sessions being lost after host sleep or daemon worker stalls ([#3235](https://github.com/getpaseo/paseo/pull/3235), [#3263](https://github.com/getpaseo/paseo/pull/3263))
-- Fixed daemon hang when archiving a workspace ([#3107](https://github.com/getpaseo/paseo/pull/3107))
-- Fixed New Workspace crash on Android when projects span multiple hosts ([#3241](https://github.com/getpaseo/paseo/pull/3241))
-- Fixed provider cache exhausting Android local storage ([#3234](https://github.com/getpaseo/paseo/pull/3234))
-- Fixed dictation recordings being lost during connection interruptions ([#3159](https://github.com/getpaseo/paseo/pull/3159))
-- Fixed new workspaces reusing an existing worktree ([#3224](https://github.com/getpaseo/paseo/pull/3224))
-- Fixed new worktrees ignoring the setup command saved in Project Settings ([#3233](https://github.com/getpaseo/paseo/pull/3233))
-- Fixed new worktrees becoming dirty when the selected base contained a different `paseo.json` ([#3311](https://github.com/getpaseo/paseo/pull/3311))
-- Fixed removed hosts continuing to receive push notifications ([#3176](https://github.com/getpaseo/paseo/pull/3176))
-- Fixed delegated-agent notifications stopping after permission prompts or workspace closure ([#3177](https://github.com/getpaseo/paseo/pull/3177), [#3192](https://github.com/getpaseo/paseo/pull/3192) by [@thomasvan](https://github.com/thomasvan), [@wilgon456](https://github.com/wilgon456))
-- Fixed OMP agent startup when model catalogs exceed the protocol-v1 frame limit ([#3184](https://github.com/getpaseo/paseo/pull/3184) by [@pi3123](https://github.com/pi3123))
-- Fixed OpenCode models being unable to return to their default variant ([#3281](https://github.com/getpaseo/paseo/pull/3281))
-- Fixed completed Codex subagents remaining marked active ([#3188](https://github.com/getpaseo/paseo/pull/3188) by [@Strainy](https://github.com/Strainy))
-- Fixed Codex compaction leaving turns marked as working ([#3211](https://github.com/getpaseo/paseo/pull/3211) by [@edihasaj](https://github.com/edihasaj))
-- Fixed Cursor usage with current Cursor logins ([#2704](https://github.com/getpaseo/paseo/pull/2704) by [@QuteSaltyFish](https://github.com/QuteSaltyFish))
-- Fixed SVG project icons rendering as blank on mobile ([#2579](https://github.com/getpaseo/paseo/pull/2579) by [@colonelpanic8](https://github.com/colonelpanic8))
-- Fixed crash when persisted cache was incompatible ([#3289](https://github.com/getpaseo/paseo/pull/3289))
-- Fixed open delegated agents being archived with their parent ([#3279](https://github.com/getpaseo/paseo/pull/3279))
-- Fixed agent creation when profiles carried modes unsupported by the selected provider ([#3331](https://github.com/getpaseo/paseo/pull/3331))
-- Fixed Claude agents waiting on Paseo's ten-minute MCP timeout ([#3315](https://github.com/getpaseo/paseo/pull/3315))
-- Fixed Copy resume command for Hermes agents ([#3300](https://github.com/getpaseo/paseo/pull/3300) by [@desmond-rai](https://github.com/desmond-rai))
+- 保留 Changes 的行内评审、源码查看和 hunk 导航，官方文件操作不会替代本地评审入口 ([4e10594b5](https://github.com/MinLeeV5/paseo/commit/4e10594b5))
+- 保留文件已评审状态和工作区级折叠分组，切换 diff 与源码时维持评审上下文 ([4e10594b5](https://github.com/MinLeeV5/paseo/commit/4e10594b5))
+- 保留可点击的 diff 概览标记，便于在长变更中定位 hunk ([b4f1dd681](https://github.com/MinLeeV5/paseo/commit/b4f1dd681))
+- 将已提交差异的聚合展示预算提高到 20 MB，避免大型提交无法评审 ([17d96785b](https://github.com/MinLeeV5/paseo/commit/17d96785b))
+- 为变更文件补充 Mermaid 文件预览与全屏查看，扩展官方聊天和 Markdown 图表能力 ([21a3ce0a6](https://github.com/MinLeeV5/paseo/commit/21a3ce0a6))
+- 新增 Agent Goal 归档和会话变更追踪，补足官方任务进度之外的长期工作上下文 ([0ac8ff7c4](https://github.com/MinLeeV5/paseo/commit/0ac8ff7c4))
+- 同步自动命名的 worktree 目录，减少 Agent 名称与实际目录不一致 ([e75553d5](https://github.com/MinLeeV5/paseo/commit/e75553d5))
+- 新增桌面端全局自定义背景，保留本地桌面个性化能力 ([c4b99d391](https://github.com/MinLeeV5/paseo/commit/c4b99d391))
+- 为桌面更新补充下载进度与安装交接操作，减少更新过程中的状态不确定性 ([501ce389d](https://github.com/MinLeeV5/paseo/commit/501ce389d), [7a26a1cdf](https://github.com/MinLeeV5/paseo/commit/7a26a1cdf))
+- 忽略 Native Trace Android Gradle 状态，避免本地构建缓存污染工作树 ([0d651015b](https://github.com/MinLeeV5/paseo/commit/0d651015b))
+
+### 官方修复
+
+- 修复主机睡眠或 daemon worker 停滞后终端会话丢失 ([#3235](https://github.com/getpaseo/paseo/pull/3235), [#3263](https://github.com/getpaseo/paseo/pull/3263))
+- 修复归档工作区时 daemon 挂起 ([#3107](https://github.com/getpaseo/paseo/pull/3107))
+- 修复 Android 上跨多个主机项目的新建工作区崩溃 ([#3241](https://github.com/getpaseo/paseo/pull/3241))
+- 修复 Provider 缓存耗尽 Android 本地存储 ([#3234](https://github.com/getpaseo/paseo/pull/3234))
+- 修复连接中断时丢失听写录音 ([#3159](https://github.com/getpaseo/paseo/pull/3159))
+- 修复新工作区复用已有 worktree ([#3224](https://github.com/getpaseo/paseo/pull/3224))
+- 修复新 worktree 忽略项目设置中的 setup 命令 ([#3233](https://github.com/getpaseo/paseo/pull/3233))
+- 修复选定基线含不同 `paseo.json` 时新 worktree 变脏 ([#3311](https://github.com/getpaseo/paseo/pull/3311))
+- 修复移除主机后仍接收推送通知 ([#3176](https://github.com/getpaseo/paseo/pull/3176))
+- 修复权限提示或工作区关闭后委派 Agent 通知停止 ([#3177](https://github.com/getpaseo/paseo/pull/3177), [#3192](https://github.com/getpaseo/paseo/pull/3192) by [@thomasvan](https://github.com/thomasvan), [@wilgon456](https://github.com/wilgon456))
+- 修复模型目录超过 protocol-v1 帧限制时 OMP Agent 无法启动 ([#3184](https://github.com/getpaseo/paseo/pull/3184) by [@pi3123](https://github.com/pi3123))
+- 修复 OpenCode 模型无法恢复默认 variant ([#3281](https://github.com/getpaseo/paseo/pull/3281))
+- 修复已完成 Codex 子 Agent 仍显示为活动状态 ([#3188](https://github.com/getpaseo/paseo/pull/3188) by [@Strainy](https://github.com/Strainy))
+- 修复 Codex compaction 后 turn 持续显示工作中 ([#3211](https://github.com/getpaseo/paseo/pull/3211) by [@edihasaj](https://github.com/edihasaj))
+- 修复当前 Cursor 登录下的用量读取 ([#2704](https://github.com/getpaseo/paseo/pull/2704) by [@QuteSaltyFish](https://github.com/QuteSaltyFish))
+- 修复 SVG 项目图标在移动端显示为空白 ([#2579](https://github.com/getpaseo/paseo/pull/2579) by [@colonelpanic8](https://github.com/colonelpanic8))
+- 修复持久化缓存不兼容时崩溃 ([#3289](https://github.com/getpaseo/paseo/pull/3289))
+- 修复归档父 Agent 时错误归档仍打开的委派 Agent ([#3279](https://github.com/getpaseo/paseo/pull/3279))
+- 修复 Profile 携带不受当前 Provider 支持的模式时创建 Agent 失败 ([#3331](https://github.com/getpaseo/paseo/pull/3331))
+- 修复 Claude Agent 等待 Paseo 十分钟 MCP 超时 ([#3315](https://github.com/getpaseo/paseo/pull/3315))
+- 修复 Hermes 的复制恢复命令 ([#3300](https://github.com/getpaseo/paseo/pull/3300) by [@desmond-rai](https://github.com/desmond-rai))
 
 ## 0.3.1 - 2026-08-09
 
