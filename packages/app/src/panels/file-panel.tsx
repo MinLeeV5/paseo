@@ -30,7 +30,8 @@ function useFilePanelDescriptor(target: { kind: "file"; path: string }) {
 
 function FilePanel() {
   const { t } = useTranslation();
-  const { serverId, workspaceId, tabId, target, fileNavigationRevision } = usePaneContext();
+  const { serverId, workspaceId, tabId, target, fileNavigationRevision, fileNavigationReveal } =
+    usePaneContext();
   const { isInteractive } = usePaneFocus();
   const workspaceDirectory = useWorkspaceDirectory(serverId, workspaceId);
   invariant(target.kind === "file", "FilePanel requires file target");
@@ -47,6 +48,7 @@ function FilePanel() {
       workspaceRoot={workspaceDirectory}
       location={target}
       navigationRevision={fileNavigationRevision ?? 0}
+      navigationReveal={fileNavigationReveal}
       isPaneFocused={isInteractive}
       searchHandlerId={`file-search:${tabId}`}
     />

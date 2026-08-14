@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filePreviewRenderKind,
-  getDefaultFilePaneMarkdownMode,
+  getDefaultFilePanePreviewMode,
   getFilePaneContentRenderMode,
   getFilePaneRenderMode,
   isRenderedMarkdownFile,
@@ -65,9 +65,45 @@ describe("getFilePaneRenderMode", () => {
 });
 
 describe("getFilePaneContentRenderMode", () => {
-  it("defaults changed files to source while regular files default to preview", () => {
-    expect(getDefaultFilePaneMarkdownMode(true)).toBe("source");
-    expect(getDefaultFilePaneMarkdownMode(false)).toBe("preview");
+  it("defaults changed Markdown and HTML to preview while code stays in source", () => {
+    expect(
+      getDefaultFilePanePreviewMode({
+        filePath: "README.md",
+        hasDiffContext: true,
+        forceSource: false,
+      }),
+    ).toBe("preview");
+    expect(
+      getDefaultFilePanePreviewMode({
+        filePath: "preview.html",
+        hasDiffContext: true,
+        forceSource: false,
+      }),
+    ).toBe("preview");
+    expect(
+      getDefaultFilePanePreviewMode({
+        filePath: "src/index.ts",
+        hasDiffContext: true,
+        forceSource: false,
+      }),
+    ).toBe("source");
+    expect(
+      getDefaultFilePanePreviewMode({
+        filePath: "src/index.ts",
+        hasDiffContext: false,
+        forceSource: false,
+      }),
+    ).toBe("preview");
+  });
+
+  it("forces source when the open request explicitly reveals a change", () => {
+    expect(
+      getDefaultFilePanePreviewMode({
+        filePath: "README.md",
+        hasDiffContext: true,
+        forceSource: true,
+      }),
+    ).toBe("source");
   });
 
   it("forces previewable text files through code rendering when diff context is present", () => {

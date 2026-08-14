@@ -17,7 +17,10 @@ import {
   resolveDiffLayout,
   SharedDiffView,
 } from "@/git/diff-pane";
+import { createDiffFileSourceTarget } from "@/git/diff-file-open";
+import { buildSourceDiffHunkNavigationTargets } from "@/git/diff-navigation";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
+import type { ParsedDiffFile } from "@/git/use-diff-query";
 import { useCommitDiffFiles } from "@/git/use-diff-files";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
@@ -51,6 +54,14 @@ function useDiffPanelPreferences() {
   const toggleLayout = useCallback(() => {
     void updatePreferences({ layout: preferences.layout === "unified" ? "split" : "unified" });
   }, [preferences.layout, updatePreferences]);
+  const setLayout = useCallback(
+    (layout: "unified" | "split") => {
+      if (layout !== preferences.layout) {
+        void updatePreferences({ layout });
+      }
+    },
+    [preferences.layout, updatePreferences],
+  );
   const toggleWrapLines = useCallback(() => {
     void updatePreferences({ wrapLines: !preferences.wrapLines });
   }, [preferences.wrapLines, updatePreferences]);
@@ -63,6 +74,7 @@ function useDiffPanelPreferences() {
     isCompact,
     canUseSplitLayout,
     displayPreferences,
+    setLayout,
     toggleLayout,
     toggleWrapLines,
     toggleHideWhitespace,
@@ -151,7 +163,7 @@ function WorkingDiffBody({
 function WorkingDiffPanel() {
   const { t } = useTranslation();
   const toast = useToast();
-  const { serverId, workspaceId, tabId, target } = usePaneContext();
+  const { serverId, workspaceId, tabId, target, openFileInWorkspace } = usePaneContext();
   const openWorkspaceTabFocused = useWorkspaceLayoutStore((state) => state.openTabFocused);
   const cwd = useWorkspaceDirectory(serverId, workspaceId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -215,6 +227,26 @@ function WorkingDiffPanel() {
     },
     [openWorkspaceTabFocused, persistenceKey],
   );
+  const viewSource = useCallback(
+    (file: ParsedDiffFile) => {
+      if (!cwd) {
+        return;
+      }
+      const firstChange = buildSourceDiffHunkNavigationTargets(file)[0];
+      openFileInWorkspace(
+        createDiffFileSourceTarget({
+          filePath: file.path,
+          diffContext: {
+            cwd,
+            mode: "uncommitted",
+            ignoreWhitespace: panelPreferences.preferences.hideWhitespace,
+          },
+          ...(firstChange ? { lineNumber: firstChange.lineNumber } : {}),
+        }).request,
+      );
+    },
+    [cwd, openFileInWorkspace, panelPreferences.preferences.hideWhitespace],
+  );
   const mode = useMemo(
     () => ({
       kind: "working_tab" as const,
@@ -222,10 +254,18 @@ function WorkingDiffPanel() {
       reviewActions: workingDiff.reviewActions,
       focusPath: target.focusPath,
       focusRequestId: target.focusRequestId,
+      onViewSource: viewSource,
       onOpenFile: openFile,
       onExpandedPathsChange: setExpandedPaths,
     }),
-    [expandedPaths, openFile, target.focusPath, target.focusRequestId, workingDiff.reviewActions],
+    [
+      expandedPaths,
+      openFile,
+      target.focusPath,
+      target.focusRequestId,
+      viewSource,
+      workingDiff.reviewActions,
+    ],
   );
 
   const baseRefLabel = workingDiff.baseRef?.replace(/^refs\/(heads|remotes)\//, "") ?? "";
@@ -240,14 +280,6 @@ function WorkingDiffPanel() {
           onSelectBase={workingDiff.selectBase}
         />
         <View style={styles.toolbarActions} testID="working-diff-toolbar">
-          {panelPreferences.canUseSplitLayout ? (
-            <DiffLayoutToggle
-              layout={panelPreferences.preferences.layout}
-              isMobile={panelPreferences.isCompact}
-              testID="working-diff-toggle-layout"
-              onToggle={panelPreferences.toggleLayout}
-            />
-          ) : null}
           {workingDiff.files.length > 0 ? (
             <DiffFilesToolbar
               allFileDiffsExpanded={allFilesExpanded}
@@ -260,9 +292,13 @@ function WorkingDiffPanel() {
             hideWhitespace={panelPreferences.preferences.hideWhitespace}
             isMobile={panelPreferences.isCompact}
             isRefreshing={isRefreshing}
+            layout={
+              panelPreferences.canUseSplitLayout ? panelPreferences.preferences.layout : undefined
+            }
             refreshSupported={refreshSupported}
             testIDPrefix="working-diff"
             wrapLines={panelPreferences.preferences.wrapLines}
+            onLayoutChange={panelPreferences.setLayout}
             onRefresh={refresh}
             onToggleHideWhitespace={panelPreferences.toggleHideWhitespace}
             onToggleWrapLines={panelPreferences.toggleWrapLines}

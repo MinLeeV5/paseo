@@ -81,6 +81,10 @@ export type SplitDiffRow =
       right: SplitDiffDisplayLine | null;
     };
 
+export interface DiffDisplayLineOptions {
+  includeHunkHeaders?: boolean;
+}
+
 function toSplitDisplayLine(cell: NumberedDiffCell | null): SplitDiffDisplayLine | null {
   if (!cell) {
     return null;
@@ -233,27 +237,44 @@ function buildNumberedCell(input: {
   };
 }
 
-export function buildUnifiedDiffLines(file: ParsedDiffFile): UnifiedDiffDisplayLine[] {
+export function buildUnifiedDiffLines(
+  file: ParsedDiffFile,
+  options: DiffDisplayLineOptions = {},
+): UnifiedDiffDisplayLine[] {
+  const includeHunkHeaders = options.includeHunkHeaders !== false;
   return buildNumberedDiffHunks(file).flatMap((hunk) =>
-    hunk.lines.map((numberedLine) => ({
-      key: numberedLine.key,
-      line: numberedLine.line,
-      lineNumber: numberedLine.unifiedCell?.lineNumber ?? null,
-      sourceLineNumber: numberedLine.line.type === "header" ? hunk.sourceLineNumber : null,
-      reviewTarget: numberedLine.unifiedCell ? toReviewTarget(numberedLine.unifiedCell) : null,
-    })),
+    hunk.lines.flatMap((numberedLine) => {
+      if (!includeHunkHeaders && numberedLine.line.type === "header") {
+        return [];
+      }
+      return [
+        {
+          key: numberedLine.key,
+          line: numberedLine.line,
+          lineNumber: numberedLine.unifiedCell?.lineNumber ?? null,
+          sourceLineNumber: numberedLine.line.type === "header" ? hunk.sourceLineNumber : null,
+          reviewTarget: numberedLine.unifiedCell ? toReviewTarget(numberedLine.unifiedCell) : null,
+        },
+      ];
+    }),
   );
 }
 
-export function buildSplitDiffRows(file: ParsedDiffFile): SplitDiffRow[] {
+export function buildSplitDiffRows(
+  file: ParsedDiffFile,
+  options: DiffDisplayLineOptions = {},
+): SplitDiffRow[] {
   const rows: SplitDiffRow[] = [];
+  const includeHunkHeaders = options.includeHunkHeaders !== false;
 
   for (const hunk of buildNumberedDiffHunks(file)) {
-    rows.push({
-      kind: "header",
-      content: hunk.hunkHeader,
-      sourceLineNumber: hunk.sourceLineNumber,
-    });
+    if (includeHunkHeaders) {
+      rows.push({
+        kind: "header",
+        content: hunk.hunkHeader,
+        sourceLineNumber: hunk.sourceLineNumber,
+      });
+    }
 
     let pendingRemovals: NumberedDiffCell[] = [];
     let pendingAdditions: NumberedDiffCell[] = [];

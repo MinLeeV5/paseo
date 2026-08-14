@@ -200,7 +200,12 @@ import {
   normalizeWorkspaceFileLocation,
   type WorkspaceFileLocation,
   type WorkspaceFileOpenRequest,
+  type WorkspaceFileReveal,
 } from "@/workspace/file-open";
+import {
+  advanceWorkspaceFileNavigation,
+  type WorkspaceFileNavigationState,
+} from "@/workspace/file-navigation";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 
@@ -316,17 +321,22 @@ function decodeSegment(value: string): string {
 function openExplorerWorkspaceFileRequest(input: {
   request: WorkspaceFileOpenRequest;
   sourcePaneId?: string;
-  openMain: (location: WorkspaceFileLocation) => void;
-  openSide: (input: { location: WorkspaceFileLocation; sourcePaneId?: string }) => void;
+  openMain: (location: WorkspaceFileLocation, options?: { reveal?: WorkspaceFileReveal }) => void;
+  openSide: (input: {
+    location: WorkspaceFileLocation;
+    sourcePaneId?: string;
+    reveal?: WorkspaceFileReveal;
+  }) => void;
 }) {
   if (input.request.disposition === "side") {
     input.openSide({
       location: input.request.location,
       sourcePaneId: input.sourcePaneId,
+      reveal: input.request.reveal,
     });
     return;
   }
-  input.openMain(input.request.location);
+  input.openMain(input.request.location, { reveal: input.request.reveal });
 }
 
 function getWorkspacePaneSourceId(paneState: WorkspacePaneState): string | undefined {
@@ -1809,13 +1819,13 @@ function WorkspaceScreenContent({
   );
   // File targets stay identity-stable so the same path reuses its tab. Keep navigation
   // requests separate so clicking an unchanged path:line can still recenter the pane.
-  const [fileNavigationRevisionByTabId, setFileNavigationRevisionByTabId] = useState<
-    Record<string, number>
+  const [fileNavigationByTabId, setFileNavigationByTabId] = useState<
+    Record<string, WorkspaceFileNavigationState>
   >({});
-  const requestFileNavigation = useCallback((tabId: string) => {
-    setFileNavigationRevisionByTabId((current) => ({
+  const requestFileNavigation = useCallback((tabId: string, reveal?: WorkspaceFileReveal) => {
+    setFileNavigationByTabId((current) => ({
       ...current,
-      [tabId]: (current[tabId] ?? 0) + 1,
+      [tabId]: advanceWorkspaceFileNavigation(current[tabId], reveal),
     }));
   }, []);
   const focusWorkspacePane = useWorkspaceLayoutStore((state) => state.focusPane);
@@ -2363,7 +2373,10 @@ function WorkspaceScreenContent({
   );
 
   const handleOpenFileFromChat = useCallback(
-    (location: WorkspaceFileLocation, options?: { parentTabId?: string | null }) => {
+    (
+      location: WorkspaceFileLocation,
+      options?: { parentTabId?: string | null; reveal?: WorkspaceFileReveal },
+    ) => {
       const normalizedLocation = normalizeWorkspaceFileLocation(location);
       if (!normalizedLocation) {
         return;
@@ -2379,7 +2392,7 @@ function WorkspaceScreenContent({
         ? openWorkspaceChildTabFocused(persistenceKey, target, options.parentTabId)
         : openWorkspaceTabFocused(persistenceKey, target);
       if (tabId) {
-        requestFileNavigation(tabId);
+        requestFileNavigation(tabId, options?.reveal);
         navigateToTabId(tabId);
       }
     },
@@ -2398,13 +2411,17 @@ function WorkspaceScreenContent({
       location: WorkspaceFileLocation;
       sourcePaneId?: string;
       parentTabId?: string | null;
+      reveal?: WorkspaceFileReveal;
     }) => {
       const location = normalizeWorkspaceFileLocation(input.location);
       if (!location) {
         return;
       }
       if (!persistenceKey || isMobile || !input.sourcePaneId) {
-        handleOpenFileFromChat(location, { parentTabId: input.parentTabId });
+        handleOpenFileFromChat(location, {
+          parentTabId: input.parentTabId,
+          reveal: input.reveal,
+        });
         return;
       }
 
@@ -2428,7 +2445,7 @@ function WorkspaceScreenContent({
         ? openWorkspaceChildTabFocused(persistenceKey, target, input.parentTabId)
         : openWorkspaceTabFocused(persistenceKey, target);
       if (tabId) {
-        requestFileNavigation(tabId);
+        requestFileNavigation(tabId, input.reveal);
         navigateToTabId(tabId);
       }
     },
@@ -2478,10 +2495,11 @@ function WorkspaceScreenContent({
         location: request.location,
         sourcePaneId: paneId ?? undefined,
         parentTabId,
+        reveal: request.reveal,
       });
       return;
     }
-    handleOpenFileFromChat(request.location, { parentTabId });
+    handleOpenFileFromChat(request.location, { parentTabId, reveal: request.reveal });
   });
 
   const [hoveredCloseTabKey, setHoveredCloseTabKey] = useState<string | null>(null);
@@ -3308,7 +3326,8 @@ function WorkspaceScreenContent({
         tab: input.tab,
         normalizedServerId,
         normalizedWorkspaceId,
-        fileNavigationRevision: fileNavigationRevisionByTabId[input.tab.tabId] ?? 0,
+        fileNavigationRevision: fileNavigationByTabId[input.tab.tabId]?.revision ?? 0,
+        fileNavigationReveal: fileNavigationByTabId[input.tab.tabId]?.reveal,
         onOpenTab: (target) => {
           if (!persistenceKey) {
             return;
@@ -3343,7 +3362,7 @@ function WorkspaceScreenContent({
     [
       handleCloseTabById,
       focusWorkspacePane,
-      fileNavigationRevisionByTabId,
+      fileNavigationByTabId,
       handleOpenWorkspaceFileFromPane,
       navigateToTabId,
       normalizedServerId,

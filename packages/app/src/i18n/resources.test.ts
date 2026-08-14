@@ -169,6 +169,42 @@ describe("translation resources", () => {
     expect(ko.desktop.daemon.status.notRunning).toBe("실행 중이 아님");
   });
 
+  it("localizes inline and side-by-side diff view labels", () => {
+    expect(en.workspace.git.diff).toMatchObject({
+      unified: "Inline diff",
+      split: "Side-by-side diff",
+    });
+    expect(ar.workspace.git.diff).toMatchObject({
+      unified: "فرق مضمّن",
+      split: "فرق جنبًا إلى جنب",
+    });
+    expect(es.workspace.git.diff).toMatchObject({
+      unified: "Diferencias en línea",
+      split: "Diferencias en paralelo",
+    });
+    expect(fr.workspace.git.diff).toMatchObject({
+      unified: "Diff en ligne",
+      split: "Diff côte à côte",
+    });
+    expect(ja.workspace.git.diff).toMatchObject({
+      unified: "インライン差分",
+      split: "並列差分",
+    });
+    expect(ko.workspace.git.diff).toMatchObject({
+      unified: "인라인 diff",
+      split: "나란히 diff",
+    });
+    expect(ptBR.workspace.git.diff).toMatchObject({
+      unified: "Diff em linha",
+      split: "Diff lado a lado",
+    });
+    expect(ru.workspace.git.diff).toMatchObject({
+      unified: "Встроенное сравнение",
+      split: "Сравнение рядом",
+    });
+    expect(zhCN.workspace.git.diff).toMatchObject({ unified: "行内差异", split: "并排差异" });
+  });
+
   it("labels the immediate add-to-chat action without an ellipsis", () => {
     expect(en.workspace.fileActions.addToChat).toBe("Add to chat");
   });

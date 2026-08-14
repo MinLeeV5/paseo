@@ -9,14 +9,18 @@ import type {
 export function buildFileDiffOverview(input: {
   file: ParsedDiffFile;
   layout: "unified" | "split";
+  includeHunkHeaders?: boolean;
 }): WorkspaceFileDiffOverview {
   return input.layout === "split"
-    ? buildSplitOverview(input.file)
-    : buildUnifiedOverview(input.file);
+    ? buildSplitOverview(input.file, input.includeHunkHeaders)
+    : buildUnifiedOverview(input.file, input.includeHunkHeaders);
 }
 
-function buildUnifiedOverview(file: ParsedDiffFile): WorkspaceFileDiffOverview {
-  const lines = buildUnifiedDiffLines(file);
+function buildUnifiedOverview(
+  file: ParsedDiffFile,
+  includeHunkHeaders?: boolean,
+): WorkspaceFileDiffOverview {
+  const lines = buildUnifiedDiffLines(file, { includeHunkHeaders });
   const markers: WorkspaceFileDiffOverviewMarker[] = [];
   let row = 0;
 
@@ -45,8 +49,11 @@ function buildUnifiedOverview(file: ParsedDiffFile): WorkspaceFileDiffOverview {
   return { markers, totalRows: lines.length };
 }
 
-function buildSplitOverview(file: ParsedDiffFile): WorkspaceFileDiffOverview {
-  const rows = buildSplitDiffRows(file);
+function buildSplitOverview(
+  file: ParsedDiffFile,
+  includeHunkHeaders?: boolean,
+): WorkspaceFileDiffOverview {
+  const rows = buildSplitDiffRows(file, { includeHunkHeaders });
   const markers: WorkspaceFileDiffOverviewMarker[] = [];
 
   for (const [rowIndex, row] of rows.entries()) {

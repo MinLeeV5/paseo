@@ -33,6 +33,12 @@ export type WorkspaceFileTabTarget = { kind: "file" } & WorkspaceFileLocation;
 export interface WorkspaceFileOpenRequest {
   location: WorkspaceFileLocation;
   disposition: OpenFileDisposition;
+  reveal?: WorkspaceFileReveal;
+}
+
+export interface WorkspaceFileReveal {
+  mode: "source";
+  lineNumber?: number;
 }
 
 export function normalizeWorkspaceFileLocation(

@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import React, {
   useCallback,
   useEffect,
@@ -17,6 +16,9 @@ import {
   Text,
   View,
   type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type TextStyle,
 } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -29,7 +31,7 @@ import { lineNumberGutterWidth } from "@/components/code-insets";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import {
   filePreviewRenderKind,
-  getDefaultFilePaneMarkdownMode,
+  getDefaultFilePanePreviewMode,
   getFilePaneContentRenderMode,
   isStandaloneMermaidFile,
 } from "@/components/file-pane-render-mode";
@@ -44,6 +46,7 @@ import {
   resolveWorkspaceFilePaths,
   type WorkspaceFileCheckoutDiffContext,
   type WorkspaceFileLocation,
+  type WorkspaceFileReveal,
   type WorkspaceFileSessionDiffContext,
 } from "@/workspace/file-open";
 import { useRetainedPanelActive } from "@/components/retained-panel";
@@ -51,7 +54,7 @@ import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
 import { useCheckoutDiffQuery, type ParsedDiffFile } from "@/git/use-diff-query";
 import { useAgentSessionChangesQuery } from "@/git/use-agent-session-changes-query";
-import { DiffLayoutToggle, resolveDiffLayout } from "@/git/diff-pane";
+import { resolveDiffLayout } from "@/git/diff-pane";
 import {
   buildWorkspaceFileDiffDecorations,
   buildWorkspaceFileDiffOverview,
@@ -61,8 +64,6 @@ import {
   type WorkspaceFileDiffOverviewMarker,
 } from "@/workspace/file-diff-decorations";
 import { isWeb } from "@/constants/platform";
-import { useAppSettings } from "@/hooks/use-settings";
-import { useChangesPreferences } from "@/hooks/use-changes-preferences";
 import { useLiveFile } from "./live-file/hook";
 import { FilePanelBar } from "./bar";
 import { FileHtmlPreview } from "./html-preview";
@@ -83,8 +84,10 @@ import {
   getFileDiffOverviewScrollOffset,
   getFileSourceLineScrollOffset,
 } from "./diff-overview-navigation";
-import { FileDiffView } from "./file-diff-view";
 import { selectWorkspaceFileDiffFiles } from "./workspace-file-diff-selection";
+import { useAppSettings } from "@/hooks/use-settings";
+import { useChangesPreferences } from "@/hooks/use-changes-preferences";
+import { FileDiffView } from "./file-diff-view";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -99,11 +102,13 @@ interface CodeLineProps {
   diffState?: WorkspaceFileDiffLineState;
   searchMatches: FileSearchMatch[];
   currentSearchMatchIndex: number;
+  wrapLines: boolean;
 }
 
 interface DeletedCodeLineProps {
   row: WorkspaceFileDeletedDiffRow;
   gutterWidth: number;
+  wrapLines: boolean;
 }
 
 interface FilePreviewBodyProps {
@@ -116,11 +121,46 @@ interface FilePreviewBodyProps {
   imagePreviewUri: string | null;
   diffDecorations: WorkspaceFileDiffDecorations | null;
   search?: FileSearchController;
+  initialScrollOffset?: number;
+  onScrollOffsetChange?: (offset: number) => void;
+  revealLineSelection?: boolean;
+  onLineSelectionRevealed?: () => void;
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
-type FileDiffDisplayMode = "diff" | "source";
 const EMPTY_FILE_SEARCH_MATCHES: FileSearchMatch[] = [];
+type WrappedSourceWebTextStyle = TextStyle & {
+  whiteSpace?: "pre-wrap";
+  overflowWrap?: "anywhere";
+};
+const WRAPPED_SOURCE_WEB_TEXT_STYLE: WrappedSourceWebTextStyle | undefined = isWeb
+  ? { whiteSpace: "pre-wrap", overflowWrap: "anywhere" }
+  : undefined;
+
+function useReadOnlyFileSearch(input: {
+  preview: ExplorerFile | null;
+  previewMode?: "preview" | "source";
+  location: WorkspaceFileLocation;
+  enabled: boolean;
+  isPaneFocused: boolean;
+  searchHandlerId: string;
+}) {
+  const textRenderMode = getSearchableTextRenderMode({
+    preview: input.preview,
+    location: input.location,
+    mode: input.previewMode,
+  });
+  const canSearch = input.enabled && textRenderMode !== null;
+  const content = input.preview?.kind === "text" ? (input.preview.content ?? "") : "";
+  const search = useFileSearch({
+    content,
+    enabled: canSearch,
+    isPaneFocused: input.isPaneFocused,
+    handlerId: input.searchHandlerId,
+    matchSource: textRenderMode === "markdown" ? "rendered" : "content",
+  });
+  return { canSearch, search };
+}
 
 function trimNonEmpty(value: string | null | undefined): string | null {
   if (typeof value !== "string") {
@@ -365,6 +405,7 @@ const CodeLine = React.memo(function CodeLine({
   diffState,
   searchMatches,
   currentSearchMatchIndex,
+  wrapLines,
 }: CodeLineProps) {
   const gutterStyle = useMemo(
     () => [codeLineStyles.gutter, inlineUnistylesStyle({ width: gutterWidth })],
@@ -376,8 +417,17 @@ const CodeLine = React.memo(function CodeLine({
       diffState === "added" && codeLineStyles.addedLine,
       diffState === "modified" && codeLineStyles.modifiedLine,
       highlighted && codeLineStyles.highlightedLine,
+      wrapLines && codeLineStyles.wrappedLine,
     ],
-    [diffState, highlighted],
+    [diffState, highlighted, wrapLines],
+  );
+  const lineTextStyle = useMemo(
+    () => [
+      codeLineStyles.lineText,
+      wrapLines && codeLineStyles.wrappedLineText,
+      wrapLines && WRAPPED_SOURCE_WEB_TEXT_STYLE,
+    ],
+    [wrapLines],
   );
   const keyedTokens = useMemo(() => {
     const segments = splitFileSearchTokens({
@@ -394,7 +444,7 @@ const CodeLine = React.memo(function CodeLine({
           {String(lineNumber)}
         </Text>
       </View>
-      <Text selectable style={codeLineStyles.lineText}>
+      <Text selectable style={lineTextStyle}>
         {keyedTokens.map(({ key, token }) => (
           <CodeLineToken key={key} token={token} />
         ))}
@@ -403,19 +453,31 @@ const CodeLine = React.memo(function CodeLine({
   );
 });
 
-function DeletedCodeLine({ row, gutterWidth }: DeletedCodeLineProps) {
+function DeletedCodeLine({ row, gutterWidth, wrapLines }: DeletedCodeLineProps) {
   const gutterStyle = useMemo(
     () => [codeLineStyles.gutter, inlineUnistylesStyle({ width: gutterWidth })],
     [gutterWidth],
   );
-  const lineStyle = useMemo(() => [codeLineStyles.line, codeLineStyles.deletedLine], []);
+  const lineStyle = useMemo(
+    () => [
+      codeLineStyles.line,
+      codeLineStyles.deletedLine,
+      wrapLines && codeLineStyles.wrappedLine,
+    ],
+    [wrapLines],
+  );
   const gutterTextStyle = useMemo(
     () => [codeLineStyles.gutterText, codeLineStyles.deletedGutter],
     [],
   );
   const lineTextStyle = useMemo(
-    () => [codeLineStyles.lineText, codeLineStyles.deletedLineText],
-    [],
+    () => [
+      codeLineStyles.lineText,
+      codeLineStyles.deletedLineText,
+      wrapLines && codeLineStyles.wrappedLineText,
+      wrapLines && WRAPPED_SOURCE_WEB_TEXT_STYLE,
+    ],
+    [wrapLines],
   );
   return (
     <View style={lineStyle} testID={`file-source-line-${row.oldLineNumber}`}>
@@ -452,6 +514,10 @@ function CodeLineToken({ token }: CodeLineTokenProps) {
 const codeLineStyles = StyleSheet.create((theme) => ({
   line: {
     flexDirection: "row",
+  },
+  wrappedLine: {
+    width: "100%",
+    minWidth: 0,
   },
   highlightedLine: {
     backgroundColor: theme.colors.accentBorder,
@@ -490,6 +556,10 @@ const codeLineStyles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.code,
     lineHeight: theme.fontSize.code * 1.45,
     flex: 1,
+  },
+  wrappedLineText: {
+    minWidth: 0,
+    flexShrink: 1,
   },
   deletedGutter: {
     color: theme.colors.diffDeletion,
@@ -553,6 +623,10 @@ function FilePreviewBody({
   imagePreviewUri,
   diffDecorations,
   search,
+  initialScrollOffset = 0,
+  onScrollOffsetChange,
+  revealLineSelection = true,
+  onLineSelectionRevealed,
 }: FilePreviewBodyProps) {
   const theme = UnistylesRuntime.getTheme();
   const { t } = useTranslation();
@@ -604,20 +678,6 @@ function FilePreviewBody({
       }),
     [highlightedLines?.length, location.lineEnd, location.lineStart, maxDeletedLineNumber],
   );
-  const sourceAnchorPadding = lineSelection
-    ? Math.max(0, previewViewportHeight / 2 - lineHeight / 2 - theme.spacing[4])
-    : 0;
-  const sourceAnchorContentStyle = useMemo(
-    () =>
-      sourceAnchorPadding > 0
-        ? inlineUnistylesStyle({
-            paddingTop: sourceAnchorPadding,
-            paddingBottom: sourceAnchorPadding,
-          })
-        : undefined,
-    [sourceAnchorPadding],
-  );
-
   const imageSource = useMemo(
     () => (imagePreviewUri ? { uri: imagePreviewUri } : null),
     [imagePreviewUri],
@@ -626,6 +686,7 @@ function FilePreviewBody({
     () => collectDeletedRowsForFallback(diffDecorations),
     [diffDecorations],
   );
+  const wrapSourceLines = Boolean(location.diffContext);
   const sourceDiffOverview = useMemo(
     () =>
       diffDecorations
@@ -645,45 +706,66 @@ function FilePreviewBody({
       currentHeight === nextHeight ? currentHeight : nextHeight,
     );
   }, []);
+  const handlePreviewScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      onScrollOffsetChange?.(event.nativeEvent.contentOffset.y);
+    },
+    [onScrollOffsetChange],
+  );
   const handleDiffOverviewMarkerPress = useCallback(
     (marker: WorkspaceFileDiffOverviewMarker) => {
-      previewScrollRef.current?.scrollTo({
-        y: getFileDiffOverviewScrollOffset({
-          marker,
-          lineHeight,
-          viewportHeight: previewViewportHeightRef.current,
-          contentTopInset: theme.spacing[4],
-        }),
-        animated: false,
+      const offset = getFileDiffOverviewScrollOffset({
+        marker,
+        lineHeight,
+        viewportHeight: previewViewportHeightRef.current,
+        contentTopInset: theme.spacing[4],
       });
+      previewScrollRef.current?.scrollTo({ y: offset, animated: false });
+      onScrollOffsetChange?.(offset);
     },
-    [lineHeight, theme.spacing],
+    [lineHeight, onScrollOffsetChange, theme.spacing],
   );
 
   useEffect(() => {
-    if (!lineSelection || previewViewportHeight <= 0) {
+    if (!lineSelection || !revealLineSelection || previewViewportHeight <= 0) {
       return;
     }
     const timeout = setTimeout(() => {
-      previewScrollRef.current?.scrollTo({
-        y: getFileSourceLineScrollOffset({
-          lineNumber: lineSelection.lineStart,
-          lineHeight,
-          viewportHeight: previewViewportHeight,
-          contentTopInset: theme.spacing[4] + sourceAnchorPadding,
-        }),
-        animated: false,
+      const offset = getFileSourceLineScrollOffset({
+        lineNumber: lineSelection.lineStart,
+        lineHeight,
+        viewportHeight: previewViewportHeight,
+        contentTopInset: theme.spacing[4],
       });
+      previewScrollRef.current?.scrollTo({ y: offset, animated: false });
+      onScrollOffsetChange?.(offset);
+      onLineSelectionRevealed?.();
     }, 0);
     return () => clearTimeout(timeout);
   }, [
     lineHeight,
     lineSelection,
     navigationRevision,
+    onLineSelectionRevealed,
+    onScrollOffsetChange,
     previewViewportHeight,
-    sourceAnchorPadding,
+    revealLineSelection,
     theme.spacing,
   ]);
+
+  useEffect(() => {
+    if (
+      initialScrollOffset <= 0 ||
+      previewViewportHeight <= 0 ||
+      (lineSelection && revealLineSelection)
+    ) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      previewScrollRef.current?.scrollTo({ y: initialScrollOffset, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [initialScrollOffset, lineSelection, previewViewportHeight, revealLineSelection]);
 
   if (isLoading && !preview) {
     return (
@@ -700,14 +782,26 @@ function FilePreviewBody({
         <RNScrollView
           ref={previewScrollRef}
           style={styles.previewContent}
-          contentContainerStyle={sourceAnchorContentStyle}
           showsVerticalScrollIndicator
           onLayout={handlePreviewLayout}
+          onScroll={handlePreviewScroll}
+          scrollEventThrottle={16}
           testID="file-source-preview-scroll"
         >
-          <View style={styles.previewCodeScrollContent} dataSet={CODE_SURFACE_DATASET}>
+          <View
+            style={[
+              styles.previewCodeScrollContent,
+              wrapSourceLines && styles.wrappedPreviewCodeContent,
+            ]}
+            dataSet={CODE_SURFACE_DATASET}
+          >
             {deletedFallbackRows.map((row) => (
-              <DeletedCodeLine key={`deleted-${row.key}`} row={row} gutterWidth={gutterWidth} />
+              <DeletedCodeLine
+                key={`deleted-${row.key}`}
+                row={row}
+                gutterWidth={gutterWidth}
+                wrapLines={wrapSourceLines}
+              />
             ))}
           </View>
         </RNScrollView>
@@ -787,6 +881,7 @@ function FilePreviewBody({
                 key={`deleted-before-${row.key}`}
                 row={row}
                 gutterWidth={gutterWidth}
+                wrapLines={wrapSourceLines}
               />
             ))}
             <CodeLine
@@ -801,11 +896,17 @@ function FilePreviewBody({
               diffState={diffDecorations?.lineStatesByLineNumber.get(lineNumber)}
               searchMatches={searchMatchesByLine.get(lineNumber) ?? EMPTY_FILE_SEARCH_MATCHES}
               currentSearchMatchIndex={currentSearchMatchIndex}
+              wrapLines={wrapSourceLines}
             />
           </React.Fragment>
         ))}
         {deletedRowsAfterRenderedLines.map((row) => (
-          <DeletedCodeLine key={`deleted-after-${row.key}`} row={row} gutterWidth={gutterWidth} />
+          <DeletedCodeLine
+            key={`deleted-after-${row.key}`}
+            row={row}
+            gutterWidth={gutterWidth}
+            wrapLines={wrapSourceLines}
+          />
         ))}
       </View>
     );
@@ -815,13 +916,21 @@ function FilePreviewBody({
         <RNScrollView
           ref={previewScrollRef}
           style={styles.previewContent}
-          contentContainerStyle={sourceAnchorContentStyle}
           showsVerticalScrollIndicator
           onLayout={handlePreviewLayout}
+          onScroll={handlePreviewScroll}
+          scrollEventThrottle={16}
           testID="file-source-preview-scroll"
         >
-          {isMobile ? (
-            <View style={styles.previewCodeScrollContent}>{codeLines}</View>
+          {isMobile || wrapSourceLines ? (
+            <View
+              style={[
+                styles.previewCodeScrollContent,
+                wrapSourceLines && styles.wrappedPreviewCodeContent,
+              ]}
+            >
+              {codeLines}
+            </View>
           ) : (
             <RNScrollView
               horizontal
@@ -877,16 +986,9 @@ function FilePreviewBody({
   );
 }
 
-function useFileDiffPreferences(isMobile: boolean) {
-  const { preferences, updatePreferences } = useChangesPreferences();
-  const canUseSplitLayout = isWeb && !isMobile;
-  const layout = resolveDiffLayout(preferences.layout, canUseSplitLayout);
-  const toggleLayout = useCallback(() => {
-    void updatePreferences({
-      layout: preferences.layout === "unified" ? "split" : "unified",
-    });
-  }, [preferences.layout, updatePreferences]);
-  return { layout, wrapLines: preferences.wrapLines, canUseSplitLayout, toggleLayout };
+function useFileDiffLayout(isMobile: boolean): "unified" | "split" {
+  const { preferences } = useChangesPreferences();
+  return resolveDiffLayout(preferences.layout, isWeb && !isMobile);
 }
 
 export function FilePane({
@@ -894,6 +996,7 @@ export function FilePane({
   workspaceRoot,
   location,
   navigationRevision,
+  navigationReveal,
   isPaneFocused,
   searchHandlerId,
 }: {
@@ -901,17 +1004,21 @@ export function FilePane({
   workspaceRoot: string;
   location: WorkspaceFileLocation;
   navigationRevision: number;
+  navigationReveal?: WorkspaceFileReveal;
   isPaneFocused: boolean;
   searchHandlerId: string;
 }) {
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const { settings } = useAppSettings();
-  const fileDiffPreferences = useFileDiffPreferences(isMobile);
+  const diffLayout = useFileDiffLayout(isMobile);
   const isDiffView = Boolean(location.diffContext);
-  const defaultPreviewMode = getDefaultFilePaneMarkdownMode(isDiffView);
+  const defaultPreviewMode = getDefaultFilePanePreviewMode({
+    filePath: location.path,
+    hasDiffContext: isDiffView,
+    forceSource: Boolean(location.lineStart || navigationReveal?.mode === "source"),
+  });
   const [previewMode, setPreviewMode] = useState<"preview" | "source">(defaultPreviewMode);
-  const [diffDisplayMode, setDiffDisplayMode] = useState<FileDiffDisplayMode>("diff");
   const [resolvedPreview, setResolvedPreview] = useState<{
     key: string | null;
     file: ExplorerFile | null;
@@ -979,8 +1086,10 @@ export function FilePane({
     };
   }, [liveFile.file, readTarget]);
 
-  useEffect(() => setPreviewMode(defaultPreviewMode), [defaultPreviewMode, readTarget?.path]);
-  useEffect(() => setDiffDisplayMode("diff"), [isDiffView, readTarget?.path]);
+  useEffect(
+    () => setPreviewMode(defaultPreviewMode),
+    [defaultPreviewMode, navigationRevision, readTarget?.path],
+  );
 
   const previewKey = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
   const preview = resolvedPreview.key === previewKey ? resolvedPreview.file : null;
@@ -993,12 +1102,16 @@ export function FilePane({
     supportsEditing,
     isDiffView,
   });
-  const canTogglePreviewMode = isRenderable && !location.lineStart && !isDiffView;
+  const canTogglePreviewMode = canToggleFilePanePreviewMode({
+    filePath: location.path,
+    isRenderable,
+    hasLineSelection: Boolean(location.lineStart),
+    hasDiffContext: isDiffView,
+  });
   const lineCount =
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
   const errorMessage = resolveFilePaneErrorMessage({
-    hasDiffFile: Boolean(diffFile),
-    diffDecorations,
+    canRenderWithoutPreview: canRenderFileDiffWithoutPreview(diffFile),
     error: liveFile.error,
     fallback: t("panels.file.failedToLoad"),
   });
@@ -1026,12 +1139,7 @@ export function FilePane({
       navigationRevision={navigationRevision}
       imagePreviewUri={imagePreviewUri}
       diffFile={diffFile}
-      diffDisplayMode={diffDisplayMode}
-      onDiffDisplayModeChange={setDiffDisplayMode}
-      diffLayout={fileDiffPreferences.layout}
-      diffWrapLines={fileDiffPreferences.wrapLines}
-      canUseSplitDiffLayout={fileDiffPreferences.canUseSplitLayout}
-      onToggleDiffLayout={fileDiffPreferences.toggleLayout}
+      diffLayout={diffLayout}
       codeFontSize={settings.codeFontSize}
       monoFontFamily={settings.monoFontFamily}
       diffDecorations={diffDecorations}
@@ -1048,19 +1156,36 @@ function isRenderablePreview(preview: ExplorerFile | null, path: string): boolea
   );
 }
 
+function canToggleFilePanePreviewMode(input: {
+  filePath: string;
+  isRenderable: boolean;
+  hasLineSelection: boolean;
+  hasDiffContext: boolean;
+}): boolean {
+  if (!input.isRenderable || input.hasLineSelection) {
+    return false;
+  }
+  return !input.hasDiffContext || filePreviewRenderKind(input.filePath) !== null;
+}
+
 function getFileErrorMessage(error: unknown, fallback: string): string | null {
   if (!error) return null;
   if (typeof error === "string") return error;
   return error instanceof Error ? error.message : fallback;
 }
 
+function canRenderFileDiffWithoutPreview(file: ParsedDiffFile | null): boolean {
+  return Boolean(
+    file && (file.isDeleted || file.status === "binary" || file.status === "too_large"),
+  );
+}
+
 function resolveFilePaneErrorMessage(input: {
-  hasDiffFile: boolean;
-  diffDecorations: WorkspaceFileDiffDecorations | null;
+  canRenderWithoutPreview: boolean;
   error: unknown;
   fallback: string;
 }): string | null {
-  if (input.hasDiffFile || collectDeletedRowsForFallback(input.diffDecorations).length > 0) {
+  if (input.canRenderWithoutPreview) {
     return null;
   }
   return getFileErrorMessage(input.error, input.fallback);
@@ -1102,12 +1227,7 @@ function FilePanePresentation({
   navigationRevision,
   imagePreviewUri,
   diffFile,
-  diffDisplayMode,
-  onDiffDisplayModeChange,
   diffLayout,
-  diffWrapLines,
-  canUseSplitDiffLayout,
-  onToggleDiffLayout,
   codeFontSize,
   monoFontFamily,
   diffDecorations,
@@ -1135,12 +1255,7 @@ function FilePanePresentation({
   navigationRevision: number;
   imagePreviewUri: string | null;
   diffFile: ParsedDiffFile | null;
-  diffDisplayMode: FileDiffDisplayMode;
-  onDiffDisplayModeChange: (mode: FileDiffDisplayMode) => void;
   diffLayout: "unified" | "split";
-  diffWrapLines: boolean;
-  canUseSplitDiffLayout: boolean;
-  onToggleDiffLayout: () => void;
   codeFontSize: number;
   monoFontFamily: string;
   diffDecorations: WorkspaceFileDiffDecorations | null;
@@ -1207,12 +1322,7 @@ function FilePanePresentation({
       navigationRevision={navigationRevision}
       imagePreviewUri={imagePreviewUri}
       diffFile={diffFile}
-      diffDisplayMode={diffDisplayMode}
-      onDiffDisplayModeChange={onDiffDisplayModeChange}
       diffLayout={diffLayout}
-      diffWrapLines={diffWrapLines}
-      canUseSplitDiffLayout={canUseSplitDiffLayout}
-      onToggleDiffLayout={onToggleDiffLayout}
       codeFontSize={codeFontSize}
       monoFontFamily={monoFontFamily}
       diffDecorations={diffDecorations}
@@ -1234,12 +1344,7 @@ function ReadOnlyFilePane({
   navigationRevision,
   imagePreviewUri,
   diffFile,
-  diffDisplayMode,
-  onDiffDisplayModeChange,
   diffLayout,
-  diffWrapLines,
-  canUseSplitDiffLayout,
-  onToggleDiffLayout,
   codeFontSize,
   monoFontFamily,
   diffDecorations,
@@ -1257,90 +1362,22 @@ function ReadOnlyFilePane({
   navigationRevision: number;
   imagePreviewUri: string | null;
   diffFile: ParsedDiffFile | null;
-  diffDisplayMode: FileDiffDisplayMode;
-  onDiffDisplayModeChange: (mode: FileDiffDisplayMode) => void;
   diffLayout: "unified" | "split";
-  diffWrapLines: boolean;
-  canUseSplitDiffLayout: boolean;
-  onToggleDiffLayout: () => void;
   codeFontSize: number;
   monoFontFamily: string;
   diffDecorations: WorkspaceFileDiffDecorations | null;
   isPaneFocused: boolean;
   searchHandlerId: string;
 }) {
-  const { t } = useTranslation();
-  const [diffSourceAnchor, setDiffSourceAnchor] = useState<{
-    filePath: string;
-    lineNumber: number;
-  } | null>(null);
-  const textRenderMode = getSearchableTextRenderMode({ preview, location, mode: previewMode });
-  const isShowingDiff = Boolean(diffFile && diffDisplayMode === "diff");
-  const canSearch = !isShowingDiff && textRenderMode !== null;
-  const search = useFileSearch({
-    content: preview?.kind === "text" ? (preview.content ?? "") : "",
-    enabled: canSearch,
+  const isShowingDiff = Boolean(diffFile && previewMode !== "preview");
+  const { canSearch, search } = useReadOnlyFileSearch({
+    preview,
+    previewMode,
+    location,
+    enabled: !isShowingDiff,
     isPaneFocused,
-    handlerId: searchHandlerId,
-    matchSource: textRenderMode === "markdown" ? "rendered" : "content",
+    searchHandlerId,
   });
-  const diffLayoutAction = useMemo(
-    () =>
-      isShowingDiff && canUseSplitDiffLayout ? (
-        <DiffLayoutToggle
-          layout={diffLayout}
-          isMobile={isMobile}
-          testID="file-diff-toggle-layout"
-          onToggle={onToggleDiffLayout}
-        />
-      ) : undefined,
-    [canUseSplitDiffLayout, diffLayout, isMobile, isShowingDiff, onToggleDiffLayout],
-  );
-  const diffDisplayOptions = useMemo(
-    () => [
-      {
-        value: "diff" as const,
-        label: t("panels.file.editor.diff"),
-        testID: "file-diff-mode-diff",
-      },
-      {
-        value: "source" as const,
-        label: t("panels.file.editor.source"),
-        testID: "file-diff-mode-source",
-      },
-    ],
-    [t],
-  );
-  const diffActions = diffFile ? (
-    <>
-      {diffLayoutAction}
-      <SegmentedControl
-        size="xs"
-        value={diffDisplayMode}
-        onValueChange={onDiffDisplayModeChange}
-        options={diffDisplayOptions}
-        testID="file-diff-mode"
-      />
-    </>
-  ) : undefined;
-  const handleExpandContext = useCallback(
-    (sourceLineNumber: number) => {
-      setDiffSourceAnchor({ filePath: location.path, lineNumber: sourceLineNumber });
-      onDiffDisplayModeChange("source");
-    },
-    [location.path, onDiffDisplayModeChange],
-  );
-  const sourceLocation = useMemo<WorkspaceFileLocation>(
-    () =>
-      diffFile && diffSourceAnchor?.filePath === location.path
-        ? {
-            ...location,
-            lineStart: diffSourceAnchor.lineNumber,
-            lineEnd: diffSourceAnchor.lineNumber,
-          }
-        : location,
-    [diffFile, diffSourceAnchor, location],
-  );
 
   return (
     <View style={styles.container} testID="workspace-file-pane">
@@ -1351,7 +1388,6 @@ function ReadOnlyFilePane({
           mode={previewMode}
           onModeChange={onPreviewModeChange}
           search={canSearch ? search : undefined}
-          actions={diffActions}
         />
       ) : null}
       <View style={styles.contentLayer}>
@@ -1364,22 +1400,21 @@ function ReadOnlyFilePane({
         {isShowingDiff && diffFile ? (
           <FileDiffView
             file={diffFile}
+            source={preview?.kind === "text" ? (preview.content ?? "") : null}
             layout={diffLayout}
-            wrapLines={diffWrapLines}
             codeFontSize={codeFontSize}
             monoFontFamily={monoFontFamily}
-            onExpandContext={handleExpandContext}
           />
         ) : (
           <FilePreviewBody
             preview={preview}
             isLoading={isLoading}
             isMobile={isMobile}
-            location={sourceLocation}
+            location={location}
             navigationRevision={navigationRevision}
             imagePreviewUri={imagePreviewUri}
             diffDecorations={diffDecorations}
-            mode={diffFile ? "source" : previewMode}
+            mode={previewMode}
             search={canSearch ? search : undefined}
           />
         )}
@@ -1689,6 +1724,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   previewCodeScrollContent: {
     padding: theme.spacing[4],
+  },
+  wrappedPreviewCodeContent: {
+    width: "100%",
   },
   previewMarkdownScrollContent: {
     padding: theme.spacing[4],

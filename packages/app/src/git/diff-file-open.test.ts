@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createChangedFileSourceTarget, createDiffFileOpenTarget } from "@/git/diff-file-open";
+import {
+  createChangedFileSourceTarget,
+  createDiffFileOpenTarget,
+  createDiffFileSourceTarget,
+} from "@/git/diff-file-open";
 
 const diffContext = {
   cwd: "/repo",
@@ -32,6 +36,29 @@ describe("changed file open targets", () => {
         location: {
           path: "docs/README.md",
           diffContext,
+        },
+      },
+    });
+  });
+
+  it("opens the current source at a change without turning the reveal into tab identity", () => {
+    expect(
+      createDiffFileSourceTarget({
+        filePath: "docs/README.md",
+        diffContext,
+        lineNumber: 42,
+      }),
+    ).toEqual({
+      kind: "file",
+      request: {
+        disposition: "main",
+        location: {
+          path: "docs/README.md",
+          diffContext,
+        },
+        reveal: {
+          mode: "source",
+          lineNumber: 42,
         },
       },
     });

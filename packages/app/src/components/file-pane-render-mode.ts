@@ -1,7 +1,7 @@
 import { isStandaloneMermaidFile } from "@/components/mermaid/language";
 
 export type FilePaneRenderMode = "code" | "markdown" | "mermaid";
-export type FilePaneMarkdownMode = "preview" | "source";
+export type FilePanePreviewMode = "preview" | "source";
 
 export type FilePreviewRenderKind = "markdown" | "html";
 
@@ -38,8 +38,18 @@ export function getFilePaneContentRenderMode(input: {
   return getFilePaneRenderMode(input.filePath);
 }
 
-export function getDefaultFilePaneMarkdownMode(hasDiffContext: boolean): FilePaneMarkdownMode {
-  return hasDiffContext ? "source" : "preview";
+export function getDefaultFilePanePreviewMode(input: {
+  filePath: string;
+  hasDiffContext: boolean;
+  forceSource: boolean;
+}): FilePanePreviewMode {
+  if (input.forceSource) {
+    return "source";
+  }
+  if (input.hasDiffContext && filePreviewRenderKind(input.filePath) === null) {
+    return "source";
+  }
+  return "preview";
 }
 
 function isRenderedHtmlFile(filePath: string): boolean {

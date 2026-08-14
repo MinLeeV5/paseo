@@ -33,3 +33,24 @@ export function createDiffFileOpenTarget(input: {
     },
   };
 }
+
+export function createDiffFileSourceTarget(input: {
+  filePath: string;
+  diffContext: WorkspaceFileDiffContext;
+  lineNumber?: number;
+}): DiffFileFileTarget {
+  return {
+    kind: "file",
+    request: {
+      disposition: "main",
+      location: {
+        path: input.filePath,
+        diffContext: input.diffContext,
+      },
+      reveal: {
+        mode: "source",
+        ...(input.lineNumber ? { lineNumber: input.lineNumber } : {}),
+      },
+    },
+  };
+}

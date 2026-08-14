@@ -62,12 +62,12 @@ export function getAdjacentFileSearchIndex(input: {
   return (input.currentIndex + delta + input.matchCount) % input.matchCount;
 }
 
-export function splitFileSearchTokens(input: {
-  tokens: HighlightToken[];
-  matches: FileSearchMatch[];
+export function splitFileSearchTokens<TToken extends { text: string }>(input: {
+  tokens: readonly TToken[];
+  matches: readonly FileSearchMatch[];
   currentMatchIndex: number;
-}): FileSearchTokenSegment[] {
-  const segments: FileSearchTokenSegment[] = [];
+}): Array<TToken & { searchState: FileSearchTokenState }> {
+  const segments: Array<TToken & { searchState: FileSearchTokenState }> = [];
   let tokenStart = 0;
 
   for (const token of input.tokens) {
@@ -89,8 +89,8 @@ export function splitFileSearchTokens(input: {
       );
       const searchState = getFileSearchTokenState(match, input.currentMatchIndex);
       segments.push({
+        ...token,
         text: token.text.slice(fromColumn - tokenStart, toColumn - tokenStart),
-        style: token.style,
         searchState,
       });
     }

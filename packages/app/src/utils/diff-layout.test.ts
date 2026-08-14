@@ -50,6 +50,23 @@ function expectReviewTarget(
 }
 
 describe("buildSplitDiffRows", () => {
+  it("can omit structural hunk rows for full-file source reading", () => {
+    const rows = buildSplitDiffRows(
+      makeFile([
+        { type: "header", content: "@@ -10,1 +10,1 @@" },
+        { type: "context", content: "same line" },
+      ]),
+      { includeHunkHeaders: false },
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      kind: "pair",
+      left: { type: "context", content: "same line", lineNumber: 10 },
+      right: { type: "context", content: "same line", lineNumber: 10 },
+    });
+  });
+
   it("uses one canonical persisted key for rendered review targets", () => {
     const rows = buildSplitDiffRows(
       makeFile([
@@ -205,6 +222,22 @@ describe("buildSplitDiffRows", () => {
 });
 
 describe("buildUnifiedDiffLines", () => {
+  it("can omit structural hunk lines for full-file source reading", () => {
+    const lines = buildUnifiedDiffLines(
+      makeFile([
+        { type: "header", content: "@@ -10,1 +10,1 @@" },
+        { type: "context", content: "same line" },
+      ]),
+      { includeHunkHeaders: false },
+    );
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      line: { type: "context", content: "same line" },
+      lineNumber: 10,
+    });
+  });
+
   it("computes line numbers per line type within a hunk", () => {
     const lines = buildUnifiedDiffLines(
       makeFile([
