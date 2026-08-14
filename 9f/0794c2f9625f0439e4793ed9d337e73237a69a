@@ -1,0 +1,65 @@
+packages/app/src/screens/workspace/workspace-desktop-tabs-row.tsx
+  4a8cd34a1c08baa5 17-18,68-71,103,105,825-827,829,842-849,869,922-986,1151,1155,1158-1161
+packages/app/src/styles/web-scrollbar.ts
+  4a8cd34a1c08baa5 3
+packages/app/src/screens/workspace/workspace-tab-layout.test.ts
+  4a8cd34a1c08baa5 5-6,138-239
+  b782f7c793874325 240-241
+  dadbbd3650324d27 2-4,7,14,67,75-77,80,89-90,105-137
+packages/app/src/screens/workspace/use-workspace-tab-layout.ts
+  dadbbd3650324d27 16
+packages/app/src/styles/install-web-scrollbar-styles.web.ts
+  4a8cd34a1c08baa5 2,27-38
+packages/app/src/screens/workspace/workspace-tab-layout.ts
+  dadbbd3650324d27 11,65-67,69-70,91-98,124-145
+  b782f7c793874325 185
+  4a8cd34a1c08baa5 99-123,146-184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "9f0794c2f9625f0439e4793ed9d337e73237a69a",
+  "prompts": {
+    "4a8cd34a1c08baa5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ffaa9-f656-7080-9299-07eb6c4727f9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 250,
+      "overriden_lines": 0
+    },
+    "b782f7c793874325": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ffe26-3e82-7372-891c-d99959630db0",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 149,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/dc766b825848920efe2109ac6629def9a5678257a8260cd3fa5edea48494ddab"
+    },
+    "dadbbd3650324d27": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff9e8-8659-7d93-9986-328f7c44caf3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 256,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/852d0df09926eb03e196439e3cc7aee811d34ff030a877acde16724b6e45e1af"
+    }
+  }
+}
