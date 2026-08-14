@@ -1,0 +1,125 @@
+packages/app/src/panels/diff-panel.tsx
+  dadbbd3650324d27 20-21,23,57-64,77,166,230-249,257,261-268,295-296
+packages/app/src/i18n/resources/pt-BR.ts
+  dadbbd3650324d27 929,935-939
+packages/app/src/file-pane/full-file-diff.ts
+  dadbbd3650324d27 37-38,55-59,66-67
+  a92c541d9dee5bb3 1-11,13-36,39-54,60-65,68-81
+packages/app/src/file-pane/pane.tsx
+  dadbbd3650324d27 21,34,49,57,88-90,105,111,124-127,132-143,145-152,155-163,408,420,422-430,447,456,461-468,474-480,518-521,560-563,626-629,689,709-714,717-721,723-724,726,730,734-738,740-742,749-750,752,756-769,787-788,791-797,799-804,884,899,904-909,921-922,925-933,989-991,999,1007,1014,1016-1020,1089-1092,1105-1110,1114,1142,1159-1170,1177-1182,1184,1188,1372-1376,1379,1417,1728-1729
+  a92c541d9dee5bb3 1403
+packages/app/src/utils/diff-layout.test.ts
+  dadbbd3650324d27 53-69,225-240
+packages/app/src/utils/diff-layout.ts
+  a92c541d9dee5bb3 84-87,240-244,246-259,263-266,268,271-277
+packages/app/src/screens/workspace/workspace-screen.tsx
+  dadbbd3650324d27 203,205-208,324-329,335,339,1822-1823,1825-1826,1828,2376-2379,2395,2414,2421-2424,2448,2498,2502,3329-3330,3365
+packages/app/src/file-pane/file-diff-overview.ts
+  a92c541d9dee5bb3 12,15-16,19-23,52-56
+packages/app/src/git/diff-navigation.test.ts
+  dadbbd3650324d27 1-99
+packages/app/src/i18n/resources.test.ts
+  dadbbd3650324d27 172-207
+packages/app/src/file-pane/search.ts
+  dadbbd3650324d27 65-67,69-70,92
+packages/app/src/git/diff-file-open.ts
+  dadbbd3650324d27 36-56
+packages/app/src/i18n/resources/zh-CN.ts
+  dadbbd3650324d27 897,903-907
+packages/app/src/git/diff-file-open.test.ts
+  dadbbd3650324d27 2-6,44-61
+packages/app/src/git/diff-search.ts
+  dadbbd3650324d27 1-92
+packages/app/src/file-pane/full-file-diff.test.ts
+  dadbbd3650324d27 1-68,70-96,98-136,138-145
+packages/app/src/i18n/resources/ar.ts
+  dadbbd3650324d27 905,911-915
+packages/app/src/i18n/resources/ja.ts
+  dadbbd3650324d27 917,923-927
+packages/app/src/i18n/resources/fr.ts
+  dadbbd3650324d27 939,945-949
+packages/app/src/components/file-pane-render-mode.test.ts
+  4a8cd34a1c08baa5 4,68-106
+packages/app/src/file-pane/file-diff-view.tsx
+  dadbbd3650324d27 9-12,25,147,157-170
+  a92c541d9dee5bb3 19,45,51,56,61-63,67-68,133,135-136
+packages/app/src/panels/pane-context.tsx
+  dadbbd3650324d27 4,12
+packages/app/src/workspace/file-navigation.ts
+  dadbbd3650324d27 1-16
+packages/app/src/i18n/resources/es.ts
+  dadbbd3650324d27 939,945-949
+packages/app/src/git/diff-pane.tsx
+  a92c541d9dee5bb3 482,1568,1580,1640,1668-1670
+  dadbbd3650324d27 40,90,92,123-127,138,146-155,181-183,187-189,217-232,239-241,250,252,256-268,293,375-418,464-471,496,505-506,520-521,569-582,633-634,640,649-650,659-660,696,698,701-703,718-719,731-732,777-789,823-824,831-832,874,876,879-881,1006,1016,1077-1078,1174-1175,1207,1216-1217,1237,1265,1307,1310,1312,1372,1450,1477,1509,1511-1514,1565,1577,1637,1649,1659,1685-1686,1747-1748,1810,1828-1840,1872,1972,2014,2040-2105,2220-2448,2451,2455,2458,2461-2462,2470,2474,2477,2480-2481,2495-2525,2528,2547-2572,2589-2595,2765,2785,2850,3283,3328,3935,3969-3976,4074,4079,4090-4116,4119-4120,4123-4138,4142-4148,4436-4462,4503,4523,4655-4664,4679,4683-4685,4688,4690-4691,4801-4813,5127-5131,5196-5197,5203-5215,5228-5233
+packages/app/src/i18n/resources/ko.ts
+  dadbbd3650324d27 834-839
+packages/app/src/git/diff-search.test.ts
+  dadbbd3650324d27 1-65
+packages/app/src/i18n/resources/ru.ts
+  dadbbd3650324d27 927,933-937
+packages/app/e2e/browser/changes-pane.spec.ts
+  dadbbd3650324d27 28-34,206,219,293,311,320,324-330,332-336,341-342,344-346,349-350,367-393,414,416-420,457,496-506,511,515,543-575,655-690
+  a92c541d9dee5bb3 262-263,265,273,337
+packages/app/src/git/diff-navigation.ts
+  dadbbd3650324d27 1-27,29-70
+packages/app/src/i18n/resources/en.ts
+  dadbbd3650324d27 915,921-925
+packages/app/src/workspace/file-navigation.test.ts
+  dadbbd3650324d27 1-22
+packages/app/src/panels/file-panel.tsx
+  dadbbd3650324d27 33-34,51
+packages/app/src/components/file-pane-render-mode.ts
+  4a8cd34a1c08baa5 41-44,46-52
+packages/app/src/screens/workspace/workspace-pane-content.tsx
+  dadbbd3650324d27 14,27,40,59,95,109
+packages/app/src/workspace/file-open/index.ts
+  dadbbd3650324d27 36-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "4e10594b562c4afc6276a09d493602fb95dab388",
+  "prompts": {
+    "4a8cd34a1c08baa5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ffaa9-f656-7080-9299-07eb6c4727f9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 307,
+      "total_deletions": 18,
+      "accepted_lines": 301,
+      "overriden_lines": 1
+    },
+    "a92c541d9dee5bb3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ffe01-8061-7ff0-8143-e308447b53b1",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 155,
+      "total_deletions": 28,
+      "accepted_lines": 140,
+      "overriden_lines": 5
+    },
+    "dadbbd3650324d27": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff9e8-8659-7d93-9986-328f7c44caf3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 2380,
+      "total_deletions": 1034,
+      "accepted_lines": 1969,
+      "overriden_lines": 17,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/852d0df09926eb03e196439e3cc7aee811d34ff030a877acde16724b6e45e1af"
+    }
+  }
+}
