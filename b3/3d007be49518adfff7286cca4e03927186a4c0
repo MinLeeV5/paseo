@@ -1,0 +1,69 @@
+packages/app/src/desktop/browser/shortcuts.test.ts
+  0bfa06d6612b9e19 172-194
+packages/server/src/server/daemon-client.e2e.test.ts
+  0bfa06d6612b9e19 1237-1245
+packages/app/src/keyboard/keyboard-shortcuts.test.ts
+  0bfa06d6612b9e19 248-260,471-475,710-711,726-727
+packages/server/src/server/bootstrap.ts
+  0bfa06d6612b9e19 148,815-820,848-869,1599
+packages/server/src/server/agent/agent-manager.test.ts
+  0bfa06d6612b9e19 3775-3843
+packages/server/src/utils/checkout-git.test.ts
+  0bfa06d6612b9e19 510-532
+packages/server/src/utils/checkout-git.ts
+  0bfa06d6612b9e19 3-4,206,279-302,611,653,774,837,4332,4335,4495-4520
+  1f2f706775bc98fb 194,209-276,609,735-749,757,770,828-833,849-924,926-1543,1545-1705,1707-1709,1711-1713,1716-1728,1730-1731,1733-1738,1740-1744,1746-1747,1749-1755,1757-1763,1766-1767,1769,1773,1775-1785,1787-1800,1802-1806,1808-1809,1811-1819,1821-1826,1828-1829,1831-1832,3196,4099-4114,4206,4363-4372,4375-4407,4409-4412,4457-4470
+packages/server/src/server/websocket-server.ts
+  0bfa06d6612b9e19 16,534,626,650,1049,1354,1572-1577
+packages/app/src/keyboard/keyboard-shortcuts.ts
+  0bfa06d6612b9e19 602-624
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "b33d007be49518adfff7286cca4e03927186a4c0",
+  "prompts": {
+    "0bfa06d6612b9e19": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a00f08-1d65-7ac1-8d3d-b305c59e7226",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 289,
+      "total_deletions": 31,
+      "accepted_lines": 279,
+      "overriden_lines": 1,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/faac7437af01c0f2801fffca795d8f9862d63e2caafbe3f11e44cc37bac89d1c"
+    },
+    "1b255716275d334e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a00de4-c596-7892-a0e0-863e8edc89c3",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/b8706238602474303b31bb56b406e7f167fc7a0ecd8ff10a2efb9d3ef94c2b68"
+    },
+    "1f2f706775bc98fb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a00e7c-6294-7101-a0ad-8d943ab68419",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 1148,
+      "total_deletions": 24,
+      "accepted_lines": 1131,
+      "overriden_lines": 22,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/c15abe709a9bc558be6d161bdb90bc8891e11e1c39ef81dab11fabe45c6c7530"
+    }
+  }
+}
