@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -65,6 +66,162 @@ let cachedStagingUserIdPromise: Promise<string> | null = null;
 
 const UPDATE_CHANNEL_NOT_PUBLISHED_CODE = "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND";
 const UPDATE_INSTALL_HANDOFF_TIMEOUT_MS = 15_000;
+const DIRECT_MAC_UPDATE_MODE = "direct";
+
+const MAC_DIRECT_UPDATE_WORKER_SCRIPT = String.raw`
+"use strict";
+
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { spawn, spawnSync } = require("node:child_process");
+
+const [parentPid, zipPath, appPath, userDataPath, executableName] = process.argv.slice(1);
+const logPath = path.join(userDataPath, "mac-update.log");
+const backupPath = appPath + ".paseo-update-backup";
+
+function writeLog(message) {
+  try {
+    fs.appendFileSync(
+      logPath,
+      new Date().toISOString() + " " + message + String.fromCharCode(10),
+    );
+  } catch {}
+}
+
+function isRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error && error.code === "EPERM";
+  }
+}
+
+function waitForParentExit(pid) {
+  const deadline = Date.now() + 60_000;
+  const signal = new Int32Array(new SharedArrayBuffer(4));
+  while (isRunning(pid)) {
+    if (Date.now() >= deadline) {
+      throw new Error("The previous Paseo process did not exit before the update timeout.");
+    }
+    Atomics.wait(signal, 0, 0, 100);
+  }
+}
+
+function run(command, args) {
+  const result = spawnSync(command, args, { encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    const output = String(result.stderr || result.stdout || "").trim();
+    throw new Error(command + " failed" + (output ? ": " + output : ""));
+  }
+}
+
+function isPermissionError(error) {
+  return error && (error.code === "EACCES" || error.code === "EPERM");
+}
+
+function shellQuote(value) {
+  return "'" + value.replaceAll("'", "'\\''") + "'";
+}
+
+function appleScriptQuote(value) {
+  return JSON.stringify(value);
+}
+
+function replaceBundleWithPrivileges(nextApp) {
+  const current = shellQuote(appPath);
+  const backup = shellQuote(backupPath);
+  const source = shellQuote(nextApp);
+  const target = [
+    "/bin/rm -rf " + backup,
+    "/bin/mv " + current + " " + backup,
+    "/usr/bin/ditto --rsrc --extattr " + source + " " + current,
+    "/bin/rm -rf " + backup,
+  ].join(" && ");
+  const rollback = "/bin/rm -rf " + current + " && /bin/mv " + backup + " " + current;
+  const command = "(" + target + ") || (" + rollback + "; exit 1)";
+  const script = "do shell script " + appleScriptQuote(command) + " with administrator privileges";
+  run("/usr/bin/osascript", ["-e", script]);
+}
+
+function replaceBundle(nextApp) {
+  if (fs.existsSync(backupPath)) {
+    if (!fs.existsSync(appPath)) fs.renameSync(backupPath, appPath);
+    else fs.rmSync(backupPath, { recursive: true, force: true });
+  }
+
+  let moved = false;
+  try {
+    fs.renameSync(appPath, backupPath);
+    moved = true;
+    run("/usr/bin/ditto", ["--rsrc", "--extattr", nextApp, appPath]);
+    fs.rmSync(backupPath, { recursive: true, force: true });
+  } catch (error) {
+    if (moved && !fs.existsSync(appPath) && fs.existsSync(backupPath)) {
+      fs.renameSync(backupPath, appPath);
+    }
+    if (!isPermissionError(error)) throw error;
+    replaceBundleWithPrivileges(nextApp);
+  }
+}
+
+function main() {
+  if (!parentPid || !zipPath || !appPath || !userDataPath || !executableName) {
+    throw new Error("The direct macOS updater received incomplete arguments.");
+  }
+  if (!fs.existsSync(zipPath)) throw new Error("The downloaded update ZIP no longer exists.");
+  if (!appPath.endsWith(".app")) throw new Error("The running application path is not a macOS app bundle.");
+
+  writeLog("Starting direct update from " + zipPath);
+  waitForParentExit(Number(parentPid));
+
+  const extractionPath = fs.mkdtempSync(path.join(os.tmpdir(), "paseo-mac-update-"));
+  try {
+    run("/usr/bin/ditto", ["-x", "-k", zipPath, extractionPath]);
+    const appBundles = fs
+      .readdirSync(extractionPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.endsWith(".app"));
+    if (appBundles.length !== 1) {
+      throw new Error("The downloaded update ZIP does not contain exactly one app bundle.");
+    }
+    const nextApp = path.join(extractionPath, appBundles[0].name);
+    if (appBundles[0].name !== path.basename(appPath)) {
+      throw new Error("The downloaded update is for a different application.");
+    }
+    if (!fs.existsSync(path.join(nextApp, "Contents", "MacOS", executableName))) {
+      throw new Error("The downloaded update is missing its application executable.");
+    }
+
+    replaceBundle(nextApp);
+    writeLog("Installed direct macOS update at " + appPath);
+    const relaunch = spawn("/usr/bin/open", ["--background", appPath], {
+      detached: true,
+      stdio: "ignore",
+    });
+    relaunch.unref();
+  } finally {
+    fs.rmSync(extractionPath, { recursive: true, force: true });
+  }
+}
+
+try {
+  main();
+} catch (error) {
+  writeLog("Direct macOS update failed: " + String(error && error.stack ? error.stack : error));
+  process.exitCode = 1;
+}
+`;
+
+interface DownloadedUpdateHelperLike {
+  file?: string | null;
+}
+
+interface ElectronUpdaterInternals {
+  downloadedUpdateHelper?: DownloadedUpdateHelperLike | null;
+  getOrCreateDownloadHelper?: () => Promise<DownloadedUpdateHelperLike>;
+}
 
 let appUpdateStateStore: AppUpdateStateStore | null = null;
 
@@ -145,6 +302,62 @@ export function shouldUseAppQuitHandoff(input: {
   return input.platform === "darwin" && !input.isForceRunAfter;
 }
 
+export function shouldUseDirectMacUpdate(input: {
+  platform: NodeJS.Platform;
+  updateMode: unknown;
+}): boolean {
+  return input.platform === "darwin" && input.updateMode === DIRECT_MAC_UPDATE_MODE;
+}
+
+async function resolveDownloadedUpdatePath(): Promise<string> {
+  const updater = autoUpdater as unknown as ElectronUpdaterInternals;
+  let helper = updater.downloadedUpdateHelper ?? null;
+  if (!helper && updater.getOrCreateDownloadHelper) {
+    helper = await updater.getOrCreateDownloadHelper();
+  }
+
+  if (!helper?.file) {
+    // A download restored from a previous launch is only hydrated into the
+    // updater helper when electron-updater validates it during downloadUpdate.
+    await autoUpdater.downloadUpdate();
+    helper = updater.downloadedUpdateHelper ?? null;
+  }
+
+  const updatePath = helper?.file;
+  if (!updatePath) {
+    throw new Error("The downloaded macOS update ZIP is not available.");
+  }
+  return updatePath;
+}
+
+async function handoffToDirectMacInstaller(): Promise<void> {
+  const updatePath = await resolveDownloadedUpdatePath();
+  const appPath = path.resolve(process.execPath, "..", "..", "..");
+  if (!appPath.endsWith(".app")) {
+    throw new Error(`Cannot resolve the packaged macOS app bundle from ${process.execPath}.`);
+  }
+
+  const worker = spawn(
+    process.execPath,
+    [
+      "-e",
+      MAC_DIRECT_UPDATE_WORKER_SCRIPT,
+      "--",
+      String(process.pid),
+      updatePath,
+      appPath,
+      app.getPath("userData"),
+      path.basename(process.execPath),
+    ],
+    {
+      detached: true,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      stdio: "ignore",
+    },
+  );
+  worker.unref();
+}
+
 class ElectronAppUpdateRuntime implements AppUpdateRuntime {
   private configured = false;
 
@@ -217,13 +430,21 @@ class ElectronAppUpdateRuntime implements AppUpdateRuntime {
     return autoUpdater.downloadUpdate();
   }
 
-  quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): Promise<void> {
+  quitAndInstall(
+    isSilent: boolean,
+    isForceRunAfter: boolean,
+    updateInfo?: RuntimeUpdateInfo,
+  ): Promise<void> {
     autoUpdater.autoRunAppAfterInstall = isForceRunAfter;
     return new Promise((resolve, reject) => {
       let settled = false;
       const usesAppQuitHandoff = shouldUseAppQuitHandoff({
         platform: process.platform,
         isForceRunAfter,
+      });
+      const usesDirectMacUpdate = shouldUseDirectMacUpdate({
+        platform: process.platform,
+        updateMode: updateInfo?.paseoMacUpdateMode,
       });
       const timeout = setTimeout(() => {
         settle(new Error("Update installer did not take over before the timeout."));
@@ -245,12 +466,27 @@ class ElectronAppUpdateRuntime implements AppUpdateRuntime {
       const onHandoff = (): void => settle();
       const onError = (error: Error): void => settle(error);
 
-      if (usesAppQuitHandoff) {
+      if (usesDirectMacUpdate) {
+        electronAutoUpdater.once("before-quit-for-update", onHandoff);
+      } else if (usesAppQuitHandoff) {
         app.once("before-quit", onHandoff);
       } else {
         electronAutoUpdater.once("before-quit-for-update", onHandoff);
       }
       autoUpdater.once("error", onError);
+      if (usesDirectMacUpdate) {
+        void handoffToDirectMacInstaller()
+          .then(() => {
+            electronAutoUpdater.emit("before-quit-for-update");
+            app.quit();
+            return undefined;
+          })
+          .catch((error: unknown) => {
+            settle(error instanceof Error ? error : new Error(String(error)));
+          });
+        return;
+      }
+
       try {
         autoUpdater.quitAndInstall(isSilent, isForceRunAfter);
       } catch (error) {
@@ -317,7 +553,7 @@ export async function downloadAndInstallUpdate(
     currentVersion: string;
     releaseChannel: AppReleaseChannel;
   },
-  onBeforeQuit?: () => Promise<void>,
+  onBeforeQuit?: (updateInfo: RuntimeUpdateInfo) => Promise<void>,
 ): Promise<AppUpdateInstallResult> {
   return appUpdateService.downloadAndInstallUpdate(
     { currentVersion, releaseChannel },

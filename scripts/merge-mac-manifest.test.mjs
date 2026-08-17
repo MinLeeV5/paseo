@@ -17,11 +17,12 @@ test("preserves unknown fields while merging files by url", () => {
     );
     writeFileSync(
       x64Path,
-      "version: 1.2.3\nfiles:\n  - url: app-x64.zip\n    sha512: x64\nstagingPercentage: 50\npath: app-x64.zip\nsha512: x64\nreleaseDate: '2026-04-29T00:00:00.000Z'\n",
+      "version: 1.2.3\npaseoMacUpdateMode: direct\nfiles:\n  - url: app-x64.zip\n    sha512: x64\nstagingPercentage: 50\npath: app-x64.zip\nsha512: x64\nreleaseDate: '2026-04-29T00:00:00.000Z'\n",
     );
     mergeMacManifest(arm64Path, x64Path, outputPath);
     const output = readFileSync(outputPath, "utf8");
     assert.match(output, /stagingPercentage: 25/);
+    assert.match(output, /paseoMacUpdateMode: direct/);
     assert.match(output, /url: app-arm64\.zip/);
     assert.match(output, /url: app-x64\.zip/);
   } finally {

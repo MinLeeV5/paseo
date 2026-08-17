@@ -77,6 +77,7 @@ import {
   shouldAdmitToRollout,
   shouldInstallAppUpdateOnQuit,
   shouldUseAppQuitHandoff,
+  shouldUseDirectMacUpdate,
 } from "./auto-updater";
 
 describe("checkForAppUpdate", () => {
@@ -175,6 +176,14 @@ describe("shouldUseAppQuitHandoff", () => {
     expect(shouldUseAppQuitHandoff({ platform: "darwin", isForceRunAfter: false })).toBe(true);
     expect(shouldUseAppQuitHandoff({ platform: "darwin", isForceRunAfter: true })).toBe(false);
     expect(shouldUseAppQuitHandoff({ platform: "win32", isForceRunAfter: false })).toBe(false);
+  });
+});
+
+describe("shouldUseDirectMacUpdate", () => {
+  it("selects the direct installer only for the marked macOS update", () => {
+    expect(shouldUseDirectMacUpdate({ platform: "darwin", updateMode: "direct" })).toBe(true);
+    expect(shouldUseDirectMacUpdate({ platform: "darwin", updateMode: undefined })).toBe(false);
+    expect(shouldUseDirectMacUpdate({ platform: "win32", updateMode: "direct" })).toBe(false);
   });
 });
 

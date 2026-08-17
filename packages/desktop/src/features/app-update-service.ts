@@ -28,6 +28,7 @@ export interface RuntimeUpdateInfo {
   releaseNotes?: unknown;
   releaseDate?: unknown;
   rolloutHours?: unknown;
+  paseoMacUpdateMode?: "direct";
 }
 
 export interface RuntimeUpdateProgress {
@@ -65,7 +66,11 @@ export interface AppUpdateRuntime {
   configure(input: AppUpdateRuntimeConfiguration): void;
   checkForUpdates(): Promise<RuntimeUpdateCheckResult | null>;
   downloadUpdate(): Promise<unknown>;
-  quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): Promise<void>;
+  quitAndInstall(
+    isSilent: boolean,
+    isForceRunAfter: boolean,
+    updateInfo?: RuntimeUpdateInfo,
+  ): Promise<void>;
 }
 
 export interface AppUpdateService {
@@ -79,7 +84,7 @@ export interface AppUpdateService {
       currentVersion: string;
       releaseChannel: AppReleaseChannel;
     },
-    onBeforeQuit?: () => Promise<void>,
+    onBeforeQuit?: (updateInfo: RuntimeUpdateInfo) => Promise<void>,
   ): Promise<AppUpdateInstallResult>;
   installUpdateOnQuit(input: {
     currentVersion: string;
@@ -128,13 +133,15 @@ async function performQuitAndInstall(
   {
     onBeforeQuit,
     restart,
+    updateInfo,
   }: {
-    onBeforeQuit?: () => Promise<void>;
+    onBeforeQuit?: (updateInfo: RuntimeUpdateInfo) => Promise<void>;
     restart: boolean;
+    updateInfo?: RuntimeUpdateInfo;
   },
 ): Promise<void> {
-  if (onBeforeQuit) await onBeforeQuit();
-  await runtime.quitAndInstall(/* isSilent */ !restart, /* isForceRunAfter */ restart);
+  if (onBeforeQuit && updateInfo) await onBeforeQuit(updateInfo);
+  await runtime.quitAndInstall(/* isSilent */ !restart, /* isForceRunAfter */ restart, updateInfo);
 }
 
 function getErrorMessage(error: unknown): string {
@@ -366,7 +373,7 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
       currentVersion: string;
       releaseChannel: AppReleaseChannel;
     },
-    onBeforeQuit?: () => Promise<void>,
+    onBeforeQuit?: (updateInfo: RuntimeUpdateInfo) => Promise<void>,
   ): Promise<AppUpdateInstallResult> {
     if (!deps.isPackaged()) {
       return {
@@ -436,7 +443,7 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
       signal,
       restart,
     }: {
-      onBeforeQuit?: () => Promise<void>;
+      onBeforeQuit?: (updateInfo: RuntimeUpdateInfo) => Promise<void>;
       signal?: AbortSignal;
       restart: boolean;
     },
@@ -455,7 +462,11 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
     }
 
     if (isReadyToInstallVersion(readyVersion)) {
-      await performQuitAndInstall(deps.runtime, { onBeforeQuit, restart });
+      await performQuitAndInstall(deps.runtime, {
+        onBeforeQuit,
+        restart,
+        updateInfo: cachedUpdateInfo,
+      });
       return {
         installed: true,
         version: readyVersion,
@@ -475,7 +486,11 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
           message: "A newer update was found and will be installed later.",
         };
       }
-      await performQuitAndInstall(deps.runtime, { onBeforeQuit, restart });
+      await performQuitAndInstall(deps.runtime, {
+        onBeforeQuit,
+        restart,
+        updateInfo: cachedUpdateInfo,
+      });
 
       return {
         installed: true,

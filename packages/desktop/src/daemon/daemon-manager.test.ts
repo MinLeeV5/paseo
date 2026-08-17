@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   },
   runExternalCliJsonCommand: vi.fn(),
   runExternalCliTextCommand: vi.fn(),
+  checkForAppUpdate: vi.fn(),
+  downloadAndInstallUpdate: vi.fn(),
   createNodeEntrypointInvocation: vi.fn(() => ({
     command: "node",
     args: [],
@@ -84,6 +86,11 @@ vi.mock("../settings/desktop-settings-electron.js", () => ({
   }),
 }));
 
+vi.mock("../features/auto-updater.js", () => ({
+  checkForAppUpdate: mocks.checkForAppUpdate,
+  downloadAndInstallUpdate: mocks.downloadAndInstallUpdate,
+}));
+
 vi.mock("./runtime-paths.js", () => ({
   createNodeEntrypointInvocation: mocks.createNodeEntrypointInvocation,
   resolveDaemonRunnerEntrypoint: vi.fn(() => ({
@@ -134,6 +141,8 @@ describe("daemon-manager commands", () => {
     mocks.settings = DEFAULT_DESKTOP_SETTINGS;
     mocks.runExternalCliJsonCommand.mockReset();
     mocks.runExternalCliTextCommand.mockReset();
+    mocks.checkForAppUpdate.mockReset();
+    mocks.downloadAndInstallUpdate.mockReset();
     mocks.createNodeEntrypointInvocation.mockReset();
     mocks.createNodeEntrypointInvocation.mockReturnValue({ command: "node", args: [], env: {} });
     mocks.spawnProcess.mockReset();
@@ -342,6 +351,87 @@ describe("daemon-manager commands", () => {
         cliResult: { action: "stopped", reason: "lifecycle_shutdown_rpc" },
       }),
     );
+  });
+
+  it("restarts a managed daemon when app update installation fails after stopping it", async () => {
+    mocks.downloadAndInstallUpdate.mockImplementationOnce(async (_input, onBeforeQuit) => {
+      await onBeforeQuit?.({ version: "1.2.3" });
+      return {
+        installed: false,
+        version: "1.2.3",
+        message: "Update failed",
+        errorMessage: "Code signature validation failed",
+      };
+    });
+    mocks.runExternalCliJsonCommand
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        serverId: "server-1",
+        pid: 4242,
+        listen: "127.0.0.1:6767",
+        daemonVersion: "1.2.3",
+        desktopManaged: true,
+      })
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        serverId: "server-1",
+        pid: 4242,
+        listen: "127.0.0.1:6767",
+        daemonVersion: "1.2.3",
+        desktopManaged: true,
+      })
+      .mockResolvedValueOnce({ action: "stopped" })
+      .mockResolvedValueOnce({ localDaemon: "stopped", serverId: "" })
+      .mockResolvedValueOnce({ localDaemon: "stopped", serverId: "" })
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        connectedDaemon: "reachable",
+        serverId: "server-2",
+        pid: 8888,
+        listen: "127.0.0.1:6767",
+        daemonVersion: "1.2.3",
+        desktopManaged: true,
+      });
+    mocks.spawnProcess.mockReturnValue(createMockChildProcess());
+
+    const result = await createDaemonCommandHandlers().install_app_update({
+      releaseChannel: "stable",
+    });
+
+    expect(result).toMatchObject({
+      installed: false,
+      errorMessage: "Code signature validation failed",
+    });
+    expect(mocks.runExternalCliJsonCommand).toHaveBeenNthCalledWith(3, [
+      "daemon",
+      "stop",
+      "--json",
+      "--timeout",
+      "5",
+      "--force",
+      "--kill-timeout",
+      "5",
+    ]);
+    expect(mocks.spawnProcess).toHaveBeenCalled();
+  });
+
+  it("keeps the managed daemon running for a direct macOS update handoff", async () => {
+    mocks.downloadAndInstallUpdate.mockImplementationOnce(async (_input, onBeforeQuit) => {
+      await onBeforeQuit?.({ version: "1.2.3", paseoMacUpdateMode: "direct" });
+      return {
+        installed: true,
+        version: "1.2.4",
+        message: "Update downloaded. The app will restart shortly.",
+      };
+    });
+
+    const result = await createDaemonCommandHandlers().install_app_update({
+      releaseChannel: "stable",
+    });
+
+    expect(result).toMatchObject({ installed: true, version: "1.2.4" });
+    expect(mocks.runExternalCliJsonCommand).not.toHaveBeenCalled();
+    expect(mocks.spawnProcess).not.toHaveBeenCalled();
   });
 
   it("uses a stale reachable desktop daemon when the version matches", async () => {

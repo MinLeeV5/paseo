@@ -700,6 +700,54 @@ async function resolveRequestedReleaseChannel(
   return parseReleaseChannel(args) ?? (await getDesktopSettingsStore().get()).releaseChannel;
 }
 
+type DesktopAppUpdateInstallResult = Awaited<ReturnType<typeof downloadAndInstallUpdate>>;
+
+async function installAppUpdateWithDaemonRecovery(
+  args: Record<string, unknown> | undefined,
+): Promise<DesktopAppUpdateInstallResult> {
+  const currentVersion = resolveDesktopAppVersion();
+  const releaseChannel = await resolveRequestedReleaseChannel(args);
+  let daemonWasRunning = false;
+
+  const restartDaemonIfNeeded = async (): Promise<void> => {
+    if (!daemonWasRunning) return;
+
+    try {
+      await startDaemon();
+    } catch (error) {
+      log.error(
+        "[desktop daemon] failed to restart managed daemon after app update failure",
+        error,
+      );
+    }
+  };
+
+  try {
+    const result = await downloadAndInstallUpdate(
+      { currentVersion, releaseChannel },
+      async (updateInfo) => {
+        // The direct worker can fail after this process hands off and exits.
+        // Keep the managed daemon alive so a failed replacement cannot strand it.
+        if (updateInfo.paseoMacUpdateMode === "direct") return;
+
+        const status = await resolveDesktopDaemonStatus();
+        if (status.status !== "running" || !status.desktopManaged) return;
+
+        daemonWasRunning = true;
+        await stopDesktopDaemon("app_update");
+      },
+    );
+
+    if (!result.installed) {
+      await restartDaemonIfNeeded();
+    }
+    return result;
+  } catch (error) {
+    await restartDaemonIfNeeded();
+    throw error;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // IPC registration
 // ---------------------------------------------------------------------------
@@ -753,15 +801,7 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
         intent: parseAppUpdateCheckIntent(args),
       });
     },
-    install_app_update: async (args) => {
-      const currentVersion = resolveDesktopAppVersion();
-      return downloadAndInstallUpdate(
-        { currentVersion, releaseChannel: await resolveRequestedReleaseChannel(args) },
-        async () => {
-          await stopDesktopDaemon("app_update");
-        },
-      );
-    },
+    install_app_update: (args) => installAppUpdateWithDaemonRecovery(args),
     get_local_daemon_version: () => getLocalDaemonVersion(),
     install_cli: () => installCli(),
     get_cli_install_status: () => getCliInstallStatus(),

@@ -37,6 +37,7 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
   downloadedVersions: string[] = [];
   installedVersions: string[] = [];
   installModes: Array<{ isSilent: boolean; isForceRunAfter: boolean }> = [];
+  installUpdateInfos: Array<RuntimeUpdateInfo | undefined> = [];
 
   configure(input: AppUpdateRuntimeConfiguration): void {
     this.configuration = input;
@@ -161,12 +162,17 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
     }
   }
 
-  async quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): Promise<void> {
+  async quitAndInstall(
+    isSilent: boolean,
+    isForceRunAfter: boolean,
+    updateInfo?: RuntimeUpdateInfo,
+  ): Promise<void> {
     this.quitAndInstallCallCount += 1;
     await this.installHandoff;
     if (this.downloadedUpdate) {
       this.installedVersions.push(this.downloadedUpdate.version);
       this.installModes.push({ isSilent, isForceRunAfter });
+      this.installUpdateInfos.push(updateInfo);
     }
   }
 }
@@ -425,7 +431,11 @@ describe("app update service", () => {
     });
     runtime.finishUpdateDownload(rolledOutUpdate);
 
-    const newerUpdate = { ...rolledOutUpdate, version: "1.2.5" };
+    const newerUpdate = {
+      ...rolledOutUpdate,
+      version: "1.2.5",
+      paseoMacUpdateMode: "direct" as const,
+    };
     runtime.nextCheck({ isUpdateAvailable: true, updateInfo: newerUpdate });
     const result = await service.checkForAppUpdate({
       currentVersion: "1.2.3",
@@ -570,6 +580,7 @@ describe("app update service", () => {
     expect(result.installed).toBe(true);
     expect(runtime.installedVersions).toEqual(["1.2.5"]);
     expect(runtime.installModes).toEqual([{ isSilent: false, isForceRunAfter: true }]);
+    expect(runtime.installUpdateInfos).toEqual([newerUpdate]);
   });
 
   it("waits for a stale active download before downloading and installing the rechecked version", async () => {

@@ -7,7 +7,16 @@ export function mergeMacManifest(arm64Path, x64Path, outputPath) {
   const files = [...(arm64.files ?? []), ...(x64.files ?? [])].filter(
     (file, index, all) => all.findIndex((entry) => entry.url === file.url) === index,
   );
-  const output = dump({ ...arm64, files }, { lineWidth: -1, noRefs: true });
+  const output = dump(
+    {
+      ...arm64,
+      files,
+      ...(arm64.paseoMacUpdateMode === "direct" || x64.paseoMacUpdateMode === "direct"
+        ? { paseoMacUpdateMode: "direct" }
+        : {}),
+    },
+    { lineWidth: -1, noRefs: true },
+  );
   fs.writeFileSync(outputPath, output);
   return output;
 }

@@ -271,6 +271,18 @@ jobs:
             exit 1
           fi
 
+          if [[ "${PASEO_MACOS_SIGNING_FALLBACK:-false}" == "true" ]]; then
+            node - "$stage_dir/${RELEASE_CHANNEL}-mac.yml" <<'NODE'
+          const fs = require("node:fs");
+          const { dump, load } = require("js-yaml");
+          const manifestPath = process.argv[2];
+          const manifest = load(fs.readFileSync(manifestPath, "utf8")) ?? {};
+          manifest.paseoMacUpdateMode = "direct";
+          fs.writeFileSync(manifestPath, dump(manifest, { lineWidth: -1, noRefs: true }));
+          NODE
+            echo "::warning::Published macOS manifest selects Paseo's direct installer because signing fell back to ad-hoc."
+          fi
+
       - name: Upload desktop artifacts to release
         if: env.SHOULD_PUBLISH == 'true' && env.IS_SMOKE_TAG != 'true'
         env:

@@ -167,6 +167,12 @@ npm run release:promote          # Promote X.Y.Z-beta.N to stable X.Y.Z
   the macOS entitlements while hardened runtime is enabled; otherwise the app
   can pass `codesign --verify` but crash at launch when dyld rejects Electron
   Framework for having a different runtime signing identity.
+- If the macOS signing step fails for a signing-related reason, the workflow
+  still publishes the ad-hoc fallback package. Its updater manifest is stamped
+  with `paseoMacUpdateMode: direct`; Paseo verifies the ZIP checksum through
+  `electron-updater`, waits for the current app to exit, and replaces the app
+  bundle itself instead of asking ShipIt to validate the incoming signature.
+  Signed builds keep the native ShipIt install path.
 - Beta releases use Electron's `beta` update channel. Users on the stable channel only receive stable releases; users on the beta channel receive beta releases and the final stable release when it is published.
 - **Each beta carries its own changelog entry.** `Release Notes Sync` mirrors the matching `## X.Y.Z-beta.N` entry into that prerelease body. Promotion collapses every beta entry for the version into one final stable entry. See the Changelog policy section.
 
