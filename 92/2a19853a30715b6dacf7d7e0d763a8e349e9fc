@@ -1,0 +1,58 @@
+packages/desktop/src/features/auto-updater.ts
+  1b255716275d334e 1,69-224,305-360,433-437,445-448,469-471,477-489,556
+.github/workflows/desktop-release.yml
+  1b255716275d334e 274-283
+packages/desktop/src/daemon/daemon-manager.ts
+  110d673fb93f629f 703-725,735,740-750,804
+  1b255716275d334e 726-734,736-739
+packages/desktop/src/features/auto-updater.test.ts
+  1b255716275d334e 80,182-186
+packages/desktop/src/features/app-update-service.ts
+  1b255716275d334e 31,69-73,87,136,138,140,143-144,376,446,465-469,489-493
+packages/desktop/src/daemon/daemon-manager.test.ts
+  110d673fb93f629f 20-21,89-93,144-145,356-415
+  1b255716275d334e 418-436
+scripts/merge-mac-manifest.test.mjs
+  1b255716275d334e 20,25
+packages/desktop/src/features/app-update-service.test.ts
+  1b255716275d334e 40,165-169,175,434-438,583
+scripts/merge-mac-manifest.mjs
+  1b255716275d334e 10-19
+docs/release.md
+  110d673fb93f629f 170-175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "922a19853a30715b6dacf7d7e0d763a8e349e9fc",
+  "prompts": {
+    "110d673fb93f629f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a00de6-8fdf-7643-a0d5-b3e22cad64d4",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 0,
+      "accepted_lines": 496,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/2859e2848f0a842a231d01d39931ba6acb96a4b7a04b1a7c5d86f06d542d3d19"
+    },
+    "1b255716275d334e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a00de4-c596-7892-a0e0-863e8edc89c3",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 340,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/ce3b85b926bfdc675e06933b7b54b916c8fa0321e358e95f66259a03708006ca"
+    }
+  }
+}
