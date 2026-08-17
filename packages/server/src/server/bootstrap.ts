@@ -145,6 +145,7 @@ import {
   type WorkspaceArchiveContext,
 } from "./workspace-registry.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
+import { AgentSessionChangesManager } from "./agent-session-changes-manager.js";
 import { ScheduleService } from "./schedule/service.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
@@ -811,6 +812,12 @@ export async function createPaseoDaemon(
       forgeOverrides: { github },
     },
   });
+  const agentSessionChangesManager = new AgentSessionChangesManager({
+    agentStorage,
+    workspaceGitService,
+    paseoHome: config.paseoHome,
+    logger,
+  });
   const workspaceProvisioning = createWorkspaceProvisioningService({
     serverId,
     projectRegistry,
@@ -837,6 +844,28 @@ export async function createPaseoDaemon(
     appendSystemPrompt: config.appendSystemPrompt,
     onWorkspaceStateMayHaveChanged: ({ cwd }) => {
       workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
+    },
+    onBeforeAgentTurn: async ({ agentId, cwd, prompt, messageId }) => {
+      return agentSessionChangesManager.beginTurn({
+        agentId,
+        cwd,
+        prompt,
+        ...(messageId ? { messageId } : null),
+      });
+    },
+    onAgentTurnStarted: async ({ agentId, preparationId, turnId }) => {
+      await agentSessionChangesManager.attachProviderTurnId({
+        agentId,
+        turnDiffRecordId: preparationId,
+        providerTurnId: turnId,
+      });
+    },
+    onAfterAgentTurn: async ({ agentId, preparationId, status }) => {
+      await agentSessionChangesManager.finishTurn({
+        agentId,
+        turnDiffRecordId: preparationId,
+        status,
+      });
     },
     mcpAuthToken: agentMcpAuthToken,
     logger,
@@ -1567,6 +1596,7 @@ export async function createPaseoDaemon(
               browserToolsBroker,
               hubRelationships,
               workspaceSetupRuntime,
+              agentSessionChangesManager,
             );
             relayRuntime = createRelayRuntime({
               config: {

@@ -507,6 +507,29 @@ describe("checkout git utilities", () => {
     ]);
   });
 
+  it("keeps an unchanged snapshot file out of the diff when it is untracked locally", async () => {
+    const snapshotPath = join(repoDir, "snapshot-untracked.txt");
+    writeFileSync(snapshotPath, "unchanged\n");
+    execFileSync("git", ["add", "snapshot-untracked.txt"], { cwd: repoDir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "snapshot"], {
+      cwd: repoDir,
+    });
+    const snapshotRef = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repoDir,
+      encoding: "utf8",
+    }).trim();
+    execFileSync("git", ["reset", "--hard", "HEAD^"], { cwd: repoDir });
+    writeFileSync(snapshotPath, "unchanged\n");
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "snapshot",
+      baseRef: snapshotRef,
+      includeStructured: true,
+    });
+
+    expect(diff).toEqual({ diff: "", structured: [] });
+  });
+
   it("returns the branch being rebased when HEAD is detached during a rebase", async () => {
     execFileSync("git", ["checkout", "-b", "feature/rebase-test"], { cwd: repoDir });
     writeFileSync(join(repoDir, "file.txt"), "feature\n");

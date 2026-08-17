@@ -13,6 +13,7 @@ import type { ProjectRegistry, WorkspaceRegistry } from "./workspace-registry.js
 import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
 import type { ScheduleService } from "./schedule/service.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
+import type { AgentSessionChangesManager } from "./agent-session-changes-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
   type ServerInfoStatusPayload,
@@ -530,6 +531,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly scheduleService: ScheduleService;
   private readonly checkoutDiffManager: CheckoutDiffManager;
+  private readonly agentSessionChangesManager: AgentSessionChangesManager | null;
   private readonly github: ForgeService;
   private readonly workspaceGitService: WorkspaceGitService;
   private readonly workspaceAutoName: WorkspaceAutoName;
@@ -621,6 +623,7 @@ export class VoiceAssistantWebSocketServer {
     browserToolsBroker?: BrowserToolsBroker | null,
     hubRelationships?: HubRelationshipManagement | null,
     workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
+    agentSessionChangesManager?: AgentSessionChangesManager,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.workspaceSetupRuntime = workspaceSetupRuntime;
@@ -644,6 +647,7 @@ export class VoiceAssistantWebSocketServer {
     });
     this.scheduleService = requiredServices.scheduleService;
     this.checkoutDiffManager = requiredServices.checkoutDiffManager;
+    this.agentSessionChangesManager = agentSessionChangesManager ?? null;
     this.github = github ?? createGitHubService();
     this.workspaceGitService = workspaceGitService ?? createFallbackWorkspaceGitService();
     this.workspaceAutoName = workspaceAutoName;
@@ -1042,6 +1046,7 @@ export class VoiceAssistantWebSocketServer {
     await Promise.all(cleanupPromises);
     this.providerSnapshotManager.destroy();
     this.checkoutDiffManager.dispose();
+    this.agentSessionChangesManager?.dispose();
     await this.workspaceGitService.dispose();
     this.pendingConnections.clear();
     this.sessions.clear();
@@ -1346,6 +1351,7 @@ export class VoiceAssistantWebSocketServer {
       workspaceRegistry: this.workspaceRegistry,
       scheduleService: this.scheduleService,
       checkoutDiffManager: this.checkoutDiffManager,
+      agentSessionChangesManager: this.agentSessionChangesManager ?? undefined,
       github: this.github,
       workspaceGitService: this.workspaceGitService,
       workspaceAutoName: this.workspaceAutoName,
@@ -1563,6 +1569,12 @@ export class VoiceAssistantWebSocketServer {
         agentHistorySearch: true,
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: true,
+        // COMPAT(checkoutDiffSubmodulePaths): added in v0.1.103, remove gate after 2027-01-08.
+        checkoutDiffSubmodulePaths: true,
+        // COMPAT(agentSessionChanges): added in v1.1.114, remove gate after 2027-01-22.
+        agentSessionChanges: true,
+        // COMPAT(agentTurnChanges): added in v1.1.114, remove gate after 2027-01-22.
+        agentTurnChanges: true,
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: true,
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.

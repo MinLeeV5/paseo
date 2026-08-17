@@ -3772,6 +3772,75 @@ test("runAgent persists finished attention and idle status without an external s
   expect(persisted?.attentionTimestamp).toEqual(expect.any(String));
 });
 
+test("runAgent brackets every user prompt with turn diff lifecycle hooks", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-session-baseline-hook-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const storedAgentIdsAtTurn: string[] = [];
+  let preparationCount = 0;
+  const onBeforeAgentTurn = vi.fn(async ({ agentId }: { agentId: string }) => {
+    if (await storage.get(agentId)) {
+      storedAgentIdsAtTurn.push(agentId);
+    }
+    preparationCount += 1;
+    return `preparation-${preparationCount}`;
+  });
+  const onAgentTurnStarted = vi.fn();
+  const onAfterAgentTurn = vi.fn();
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    onBeforeAgentTurn,
+    onAgentTurnStarted,
+    onAfterAgentTurn,
+  });
+  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+
+  await manager.runAgent(snapshot.id, "first turn", { clientMessageId: "message-1" });
+  await manager.runAgent(snapshot.id, "second turn");
+
+  expect(onBeforeAgentTurn).toHaveBeenNthCalledWith(1, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    prompt: "first turn",
+    messageId: "message-1",
+  });
+  expect(onBeforeAgentTurn).toHaveBeenNthCalledWith(2, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    prompt: "second turn",
+  });
+  expect(storedAgentIdsAtTurn).toEqual([snapshot.id, snapshot.id]);
+  expect(onAgentTurnStarted).toHaveBeenNthCalledWith(1, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    preparationId: "preparation-1",
+    turnId: "turn-1",
+  });
+  expect(onAgentTurnStarted).toHaveBeenNthCalledWith(2, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    preparationId: "preparation-2",
+    turnId: "turn-2",
+  });
+  expect(onAfterAgentTurn).toHaveBeenNthCalledWith(1, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    preparationId: "preparation-1",
+    turnId: "turn-1",
+    status: "completed",
+  });
+  expect(onAfterAgentTurn).toHaveBeenNthCalledWith(2, {
+    agentId: snapshot.id,
+    cwd: workdir,
+    preparationId: "preparation-2",
+    turnId: "turn-2",
+    status: "completed",
+  });
+});
+
 test("archiveSnapshot clears persisted attention and normalizes running status", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-archive-attention-"));
   const storagePath = join(workdir, "agents");

@@ -599,6 +599,30 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
 
   // --- Tab relative navigation ---
   {
+    id: "workspace-tab-navigate-relative-ctrl-tab-desktop",
+    action: "workspace.tab.navigate.relative",
+    combo: "Ctrl+Tab",
+    when: { desktop: true, commandCenter: false },
+    payload: { type: "delta", delta: 1 },
+    help: {
+      id: "workspace-tab-next",
+      section: "tabs-panes",
+      label: "Next tab",
+    },
+  },
+  {
+    id: "workspace-tab-navigate-relative-ctrl-shift-tab-desktop",
+    action: "workspace.tab.navigate.relative",
+    combo: "Ctrl+Shift+Tab",
+    when: { desktop: true, commandCenter: false },
+    payload: { type: "delta", delta: -1 },
+    help: {
+      id: "workspace-tab-prev",
+      section: "tabs-panes",
+      label: "Previous tab",
+    },
+  },
+  {
     id: "workspace-tab-navigate-relative-alt-shift-left",
     action: "workspace.tab.navigate.relative",
     combo: "Alt+Shift+[",

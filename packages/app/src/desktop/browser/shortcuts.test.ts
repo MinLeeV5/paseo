@@ -169,6 +169,29 @@ describe("buildBrowserKeyboardPolicy", () => {
     });
   });
 
+  it("publishes desktop Ctrl+Tab navigation in both directions", () => {
+    const policy = buildBrowserKeyboardPolicy({
+      bindings: buildEffectiveBindings({}),
+      isMac: true,
+      isDesktop: true,
+    });
+
+    expect(policy.prefixes).toContainEqual({
+      alt: false,
+      code: "Tab",
+      control: true,
+      meta: false,
+      shift: false,
+    });
+    expect(policy.prefixes).toContainEqual({
+      alt: false,
+      code: "Tab",
+      control: true,
+      meta: false,
+      shift: true,
+    });
+  });
+
   it("keeps Ctrl+W out of the window menu after the tab-close shortcut is remapped", () => {
     const bindings = buildEffectiveBindings({
       "workspace-tab-close-current-ctrl-w-non-mac": "Ctrl+Y",

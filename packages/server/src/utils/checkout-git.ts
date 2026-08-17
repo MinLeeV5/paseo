@@ -1,6 +1,7 @@
 import { resolve, dirname, basename } from "path";
 import { existsSync, realpathSync } from "fs";
-import { open as openFile, readFile, stat as statFile } from "fs/promises";
+import { mkdtemp, open as openFile, readFile, rm, stat as statFile } from "fs/promises";
+import { tmpdir } from "os";
 import { TTLCache } from "@isaacs/ttlcache";
 import type { CheckoutCommit, CheckoutCommitFile } from "@getpaseo/protocol/messages";
 import { parseGitHubRemoteIdentity, parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
@@ -190,6 +191,7 @@ export function __setCheckoutShortstatCacheTtlForTests(ttlMs: number): void {
 
 interface CheckoutFileChange {
   path: string;
+  submodulePath?: string;
   oldPath?: string;
   status: string;
   isNew: boolean;
@@ -201,10 +203,103 @@ interface CheckoutDiffRefs {
   baseRef: string;
   targetRef?: string;
   includeUntracked: boolean;
+  indexFile?: string;
 }
 
-function getCheckoutDiffRefArgs(refs: CheckoutDiffRefs): string[] {
-  return [refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
+interface SubmoduleTrackedFileChange {
+  cwd: string;
+  displayPrefix: string;
+  refsForDiff: CheckoutDiffRefs;
+  change: CheckoutFileChange;
+  fallback?: SubmoduleTrackedFileChange;
+  isGitlinkFallback?: boolean;
+}
+
+interface SubmoduleFileChanges {
+  tracked: SubmoduleTrackedFileChange[];
+  untracked: CheckoutFileChange[];
+  expandedSubmodulePaths: Set<string>;
+}
+
+interface InitializedSubmodule {
+  path: string;
+  branch: string | null;
+}
+
+type RecursiveDiffEndpoint =
+  | { kind: "absent" }
+  | { kind: "commit"; ref: string }
+  | {
+      kind: "checkedCommit";
+      recordedCommit: string;
+      headCommit: string;
+    }
+  | {
+      kind: "worktree";
+      recordedCommit: string | null;
+      headCommit: string | null;
+    };
+
+interface SubmoduleDiffComparison {
+  mode: "uncommitted" | "committed";
+  oldEndpoint: RecursiveDiffEndpoint;
+  newEndpoint: RecursiveDiffEndpoint;
+  includeUntracked: boolean;
+}
+
+type GitlinkLookup =
+  | { kind: "present"; objectId: string }
+  | { kind: "absent" }
+  | { kind: "unavailable" };
+
+interface SubmoduleScanCache {
+  initializedSubmodules: Map<string, Promise<InitializedSubmodule[]>>;
+  gitlinks: Map<string, Promise<GitlinkLookup>>;
+  headObjectIds: Map<string, Promise<string | null>>;
+  currentBranchNames: Map<string, Promise<string | null>>;
+}
+
+function createSubmoduleScanCache(): SubmoduleScanCache {
+  return {
+    initializedSubmodules: new Map(),
+    gitlinks: new Map(),
+    headObjectIds: new Map(),
+    currentBranchNames: new Map(),
+  };
+}
+
+function getCheckoutDiffDiscoveryArgs(refs: CheckoutDiffRefs): string[] {
+  return ["--ignore-submodules=dirty", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
+}
+
+function getCheckoutDiffRenderingArgs(refs: CheckoutDiffRefs): string[] {
+  return ["--ignore-submodules=none", refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
+}
+
+function getCheckoutDiffGitEnv(refs: CheckoutDiffRefs) {
+  return refs.indexFile
+    ? { ...READ_ONLY_GIT_ENV, GIT_INDEX_FILE: refs.indexFile }
+    : READ_ONLY_GIT_ENV;
+}
+
+async function createSnapshotDiffIndex(
+  cwd: string,
+  baseRef: string,
+): Promise<{ directory: string; indexFile: string }> {
+  // A snapshot can contain files that are still untracked in the user's real index.
+  // Seed an alternate index so Git compares those paths to the working tree.
+  const directory = await mkdtemp(resolve(tmpdir(), "paseo-snapshot-diff-"));
+  const indexFile = resolve(directory, "index");
+  try {
+    await runGitCommand(["read-tree", baseRef], {
+      cwd,
+      envOverlay: { ...READ_ONLY_GIT_ENV, GIT_INDEX_FILE: indexFile },
+    });
+    return { directory, indexFile };
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 function normalizeBranchSuggestionName(raw: string): string | null {
@@ -511,9 +606,9 @@ async function listCheckoutFileChanges(
   const { stdout: nameStatusOut } = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace,
-      extra: ["--name-status", ...getCheckoutDiffRefArgs(refs)],
+      extra: ["--name-status", ...getCheckoutDiffDiscoveryArgs(refs)],
     }),
-    { cwd, envOverlay: READ_ONLY_GIT_ENV },
+    { cwd, envOverlay: getCheckoutDiffGitEnv(refs) },
   );
   for (const line of nameStatusOut
     .split("\n")
@@ -555,7 +650,7 @@ async function listCheckoutFileChanges(
       ["ls-files", "--others", "--exclude-standard"],
       {
         cwd,
-        envOverlay: READ_ONLY_GIT_ENV,
+        envOverlay: getCheckoutDiffGitEnv(refs),
       },
     );
     for (const file of untrackedOut
@@ -637,6 +732,21 @@ function buildGitDiffArgs(args: { ignoreWhitespace?: boolean; extra: string[] })
   return ["diff", ...(args.ignoreWhitespace ? ["-w"] : []), ...args.extra];
 }
 
+function getNestedParsedFilesForPath(
+  parsedTrackedFiles: ParsedDiffFile[],
+  path: string,
+): ParsedDiffFile[] {
+  const nestedPathPrefix = `${path}/`;
+  return parsedTrackedFiles.filter((file) => file.path.startsWith(nestedPathPrefix));
+}
+
+function joinGitPath(...parts: string[]): string {
+  return parts
+    .map((part) => part.replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean)
+    .join("/");
+}
+
 const TRACKED_DIFF_NUMSTAT_MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const TRACKED_DIFF_BATCH_SIZE = 8;
 const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -644,7 +754,7 @@ const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 function isUnbornHeadDiffError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    error.message.includes("--name-status HEAD") &&
+    error.message.includes("--name-status --ignore-submodules=dirty HEAD") &&
     error.message.includes("ambiguous argument 'HEAD'")
   );
 }
@@ -657,11 +767,11 @@ async function getTrackedNumstatByPath(
   const result = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace,
-      extra: ["--numstat", ...getCheckoutDiffRefArgs(refs)],
+      extra: ["--numstat", ...getCheckoutDiffDiscoveryArgs(refs)],
     }),
     {
       cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
+      envOverlay: getCheckoutDiffGitEnv(refs),
       maxOutputBytes: TRACKED_DIFF_NUMSTAT_MAX_BYTES,
       acceptExitCodes: [0],
     },
@@ -715,11 +825,16 @@ async function getTrackedDiffTextForPath(input: {
   const result = await runGitCommand(
     buildGitDiffArgs({
       ignoreWhitespace: input.ignoreWhitespace,
-      extra: [...getCheckoutDiffRefArgs(input.refsForDiff), "--", input.path],
+      extra: [
+        "--submodule=diff",
+        ...getCheckoutDiffRenderingArgs(input.refsForDiff),
+        "--",
+        input.path,
+      ],
     }),
     {
       cwd: input.cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
+      envOverlay: getCheckoutDiffGitEnv(input.refsForDiff),
       maxOutputBytes: PER_FILE_DIFF_MAX_BYTES,
     },
   );
@@ -729,6 +844,990 @@ async function getTrackedDiffTextForPath(input: {
     text: result.stdout,
     truncated: result.truncated,
   };
+}
+
+async function listInitializedSubmodules(cwd: string): Promise<InitializedSubmodule[]> {
+  let result;
+  try {
+    result = await runGitCommand(
+      ["config", "--file", ".gitmodules", "--get-regexp", "^submodule\\..*\\.(path|branch)$"],
+      {
+        cwd,
+        envOverlay: READ_ONLY_GIT_ENV,
+        acceptExitCodes: [0, 1],
+      },
+    );
+  } catch {
+    return [];
+  }
+
+  if (result.exitCode !== 0) {
+    return [];
+  }
+
+  const entriesByName = new Map<string, Partial<InitializedSubmodule>>();
+  for (const line of result.stdout
+    .split("\n")
+    .map((candidate) => candidate.trim())
+    .filter(Boolean)) {
+    const separatorIndex = line.indexOf(" ");
+    if (separatorIndex < 0) {
+      continue;
+    }
+
+    const key = line.slice(0, separatorIndex);
+    const value = line.slice(separatorIndex + 1).trim();
+    const match = key.match(/^submodule\.(.*)\.(path|branch)$/);
+    if (!match || !value) {
+      continue;
+    }
+    const [, name, field] = match;
+    if (!name || !field) continue;
+    const entry = entriesByName.get(name) ?? {};
+    if (field === "path") {
+      entry.path = value;
+    } else {
+      entry.branch = value;
+    }
+    entriesByName.set(name, entry);
+  }
+
+  const initialized: InitializedSubmodule[] = [];
+  for (const entry of entriesByName.values()) {
+    const submodulePath = entry.path;
+    if (!submodulePath || submodulePath.startsWith("/")) continue;
+
+    try {
+      await runGitCommand(["rev-parse", "--is-inside-work-tree"], {
+        cwd: resolve(cwd, submodulePath),
+        envOverlay: READ_ONLY_GIT_ENV,
+      });
+    } catch {
+      continue;
+    }
+
+    initialized.push({ path: submodulePath, branch: entry.branch ?? null });
+  }
+
+  return [...new Map(initialized.map((entry) => [entry.path, entry])).values()].sort((a, b) =>
+    a.path.localeCompare(b.path),
+  );
+}
+
+async function readGitlinkObjectIdAtRef(
+  cwd: string,
+  ref: string,
+  path: string,
+): Promise<GitlinkLookup> {
+  try {
+    const result = await runGitCommand(["ls-tree", ref, "--", path], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    const metadata = result.stdout.split("\t", 1)[0]?.trim().split(/\s+/) ?? [];
+    const [mode, type, objectId] = metadata;
+    if (mode === "160000" && type === "commit" && objectId) {
+      return { kind: "present", objectId };
+    }
+    return { kind: "absent" };
+  } catch {
+    return { kind: "unavailable" };
+  }
+}
+
+function getCanonicalPathOrResolved(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+function listInitializedSubmodulesCached(
+  cwd: string,
+  cache: SubmoduleScanCache,
+): Promise<InitializedSubmodule[]> {
+  const key = getCanonicalPathOrResolved(cwd);
+  const cached = cache.initializedSubmodules.get(key);
+  if (cached) return cached;
+  const load = listInitializedSubmodules(cwd);
+  cache.initializedSubmodules.set(key, load);
+  return load;
+}
+
+async function readCurrentBranchName(cwd: string): Promise<string | null> {
+  try {
+    const result = await runGitCommand(["symbolic-ref", "--quiet", "--short", "HEAD"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    return result.stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function readCurrentBranchNameCached(
+  cwd: string,
+  cache: SubmoduleScanCache,
+): Promise<string | null> {
+  const key = getCanonicalPathOrResolved(cwd);
+  const cached = cache.currentBranchNames.get(key);
+  if (cached) return cached;
+  const load = readCurrentBranchName(cwd);
+  cache.currentBranchNames.set(key, load);
+  return load;
+}
+
+function getSubmoduleBranchRefCandidates(branch: string): string[] {
+  if (branch.startsWith("refs/")) return [branch];
+  const normalized = branch.startsWith("origin/") ? branch.slice("origin/".length) : branch;
+  return [`refs/remotes/origin/${normalized}`, `refs/heads/${normalized}`];
+}
+
+async function resolveSubmoduleCommittedBaseRef(input: {
+  parentCwd: string;
+  childCwd: string;
+  configuredBranch: string | null;
+  cache: SubmoduleScanCache;
+}): Promise<string | null> {
+  const headCommit = await readHeadObjectIdCached(input.childCwd, input.cache);
+  const configuredBranch = input.configuredBranch?.trim();
+  if (!headCommit || !configuredBranch) return headCommit;
+
+  const branch =
+    configuredBranch === "."
+      ? await readCurrentBranchNameCached(input.parentCwd, input.cache)
+      : configuredBranch;
+  if (!branch) return headCommit;
+
+  for (const ref of getSubmoduleBranchRefCandidates(branch)) {
+    try {
+      const result = await runGitCommand(["rev-parse", "--verify", ref], {
+        cwd: input.childCwd,
+        envOverlay: READ_ONLY_GIT_ENV,
+      });
+      const objectId = result.stdout.trim();
+      if (objectId) return objectId;
+    } catch {
+      // Try the next local ref before falling back to the checked-out HEAD.
+    }
+  }
+  return headCommit;
+}
+
+function readGitlinkObjectIdAtRefCached(
+  cwd: string,
+  ref: string,
+  path: string,
+  cache: SubmoduleScanCache,
+): Promise<GitlinkLookup> {
+  const key = `${getCanonicalPathOrResolved(cwd)}\0${ref}\0${path}`;
+  const cached = cache.gitlinks.get(key);
+  if (cached) return cached;
+  const load = readGitlinkObjectIdAtRef(cwd, ref, path);
+  cache.gitlinks.set(key, load);
+  return load;
+}
+
+async function readHeadObjectId(cwd: string): Promise<string | null> {
+  try {
+    const result = await runGitCommand(["rev-parse", "HEAD"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    return result.stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function readHeadObjectIdCached(cwd: string, cache: SubmoduleScanCache): Promise<string | null> {
+  const key = getCanonicalPathOrResolved(cwd);
+  const cached = cache.headObjectIds.get(key);
+  if (cached) return cached;
+  const load = readHeadObjectId(cwd);
+  cache.headObjectIds.set(key, load);
+  return load;
+}
+
+function getCommitRefForEndpoint(endpoint: RecursiveDiffEndpoint): string | null {
+  switch (endpoint.kind) {
+    case "absent":
+      return EMPTY_TREE_OBJECT_ID;
+    case "commit":
+      return endpoint.ref;
+    case "checkedCommit":
+      return endpoint.headCommit;
+    case "worktree":
+      return null;
+  }
+}
+
+function getSubmoduleComparisonDiffRefs(
+  comparison: SubmoduleDiffComparison,
+): CheckoutDiffRefs | null {
+  if (comparison.oldEndpoint.kind === "worktree") return null;
+  const baseRef = getCommitRefForEndpoint(comparison.oldEndpoint);
+  const targetRef = getCommitRefForEndpoint(comparison.newEndpoint);
+  if (!baseRef) return null;
+  return {
+    baseRef,
+    ...(targetRef ? { targetRef } : null),
+    includeUntracked: comparison.includeUntracked && comparison.newEndpoint.kind === "worktree",
+  };
+}
+
+function canonicalizeRootCommitRef(ref: string, rootHead: string | null): string {
+  return ref === "HEAD" && rootHead ? rootHead : ref;
+}
+
+function createSubmoduleFallbackChange(
+  path: string,
+  comparison: SubmoduleDiffComparison | null,
+): CheckoutFileChange {
+  const isNew =
+    (comparison?.oldEndpoint.kind === "absent" && comparison.newEndpoint.kind !== "absent") ||
+    (comparison?.mode === "uncommitted" &&
+      comparison.newEndpoint.kind === "worktree" &&
+      comparison.newEndpoint.recordedCommit === null);
+  const isDeleted =
+    comparison?.oldEndpoint.kind !== "absent" && comparison?.newEndpoint.kind === "absent";
+  let status = "M";
+  if (isNew) {
+    status = "A";
+  } else if (isDeleted) {
+    status = "D";
+  }
+  return {
+    path,
+    status,
+    isNew,
+    isDeleted,
+  };
+}
+
+async function resolveChildEndpoint(input: {
+  parentCwd: string;
+  childCwd: string;
+  submodulePath: string;
+  endpoint: RecursiveDiffEndpoint;
+  cache: SubmoduleScanCache;
+}): Promise<RecursiveDiffEndpoint | null> {
+  if (input.endpoint.kind === "absent") return { kind: "absent" };
+  if (input.endpoint.kind === "commit") {
+    const lookup = await readGitlinkObjectIdAtRefCached(
+      input.parentCwd,
+      input.endpoint.ref,
+      input.submodulePath,
+      input.cache,
+    );
+    if (lookup.kind === "unavailable") return null;
+    return lookup.kind === "present"
+      ? { kind: "commit", ref: lookup.objectId }
+      : { kind: "absent" };
+  }
+
+  if (input.endpoint.kind === "checkedCommit") {
+    const lookup = await readGitlinkObjectIdAtRefCached(
+      input.parentCwd,
+      input.endpoint.headCommit,
+      input.submodulePath,
+      input.cache,
+    );
+    if (lookup.kind === "unavailable") return null;
+    return lookup.kind === "present"
+      ? { kind: "commit", ref: lookup.objectId }
+      : { kind: "absent" };
+  }
+
+  const [recordedLookup, headCommit] = await Promise.all([
+    input.endpoint.headCommit
+      ? readGitlinkObjectIdAtRefCached(
+          input.parentCwd,
+          input.endpoint.headCommit,
+          input.submodulePath,
+          input.cache,
+        )
+      : Promise.resolve<GitlinkLookup>({ kind: "absent" }),
+    readHeadObjectIdCached(input.childCwd, input.cache),
+  ]);
+  if (recordedLookup.kind === "unavailable" || !headCommit) return null;
+  return {
+    kind: "worktree",
+    recordedCommit: recordedLookup.kind === "present" ? recordedLookup.objectId : null,
+    headCommit,
+  };
+}
+
+async function resolveSubmoduleDiffComparison(input: {
+  parentCwd: string;
+  submoduleCwd: string;
+  submodulePath: string;
+  configuredBranch: string | null;
+  parentComparison: SubmoduleDiffComparison;
+  cache: SubmoduleScanCache;
+}): Promise<SubmoduleDiffComparison | null> {
+  if (input.parentComparison.mode === "uncommitted") {
+    // File classification is repository-local: once a child commit exists, only
+    // that child's HEAD-to-worktree patch remains Uncommitted. The parent-recorded
+    // gitlink is retained on the worktree endpoint solely for compact pointer output.
+    const newEndpoint = await resolveChildEndpoint({
+      parentCwd: input.parentCwd,
+      childCwd: input.submoduleCwd,
+      submodulePath: input.submodulePath,
+      endpoint: input.parentComparison.newEndpoint,
+      cache: input.cache,
+    });
+    if (newEndpoint?.kind !== "worktree" || !newEndpoint.headCommit) return null;
+    return {
+      mode: "uncommitted",
+      oldEndpoint: { kind: "commit", ref: newEndpoint.headCommit },
+      newEndpoint,
+      includeUntracked: input.parentComparison.includeUntracked,
+    };
+  }
+
+  // A configured `.gitmodules` branch is the child's committed baseline. Prefer
+  // its fetched origin ref, then its local branch; without a resolvable branch,
+  // compare HEAD to itself so a stale parent gitlink cannot expand old history.
+  const [committedBaseRef, recordedNewEndpoint, checkedHeadCommit] = await Promise.all([
+    resolveSubmoduleCommittedBaseRef({
+      parentCwd: input.parentCwd,
+      childCwd: input.submoduleCwd,
+      configuredBranch: input.configuredBranch,
+      cache: input.cache,
+    }),
+    resolveChildEndpoint({
+      parentCwd: input.parentCwd,
+      childCwd: input.submoduleCwd,
+      submodulePath: input.submodulePath,
+      endpoint: input.parentComparison.newEndpoint,
+      cache: input.cache,
+    }),
+    readHeadObjectIdCached(input.submoduleCwd, input.cache),
+  ]);
+  let newEndpoint: RecursiveDiffEndpoint | null = recordedNewEndpoint;
+  if (recordedNewEndpoint?.kind === "commit" && checkedHeadCommit) {
+    newEndpoint = {
+      kind: "checkedCommit",
+      recordedCommit: recordedNewEndpoint.ref,
+      headCommit: checkedHeadCommit,
+    };
+  } else if (checkedHeadCommit) {
+    newEndpoint = { kind: "commit", ref: checkedHeadCommit };
+  }
+  if (!committedBaseRef || !newEndpoint) return null;
+
+  return {
+    mode: "committed",
+    oldEndpoint: { kind: "commit", ref: committedBaseRef },
+    newEndpoint,
+    includeUntracked: input.parentComparison.includeUntracked,
+  };
+}
+
+async function resolveParentRecordedSubmoduleComparison(input: {
+  parentCwd: string;
+  submoduleCwd: string;
+  submodulePath: string;
+  parentComparison: SubmoduleDiffComparison;
+  cache: SubmoduleScanCache;
+}): Promise<SubmoduleDiffComparison | null> {
+  const [oldEndpoint, newEndpoint] = await Promise.all([
+    resolveChildEndpoint({
+      parentCwd: input.parentCwd,
+      childCwd: input.submoduleCwd,
+      submodulePath: input.submodulePath,
+      endpoint: input.parentComparison.oldEndpoint,
+      cache: input.cache,
+    }),
+    resolveChildEndpoint({
+      parentCwd: input.parentCwd,
+      childCwd: input.submoduleCwd,
+      submodulePath: input.submodulePath,
+      endpoint: input.parentComparison.newEndpoint,
+      cache: input.cache,
+    }),
+  ]);
+  if (!oldEndpoint || !newEndpoint) return null;
+  return {
+    mode: "committed",
+    oldEndpoint,
+    newEndpoint,
+    includeUntracked: false,
+  };
+}
+
+function hasEndpointChange(comparison: SubmoduleDiffComparison | null): boolean {
+  if (!comparison) return false;
+  return (
+    getCommitRefForEndpoint(comparison.oldEndpoint) !==
+    getCommitRefForEndpoint(comparison.newEndpoint)
+  );
+}
+
+function hasUncommittedGitlinkChange(comparison: SubmoduleDiffComparison): boolean {
+  return (
+    comparison.mode === "uncommitted" &&
+    comparison.newEndpoint.kind === "worktree" &&
+    comparison.newEndpoint.recordedCommit !== comparison.newEndpoint.headCommit
+  );
+}
+
+function getSubmoduleFallbackDiffRefs(input: {
+  parentComparison: SubmoduleDiffComparison;
+  childComparison: SubmoduleDiffComparison;
+  defaultRefs: CheckoutDiffRefs;
+}): CheckoutDiffRefs {
+  const { newEndpoint } = input.childComparison;
+  if (
+    input.childComparison.mode !== "committed" ||
+    newEndpoint.kind !== "checkedCommit" ||
+    newEndpoint.recordedCommit === newEndpoint.headCommit
+  ) {
+    return input.defaultRefs;
+  }
+  const parentTargetRef = getCommitRefForEndpoint(input.parentComparison.newEndpoint);
+  return parentTargetRef
+    ? { baseRef: parentTargetRef, includeUntracked: false }
+    : input.defaultRefs;
+}
+
+function appendDirectSubmoduleChanges(input: {
+  childChanges: CheckoutFileChange[];
+  nestedSubmodulePaths: Set<string>;
+  displaySubmodulePath: string;
+  submoduleCwd: string;
+  refsForDiff: CheckoutDiffRefs;
+  childFallback: SubmoduleTrackedFileChange;
+  tracked: SubmoduleTrackedFileChange[];
+  untracked: CheckoutFileChange[];
+}): Map<string, SubmoduleTrackedFileChange> {
+  const nestedFallbacks = new Map<string, SubmoduleTrackedFileChange>();
+  for (const change of input.childChanges) {
+    if (change.isUntracked) {
+      input.untracked.push({
+        path: joinGitPath(input.displaySubmodulePath, change.path),
+        submodulePath: input.displaySubmodulePath,
+        status: "U",
+        isNew: true,
+        isDeleted: false,
+        isUntracked: true,
+      });
+    } else if (input.nestedSubmodulePaths.has(change.path)) {
+      nestedFallbacks.set(joinGitPath(input.displaySubmodulePath, change.path), {
+        cwd: input.submoduleCwd,
+        displayPrefix: input.displaySubmodulePath,
+        refsForDiff: input.refsForDiff,
+        change,
+        fallback: input.childFallback,
+        isGitlinkFallback: true,
+      });
+    } else {
+      input.tracked.push({
+        cwd: input.submoduleCwd,
+        displayPrefix: input.displaySubmodulePath,
+        refsForDiff: input.refsForDiff,
+        change,
+        fallback: input.childFallback,
+      });
+    }
+  }
+  return nestedFallbacks;
+}
+
+// Parent `git diff` may not enumerate submodule worktree changes, especially
+// when `.gitmodules` configures `ignore = all`. Scan initialized submodules so
+// the checkout diff pane can show those files with parent-repo-relative paths.
+async function listSubmoduleFileChanges(input: {
+  cwd: string;
+  displayPrefix?: string;
+  ignoreWhitespace: boolean;
+  comparison: SubmoduleDiffComparison;
+  cache: SubmoduleScanCache;
+  parentFallback?: SubmoduleTrackedFileChange;
+  visited?: Set<string>;
+}): Promise<SubmoduleFileChanges> {
+  const {
+    cwd,
+    displayPrefix = "",
+    ignoreWhitespace,
+    comparison,
+    cache,
+    parentFallback,
+    visited = new Set<string>(),
+  } = input;
+  let canonicalCwd: string;
+  try {
+    canonicalCwd = realpathSync.native(cwd);
+  } catch {
+    return {
+      tracked: [],
+      untracked: [],
+      expandedSubmodulePaths: new Set(),
+    };
+  }
+  if (visited.has(canonicalCwd)) {
+    return {
+      tracked: [],
+      untracked: [],
+      expandedSubmodulePaths: new Set(),
+    };
+  }
+  visited.add(canonicalCwd);
+
+  const tracked: SubmoduleTrackedFileChange[] = [];
+  const untracked: CheckoutFileChange[] = [];
+  const expandedSubmodulePaths = new Set<string>();
+  const parentRefsForDiff = getSubmoduleComparisonDiffRefs(comparison);
+  if (!parentRefsForDiff) {
+    return { tracked, untracked, expandedSubmodulePaths };
+  }
+  const submodules = await listInitializedSubmodulesCached(cwd, cache);
+  for (const { path: submodulePath, branch: configuredBranch } of submodules) {
+    const submoduleCwd = resolve(cwd, submodulePath);
+    const displaySubmodulePath = joinGitPath(displayPrefix, submodulePath);
+    const [submoduleComparison, parentRecordedComparison] = await Promise.all([
+      resolveSubmoduleDiffComparison({
+        parentCwd: cwd,
+        submoduleCwd,
+        submodulePath,
+        configuredBranch,
+        parentComparison: comparison,
+        cache,
+      }),
+      comparison.mode === "committed"
+        ? resolveParentRecordedSubmoduleComparison({
+            parentCwd: cwd,
+            submoduleCwd,
+            submodulePath,
+            parentComparison: comparison,
+            cache,
+          })
+        : Promise.resolve(null),
+    ]);
+    const childFallback: SubmoduleTrackedFileChange = {
+      cwd,
+      displayPrefix,
+      refsForDiff: submoduleComparison
+        ? getSubmoduleFallbackDiffRefs({
+            parentComparison: comparison,
+            childComparison: submoduleComparison,
+            defaultRefs: parentRefsForDiff,
+          })
+        : parentRefsForDiff,
+      change: createSubmoduleFallbackChange(submodulePath, submoduleComparison),
+      ...(parentFallback ? { fallback: parentFallback } : null),
+      isGitlinkFallback: true,
+    };
+    const parentPointerFallback: SubmoduleTrackedFileChange = {
+      cwd,
+      displayPrefix,
+      refsForDiff: parentRefsForDiff,
+      change: createSubmoduleFallbackChange(submodulePath, parentRecordedComparison),
+      ...(parentFallback ? { fallback: parentFallback } : null),
+      isGitlinkFallback: true,
+    };
+    if (!submoduleComparison) continue;
+    const refsForDiff = getSubmoduleComparisonDiffRefs(submoduleComparison);
+    if (!refsForDiff) continue;
+
+    const trackedBeforeChild = tracked.length;
+    const nestedSubmodulePaths = new Set(
+      (await listInitializedSubmodulesCached(submoduleCwd, cache)).map((entry) => entry.path),
+    );
+    let nestedFallbacks: Map<string, SubmoduleTrackedFileChange>;
+
+    try {
+      const childChanges = await listCheckoutFileChanges(
+        submoduleCwd,
+        refsForDiff,
+        ignoreWhitespace,
+      );
+      nestedFallbacks = appendDirectSubmoduleChanges({
+        childChanges,
+        nestedSubmodulePaths,
+        displaySubmodulePath,
+        submoduleCwd,
+        refsForDiff,
+        childFallback,
+        tracked,
+        untracked,
+      });
+    } catch {
+      tracked.push(childFallback);
+      expandedSubmodulePaths.add(displaySubmodulePath);
+      continue;
+    }
+
+    const nestedChanges = await listSubmoduleFileChanges({
+      cwd: submoduleCwd,
+      displayPrefix: displaySubmodulePath,
+      ignoreWhitespace,
+      comparison: submoduleComparison,
+      cache,
+      parentFallback: childFallback,
+      visited,
+    });
+    for (const [fallbackPath, fallback] of nestedFallbacks) {
+      if (!nestedChanges.expandedSubmodulePaths.has(fallbackPath)) {
+        tracked.push(fallback);
+      }
+    }
+    tracked.push(...nestedChanges.tracked);
+    untracked.push(...nestedChanges.untracked);
+    if (tracked.length > trackedBeforeChild) {
+      expandedSubmodulePaths.add(displaySubmodulePath);
+    } else if (hasEndpointChange(parentRecordedComparison)) {
+      tracked.push(parentPointerFallback);
+      expandedSubmodulePaths.add(displaySubmodulePath);
+    } else if (hasUncommittedGitlinkChange(submoduleComparison)) {
+      // Do not let the root renderer expand recorded-to-checked child history back
+      // into Uncommitted. With no tracked child owner, retain one compact pointer.
+      tracked.push(childFallback);
+      expandedSubmodulePaths.add(displaySubmodulePath);
+    }
+  }
+
+  const trackedByPath = new Map(
+    tracked.map((change) => [joinGitPath(change.displayPrefix, change.change.path), change]),
+  );
+  const untrackedByPath = new Map(untracked.map((change) => [change.path, change]));
+  return {
+    tracked: [...trackedByPath.values()].sort((a, b) =>
+      joinGitPath(a.displayPrefix, a.change.path).localeCompare(
+        joinGitPath(b.displayPrefix, b.change.path),
+      ),
+    ),
+    untracked: [...untrackedByPath.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    expandedSubmodulePaths,
+  };
+}
+
+interface SubmoduleDiffOutput {
+  tryAppend: (text: string) => boolean;
+  remainingBytes: () => number;
+}
+
+interface RenderedSubmoduleTrackedDiff {
+  path: string;
+  submodulePath?: string;
+  text: string;
+  truncated: boolean;
+  trackedChange: SubmoduleTrackedFileChange;
+}
+
+async function getSubmoduleTrackedDiffTextForPath(input: {
+  trackedChange: SubmoduleTrackedFileChange;
+  ignoreWhitespace: boolean;
+}): Promise<RenderedSubmoduleTrackedDiff> {
+  const { trackedChange } = input;
+  const path = joinGitPath(trackedChange.displayPrefix, trackedChange.change.path);
+  const submoduleFormat = trackedChange.isGitlinkFallback ? "short" : "diff";
+  const srcPrefix = trackedChange.displayPrefix ? `a/${trackedChange.displayPrefix}/` : "a/";
+  const dstPrefix = trackedChange.displayPrefix ? `b/${trackedChange.displayPrefix}/` : "b/";
+  const result = await runGitCommand(
+    buildGitDiffArgs({
+      ignoreWhitespace: input.ignoreWhitespace,
+      extra: [
+        `--submodule=${submoduleFormat}`,
+        `--src-prefix=${srcPrefix}`,
+        `--dst-prefix=${dstPrefix}`,
+        ...getCheckoutDiffRenderingArgs(trackedChange.refsForDiff),
+        "--",
+        trackedChange.change.path,
+      ],
+    }),
+    {
+      cwd: trackedChange.cwd,
+      envOverlay: getCheckoutDiffGitEnv(trackedChange.refsForDiff),
+      maxOutputBytes: PER_FILE_DIFF_MAX_BYTES,
+    },
+  );
+
+  return {
+    path,
+    ...(trackedChange.displayPrefix ? { submodulePath: trackedChange.displayPrefix } : null),
+    text: result.stdout,
+    truncated: result.truncated,
+    trackedChange,
+  };
+}
+
+async function renderSubmoduleTrackedChangeWithFallback(input: {
+  trackedChange: SubmoduleTrackedFileChange;
+  ignoreWhitespace: boolean;
+  cache: Map<SubmoduleTrackedFileChange, Promise<RenderedSubmoduleTrackedDiff | null>>;
+}): Promise<RenderedSubmoduleTrackedDiff | null> {
+  let candidate: SubmoduleTrackedFileChange | undefined = input.trackedChange;
+  while (candidate) {
+    const current: SubmoduleTrackedFileChange = candidate;
+    let load = input.cache.get(current);
+    if (!load) {
+      load = getSubmoduleTrackedDiffTextForPath({
+        trackedChange: current,
+        ignoreWhitespace: input.ignoreWhitespace,
+      })
+        .then((rendered) => {
+          const isEmpty = !rendered.text && !rendered.truncated;
+          return isEmpty && current.isGitlinkFallback ? null : rendered;
+        })
+        .catch((error: unknown) => {
+          if (!current.fallback) throw error;
+          return null;
+        });
+      input.cache.set(current, load);
+    }
+    const rendered = await load;
+    if (rendered) {
+      return rendered;
+    }
+    candidate = current.fallback;
+  }
+  return null;
+}
+
+function isCoveredByRenderedFallback(
+  path: string,
+  renderedFallbackPaths: ReadonlySet<string>,
+): boolean {
+  for (const fallbackPath of renderedFallbackPaths) {
+    if (isNestedGitPath(path, fallbackPath)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isNestedGitPath(path: string, parentPath: string): boolean {
+  return path !== parentPath && path.startsWith(`${parentPath}/`);
+}
+
+interface DisplayedSubmoduleTrackedChange {
+  path: string;
+  submodulePath?: string;
+  trackedChange: SubmoduleTrackedFileChange;
+}
+
+function getDisplayedSubmoduleTrackedChange(
+  trackedChange: SubmoduleTrackedFileChange,
+): DisplayedSubmoduleTrackedChange {
+  return {
+    path: joinGitPath(trackedChange.displayPrefix, trackedChange.change.path),
+    ...(trackedChange.displayPrefix ? { submodulePath: trackedChange.displayPrefix } : null),
+    trackedChange,
+  };
+}
+
+function groupSubmoduleTrackedChanges(
+  trackedChanges: SubmoduleTrackedFileChange[],
+): SubmoduleTrackedFileChange[][] {
+  const groups = new Map<SubmoduleTrackedFileChange, SubmoduleTrackedFileChange[]>();
+  for (const trackedChange of trackedChanges) {
+    let outermostFallback = trackedChange;
+    while (outermostFallback.fallback) {
+      outermostFallback = outermostFallback.fallback;
+    }
+    const group = groups.get(outermostFallback);
+    if (group) {
+      group.push(trackedChange);
+    } else {
+      groups.set(outermostFallback, [trackedChange]);
+    }
+  }
+  return [...groups.values()];
+}
+
+interface RecordRenderedSubmoduleDiffInput {
+  fileDiff: RenderedSubmoduleTrackedDiff;
+  renderedByPath: Map<string, RenderedSubmoduleTrackedDiff>;
+  renderedFallbackPaths: Set<string>;
+}
+
+function recordRenderedSubmoduleDiff(input: RecordRenderedSubmoduleDiffInput): void {
+  const { fileDiff, renderedByPath, renderedFallbackPaths } = input;
+  if (fileDiff.trackedChange.isGitlinkFallback) {
+    for (const renderedPath of renderedByPath.keys()) {
+      if (isNestedGitPath(renderedPath, fileDiff.path)) {
+        renderedByPath.delete(renderedPath);
+      }
+    }
+    for (const fallbackPath of renderedFallbackPaths) {
+      if (isNestedGitPath(fallbackPath, fileDiff.path)) {
+        renderedFallbackPaths.delete(fallbackPath);
+      }
+    }
+    renderedFallbackPaths.add(fileDiff.path);
+  }
+  renderedByPath.set(fileDiff.path, fileDiff);
+}
+
+interface ResolveSubmoduleTrackedDiffGroupInput {
+  trackedChanges: SubmoduleTrackedFileChange[];
+  ignoreWhitespace: boolean;
+}
+
+async function resolveSubmoduleTrackedDiffGroup(
+  input: ResolveSubmoduleTrackedDiffGroupInput,
+): Promise<RenderedSubmoduleTrackedDiff[]> {
+  const renderCache = new Map<
+    SubmoduleTrackedFileChange,
+    Promise<RenderedSubmoduleTrackedDiff | null>
+  >();
+  const renderedByPath = new Map<string, RenderedSubmoduleTrackedDiff>();
+  const renderedFallbackPaths = new Set<string>();
+  for (const trackedChange of input.trackedChanges) {
+    const trackedPath = getDisplayedSubmoduleTrackedChange(trackedChange).path;
+    if (isCoveredByRenderedFallback(trackedPath, renderedFallbackPaths)) {
+      continue;
+    }
+
+    const fileDiff = await renderSubmoduleTrackedChangeWithFallback({
+      trackedChange,
+      ignoreWhitespace: input.ignoreWhitespace,
+      cache: renderCache,
+    });
+    if (!fileDiff || (!fileDiff.text && !fileDiff.truncated)) {
+      continue;
+    }
+    if (isCoveredByRenderedFallback(fileDiff.path, renderedFallbackPaths)) {
+      continue;
+    }
+    recordRenderedSubmoduleDiff({ fileDiff, renderedByPath, renderedFallbackPaths });
+  }
+
+  return [...renderedByPath.values()].sort((a, b) => a.path.localeCompare(b.path));
+}
+
+interface AppendSubmoduleTooLargeInput {
+  displayedChange: DisplayedSubmoduleTrackedChange;
+  includeStructured: boolean;
+  structured: StructuredDiffAccumulator;
+  output: SubmoduleDiffOutput;
+}
+
+function appendSubmoduleTooLarge(input: AppendSubmoduleTooLargeInput): boolean {
+  const { displayedChange, includeStructured, structured, output } = input;
+  const { change } = displayedChange.trackedChange;
+  if (includeStructured) {
+    const appended = appendStructuredFile(
+      structured,
+      buildPlaceholderParsedDiffFile(
+        {
+          path: displayedChange.path,
+          ...(displayedChange.submodulePath !== undefined
+            ? { submodulePath: displayedChange.submodulePath }
+            : null),
+          status: change.status,
+          isNew: change.isNew,
+          isDeleted: change.isDeleted,
+        },
+        { status: "too_large", stat: null },
+      ),
+    );
+    if (!appended) return false;
+  }
+  output.tryAppend(`# ${displayedChange.path}: diff too large omitted\n`);
+  return true;
+}
+
+interface AppendRenderedSubmoduleTrackedDiffInput {
+  cwd: string;
+  fileDiff: RenderedSubmoduleTrackedDiff;
+  includeStructured: boolean;
+  structured: StructuredDiffAccumulator;
+  output: SubmoduleDiffOutput;
+}
+
+async function appendRenderedSubmoduleTrackedDiff(
+  input: AppendRenderedSubmoduleTrackedDiffInput,
+): Promise<boolean> {
+  const { cwd, fileDiff, includeStructured, structured, output } = input;
+  if (output.remainingBytes() === 0 || fileDiff.truncated || !output.tryAppend(fileDiff.text)) {
+    return appendSubmoduleTooLarge({
+      displayedChange: fileDiff,
+      includeStructured,
+      structured,
+      output,
+    });
+  }
+  if (!includeStructured) {
+    return true;
+  }
+
+  const { change } = fileDiff.trackedChange;
+  const parsed = await parseAndHighlightDiff(fileDiff.text, cwd);
+  const nestedParsedFiles = getNestedParsedFilesForPath(parsed, fileDiff.path);
+  if (nestedParsedFiles.length > 0) {
+    for (const nestedFile of nestedParsedFiles) {
+      if (
+        !appendStructuredFile(structured, {
+          ...nestedFile,
+          submodulePath: fileDiff.path,
+          status: "ok",
+        })
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+  const parsedFile =
+    parsed[0] ??
+    ({
+      path: fileDiff.path,
+      isNew: change.isNew,
+      isDeleted: change.isDeleted,
+      additions: 0,
+      deletions: 0,
+      hunks: [],
+    } satisfies ParsedDiffFile);
+  return appendStructuredFile(structured, {
+    ...parsedFile,
+    path: fileDiff.path,
+    ...(fileDiff.submodulePath !== undefined ? { submodulePath: fileDiff.submodulePath } : null),
+    isNew: change.isNew,
+    isDeleted: change.isDeleted,
+    status: "ok",
+  });
+}
+
+interface ProcessSubmoduleTrackedChangesInput {
+  cwd: string;
+  trackedChanges: SubmoduleTrackedFileChange[];
+  ignoreWhitespace: boolean;
+  includeStructured: boolean;
+  structured: StructuredDiffAccumulator;
+  output: SubmoduleDiffOutput;
+}
+
+async function processSubmoduleTrackedChanges(
+  input: ProcessSubmoduleTrackedChangesInput,
+): Promise<boolean> {
+  const { cwd, trackedChanges, ignoreWhitespace, includeStructured, structured, output } = input;
+  if (trackedChanges.length === 0) {
+    return true;
+  }
+
+  const trackedChangeGroups = groupSubmoduleTrackedChanges(trackedChanges);
+  for (const group of trackedChangeGroups) {
+    const trackedDiffs = await resolveSubmoduleTrackedDiffGroup({
+      trackedChanges: group,
+      ignoreWhitespace,
+    });
+    for (const fileDiff of trackedDiffs) {
+      const appended = await appendRenderedSubmoduleTrackedDiff({
+        cwd,
+        fileDiff,
+        includeStructured,
+        structured,
+        output,
+      });
+      if (!appended) return false;
+    }
+  }
+  return true;
 }
 
 export class NotGitRepoError extends Error {
@@ -2094,6 +3193,7 @@ function buildPlaceholderParsedDiffFile(
 ): ParsedDiffFile {
   return {
     path: change.path,
+    ...(change.submodulePath !== undefined ? { submodulePath: change.submodulePath } : null),
     ...(change.oldPath ? { oldPath: change.oldPath } : {}),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
@@ -2996,6 +4096,22 @@ async function appendStructuredTrackedDiffs(
       continue;
     }
 
+    const nestedParsedFiles = getNestedParsedFilesForPath(parsedTrackedFiles, change.path);
+    if (nestedParsedFiles.length > 0) {
+      for (const nestedFile of nestedParsedFiles) {
+        if (
+          !appendStructuredFile(structured, {
+            ...nestedFile,
+            submodulePath: change.path,
+            status: "ok",
+          })
+        ) {
+          return false;
+        }
+      }
+      continue;
+    }
+
     // `git diff -w --name-status` can still report a modified path even when the
     // whitespace-filtered patch and numstat are both empty. Skip emitting a
     // structured placeholder in that case so whitespace-only edits truly disappear.
@@ -3087,6 +4203,7 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
   const file = {
     ...parsedFile,
     path: change.path,
+    ...(change.submodulePath !== undefined ? { submodulePath: change.submodulePath } : null),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     status: "ok",
@@ -3212,18 +4329,11 @@ async function resolveCheckoutDiffRefs(
   };
 }
 
-export async function getCheckoutDiff(
+async function getCheckoutDiffWithRefs(
   cwd: string,
   compare: CheckoutDiffCompare,
-  context?: CheckoutContext,
+  refsForDiff: CheckoutDiffRefs,
 ): Promise<CheckoutDiffResult> {
-  await requireGitRepo(cwd);
-
-  const refsForDiff = await resolveCheckoutDiffRefs(cwd, compare, context);
-  if (!refsForDiff) {
-    return { diff: "" };
-  }
-
   const ignoreWhitespace = compare.ignoreWhitespace === true;
   // Live diffs refresh on every edit, while committed diffs can cover a long-lived
   // branch. Give the stable committed snapshot enough room to remain reviewable.
@@ -3250,24 +4360,56 @@ export async function getCheckoutDiff(
   const structured = createStructuredDiffAccumulator();
   let diffText = "";
   let diffBytes = 0;
-  const appendDiff = (text: string) => {
-    if (!text) return;
-    if (diffBytes >= totalDiffMaxBytes) return;
-    const buf = Buffer.from(text, "utf8");
-    if (diffBytes + buf.length <= totalDiffMaxBytes) {
-      diffText += text;
-      diffBytes += buf.length;
-      return;
-    }
-    const remaining = totalDiffMaxBytes - diffBytes;
-    if (remaining > 0) {
-      diffText += buf.subarray(0, remaining).toString("utf8");
-      diffBytes = totalDiffMaxBytes;
-    }
+  const tryAppendDiff = (text: string): boolean => {
+    if (!text) return true;
+    const bytes = Buffer.byteLength(text, "utf8");
+    if (diffBytes + bytes > totalDiffMaxBytes) return false;
+    diffText += text;
+    diffBytes += bytes;
+    return true;
+  };
+  const appendDiff = (text: string): void => {
+    tryAppendDiff(text);
   };
 
-  const trackedChanges = changes.filter((change) => !change.isUntracked);
+  const submoduleScanCache = createSubmoduleScanCache();
+  const rootHead = await readHeadObjectIdCached(cwd, submoduleScanCache);
+  const rootComparison: SubmoduleDiffComparison = {
+    mode: compare.mode === "uncommitted" ? "uncommitted" : "committed",
+    oldEndpoint:
+      effectiveRefsForDiff.baseRef === EMPTY_TREE_OBJECT_ID
+        ? { kind: "absent" }
+        : {
+            kind: "commit",
+            ref: canonicalizeRootCommitRef(effectiveRefsForDiff.baseRef, rootHead),
+          },
+    newEndpoint: effectiveRefsForDiff.targetRef
+      ? {
+          kind: "commit",
+          ref: canonicalizeRootCommitRef(effectiveRefsForDiff.targetRef, rootHead),
+        }
+      : {
+          kind: "worktree",
+          recordedCommit: rootHead,
+          headCommit: rootHead,
+        },
+    includeUntracked: effectiveRefsForDiff.includeUntracked,
+  };
+  const submoduleFileChanges = await listSubmoduleFileChanges({
+    cwd,
+    ignoreWhitespace,
+    comparison: rootComparison,
+    cache: submoduleScanCache,
+  });
+  const trackedChanges = changes.filter(
+    (change) =>
+      !change.isUntracked && !submoduleFileChanges.expandedSubmodulePaths.has(change.path),
+  );
   const untrackedChanges = changes.filter((change) => change.isUntracked === true);
+  if (effectiveRefsForDiff.includeUntracked) {
+    untrackedChanges.push(...submoduleFileChanges.untracked);
+    untrackedChanges.sort((a, b) => a.path.localeCompare(b.path));
+  }
   const trackedDiff = await processTrackedChanges({
     cwd,
     refsForDiff: effectiveRefsForDiff,
@@ -3312,6 +4454,21 @@ export async function getCheckoutDiff(
     }
   }
 
+  const didAppendSubmoduleDiffs = await processSubmoduleTrackedChanges({
+    cwd,
+    trackedChanges: submoduleFileChanges.tracked,
+    ignoreWhitespace,
+    includeStructured: compare.includeStructured === true,
+    structured,
+    output: {
+      tryAppend: tryAppendDiff,
+      remainingBytes: () => Math.max(0, totalDiffMaxBytes - diffBytes),
+    },
+  });
+  if (!didAppendSubmoduleDiffs) {
+    return { diff: "", structured: [], diffTooLarge: true };
+  }
+
   for (const change of untrackedChanges) {
     if (diffBytes >= totalDiffMaxBytes) {
       break;
@@ -3333,6 +4490,34 @@ export async function getCheckoutDiff(
     return { diff: diffText, structured: structured.files };
   }
   return { diff: diffText };
+}
+
+export async function getCheckoutDiff(
+  cwd: string,
+  compare: CheckoutDiffCompare,
+  context?: CheckoutContext,
+): Promise<CheckoutDiffResult> {
+  await requireGitRepo(cwd);
+
+  let refsForDiff = await resolveCheckoutDiffRefs(cwd, compare, context);
+  if (!refsForDiff) {
+    return { diff: "" };
+  }
+
+  let snapshotDiffIndexDirectory: string | null = null;
+  if (compare.mode === "snapshot" && !refsForDiff.targetRef) {
+    const snapshotIndex = await createSnapshotDiffIndex(cwd, refsForDiff.baseRef);
+    snapshotDiffIndexDirectory = snapshotIndex.directory;
+    refsForDiff = { ...refsForDiff, indexFile: snapshotIndex.indexFile };
+  }
+
+  try {
+    return await getCheckoutDiffWithRefs(cwd, compare, refsForDiff);
+  } finally {
+    if (snapshotDiffIndexDirectory) {
+      await rm(snapshotDiffIndexDirectory, { recursive: true, force: true });
+    }
+  }
 }
 
 export async function commitChanges(
