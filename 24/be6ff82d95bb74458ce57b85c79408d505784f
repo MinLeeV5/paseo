@@ -1,0 +1,22 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.3",
+  "base_commit_sha": "24be6ff82d95bb74458ce57b85c79408d505784f",
+  "prompts": {
+    "8211f79b47dc734e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b08a8cde-a436-4be0-a3bf-64aed6366fcc",
+        "model": "<synthetic>"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/f61dce540738a44db1b37462981be200ba21f0f5d4f95896807bb066c0a8ba28"
+    }
+  }
+}
