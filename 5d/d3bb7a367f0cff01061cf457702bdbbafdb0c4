@@ -1,0 +1,63 @@
+packages/app/src/i18n/resources/pt-BR.ts
+  8211f79b47dc734e 327
+packages/app/src/i18n/resources/es.ts
+  8211f79b47dc734e 327
+packages/app/src/components/markdown/fence/mermaid/pan-zoom.ts
+  8211f79b47dc734e 1-166
+packages/app/src/components/markdown/fence/mermaid/iframe-runtime.tsx
+  8211f79b47dc734e 1-101
+packages/app/src/i18n/resources/ko.ts
+  8211f79b47dc734e 285
+packages/app/src/i18n/resources/en.ts
+  8211f79b47dc734e 321
+packages/app/src/i18n/resources/fr.ts
+  8211f79b47dc734e 327
+packages/app/src/i18n/resources/ru.ts
+  8211f79b47dc734e 324
+packages/app/src/components/markdown/fence/mermaid/controls.tsx
+  8211f79b47dc734e 1-67
+packages/app/src/components/markdown/fence/mermaid/host.web.tsx
+  8211f79b47dc734e 1-2,4-5,10-12,15,21,37,52-57,59-62,132,137-141,143,152,158,164,173-178,192-200
+packages/app/src/i18n/resources/ja.ts
+  8211f79b47dc734e 326
+packages/app/src/components/markdown/fence/mermaid/viewer.tsx
+  8211f79b47dc734e 1-175
+packages/app/src/i18n/resources/zh-CN.ts
+  8211f79b47dc734e 322
+packages/app/src/i18n/resources/ar.ts
+  8211f79b47dc734e 322
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.3",
+  "base_commit_sha": "5dd3bb7a367f0cff01061cf457702bdbbafdb0c4",
+  "prompts": {
+    "8211f79b47dc734e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b08a8cde-a436-4be0-a3bf-64aed6366fcc",
+        "model": "<synthetic>"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 563,
+      "total_deletions": 314,
+      "accepted_lines": 563,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/9a3790271d0421e20159be4aed7de9d5cc0897af2f34848277155f68f1aabf95"
+    },
+    "c735237392619d77": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01851-8091-7c41-b64a-40663a4cfd75",
+        "model": "unknown"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  }
+}
