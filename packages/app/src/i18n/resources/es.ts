@@ -324,6 +324,7 @@ export const es: TranslationResources = {
       resetZoom: "Restablecer vista",
       viewSource: "Ver fuente",
       viewDiagram: "Ver diagrama",
+      viewFullscreen: "Ver a pantalla completa",
     },
     actions: {
       copyCode: "Copiar código",

@@ -324,6 +324,7 @@ export const ptBR: TranslationResources = {
       resetZoom: "Redefinir visualização",
       viewSource: "Ver fonte",
       viewDiagram: "Ver diagrama",
+      viewFullscreen: "Ver em tela cheia",
     },
     actions: {
       copyCode: "Copiar código",

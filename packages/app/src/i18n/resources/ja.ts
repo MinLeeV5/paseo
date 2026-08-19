@@ -323,6 +323,7 @@ export const ja: TranslationResources = {
       resetZoom: "表示をリセット",
       viewSource: "ソースを表示",
       viewDiagram: "図を表示",
+      viewFullscreen: "全画面で表示",
     },
     actions: {
       copyCode: "コードをコピー",

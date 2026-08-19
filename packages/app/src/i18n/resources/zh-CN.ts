@@ -319,6 +319,7 @@ export const zhCN: TranslationResources = {
       resetZoom: "重置视图",
       viewSource: "查看源码",
       viewDiagram: "查看图表",
+      viewFullscreen: "全屏查看",
     },
     actions: {
       copyCode: "复制代码",

@@ -318,6 +318,7 @@ export const en = {
       resetZoom: "Reset view",
       viewSource: "View source",
       viewDiagram: "View diagram",
+      viewFullscreen: "View fullscreen",
     },
     actions: {
       copyCode: "Copy code",

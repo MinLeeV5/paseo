@@ -321,6 +321,7 @@ export const ru: TranslationResources = {
       resetZoom: "Сбросить вид",
       viewSource: "Показать код",
       viewDiagram: "Показать диаграмму",
+      viewFullscreen: "Во весь экран",
     },
     actions: {
       copyCode: "Скопировать код",

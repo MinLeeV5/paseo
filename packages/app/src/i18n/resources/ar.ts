@@ -319,6 +319,7 @@ export const ar: TranslationResources = {
       resetZoom: "إعادة تعيين العرض",
       viewSource: "عرض المصدر",
       viewDiagram: "عرض المخطط",
+      viewFullscreen: "عرض بملء الشاشة",
     },
     actions: {
       copyCode: "نسخ الرمز",
