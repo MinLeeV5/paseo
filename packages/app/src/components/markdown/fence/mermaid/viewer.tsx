@@ -73,7 +73,7 @@ function MermaidDiagramViewerImpl({
   const visible = state.visible;
   const naturalWidth = visible?.width;
   const runtimeHeight = Math.max(visible?.height ?? 240, 1);
-  const panZoom = useMermaidPanZoom(!showSource);
+  const panZoom = useMermaidPanZoom(!showSource, true);
 
   const backdropStyle = useMemo<React.CSSProperties>(
     () => ({

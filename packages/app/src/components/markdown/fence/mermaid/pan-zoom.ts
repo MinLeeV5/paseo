@@ -22,14 +22,19 @@ interface PanZoomDrag {
  * Web-only pan/zoom for mermaid diagrams. The diagram lives in a sandboxed
  * iframe with `pointerEvents: "none"`, so all pointer interaction happens on
  * the surrounding viewport element; this hook applies a CSS transform to a
- * content element for drag-to-pan, ctrl/cmd+wheel zoom, and button zoom.
+ * content element for drag-to-pan, wheel zoom, and button zoom.
+ *
+ * `plainWheelZoom` controls whether a bare wheel gesture zooms. Inline in the
+ * chat it stays off so plain wheel keeps scrolling the conversation and only
+ * ctrl/cmd+wheel zooms; the fullscreen viewer turns it on because there is
+ * nothing else for the wheel to scroll.
  *
  * The transform math assumes the content element's untransformed top-left
  * coincides with the viewport's top-left (transform-origin `0 0`). Callers
  * that center the diagram must do so inside the content element, not by
  * offsetting the content element itself.
  */
-export function useMermaidPanZoom(enabled: boolean) {
+export function useMermaidPanZoom(enabled: boolean, plainWheelZoom = false) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const transformRef = useRef<PanZoomTransform>({ x: 0, y: 0, scale: 1 });
@@ -67,7 +72,7 @@ export function useMermaidPanZoom(enabled: boolean) {
     }
     const activeViewport = viewport;
     function zoomWithWheel(event: WheelEvent): void {
-      if (!event.ctrlKey && !event.metaKey) {
+      if (!plainWheelZoom && !event.ctrlKey && !event.metaKey) {
         return;
       }
       event.preventDefault();
@@ -84,7 +89,7 @@ export function useMermaidPanZoom(enabled: boolean) {
     }
     activeViewport.addEventListener("wheel", zoomWithWheel, { passive: false });
     return () => activeViewport.removeEventListener("wheel", zoomWithWheel);
-  }, [applyTransform, enabled]);
+  }, [applyTransform, enabled, plainWheelZoom]);
 
   // Re-apply the transform when pan/zoom becomes active again after the
   // diagram was swapped out for the source view. The content node persists
